@@ -1,0 +1,259 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  
+  /* Brand palette */
+  --color-ocean-50: #f0f9ff;
+  --color-ocean-100: #e0f2fe;
+  --color-ocean-200: #bae6fd;
+  --color-ocean-300: #7dd3fc;
+  --color-ocean-400: #38bdf8;
+  --color-ocean-500: #0ea5e9;
+  --color-ocean-600: #0284c7;
+  --color-ocean-700: #0369a1;
+  --color-ocean-800: #075985;
+  --color-ocean-900: #0c4a6e;
+
+  --color-teal-50: #f0fdfa;
+  --color-teal-100: #ccfbf1;
+  --color-teal-400: #2dd4bf;
+  --color-teal-500: #14b8a6;
+  --color-teal-600: #0d9488;
+
+  --color-sand-50: #fefce8;
+  --color-sand-100: #fef9c3;
+  --color-sand-400: #facc15;
+  --color-sand-500: #eab308;
+
+  --color-slate-850: #1a2332;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+}
+
+/* Base styles */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #0f172a;
+  color: #f1f5f9;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Glass morphism utility */
+.glass {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-light {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #38bdf8, #2dd4bf, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Card hover */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* Leaflet map fixes */
+.leaflet-container {
+  background: #1e293b !important;
+  border-radius: 12px;
+  z-index: 0;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #1e293b !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px !important;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4) !important;
+}
+
+.leaflet-popup-tip {
+  background: #1e293b !important;
+}
+
+.leaflet-popup-close-button {
+  color: #94a3b8 !important;
+}
+
+/* Timeline */
+.timeline-line {
+  position: absolute;
+  left: 20px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, #0ea5e9, #2dd4bf);
+}
+
+/* Progress bar animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Fade in animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.4s ease forwards;
+}
+
+/* Step wizard */
+.step-active {
+  background: linear-gradient(135deg, #0ea5e9, #2dd4bf);
+  color: white;
+}
+
+.step-complete {
+  background: #14b8a6;
+  color: white;
+}
+
+.step-inactive {
+  background: #1e293b;
+  color: #64748b;
+  border: 2px solid #334155;
+}
+
+/* Budget bar */
+.budget-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: #1e293b;
+  overflow: hidden;
+}
+
+.budget-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+/* Interest chip */
+.interest-chip {
+  padding: 8px 16px;
+  border-radius: 9999px;
+  border: 2px solid #334155;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.interest-chip:hover {
+  border-color: #0ea5e9;
+  color: #0ea5e9;
+}
+
+.interest-chip.selected {
+  background: linear-gradient(135deg, #0ea5e9, #2dd4bf);
+  border-color: transparent;
+  color: white;
+}
+
+/* Day tab */
+.day-tab {
+  padding: 8px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.day-tab.active {
+  background: linear-gradient(135deg, #0ea5e9, #2dd4bf);
+  color: white;
+}
+
+.day-tab:not(.active) {
+  color: #94a3b8;
+}
+
+.day-tab:not(.active):hover {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+/* Score badge */
+.score-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Notification dot */
+.notification-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
