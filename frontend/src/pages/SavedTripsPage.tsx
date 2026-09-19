@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, MapPin, Calendar, Users, Loader2,
-  FolderOpen, Trash2, BookOpen, CheckCircle2
+  FolderOpen, Trash2, BookOpen, CheckCircle2, Copy
 } from 'lucide-react';
 import { tripsApi } from '../services/api';
 import type { TripSummary } from '../types';
@@ -18,6 +18,7 @@ export default function SavedTripsPage() {
   const [trips, setTrips] = useState<TripSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [duplicating, setDuplicating] = useState<number | null>(null);
 
   useEffect(() => {
     tripsApi.list()
@@ -34,6 +35,15 @@ export default function SavedTripsPage() {
       setTrips(prev => prev.filter(t => t.id !== id));
     } catch { /* ignore */ }
     finally { setDeleting(null); }
+  };
+
+  const handleDuplicate = async (id: number) => {
+    setDuplicating(id);
+    try {
+      const { data: newTrip } = await tripsApi.duplicate(id);
+      setTrips(prev => [newTrip as unknown as TripSummary, ...prev]);
+    } catch { /* ignore */ }
+    finally { setDuplicating(null); }
   };
 
   if (loading) {
@@ -159,6 +169,17 @@ export default function SavedTripsPage() {
                       style={{ background: 'linear-gradient(135deg,#0ea5e9,#2dd4bf)' }}
                     >
                       <FolderOpen size={14} /> Open
+                    </button>
+                    <button
+                      onClick={() => handleDuplicate(trip.id)}
+                      disabled={duplicating === trip.id}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm transition-all hover:bg-white/5 disabled:opacity-40"
+                      style={{ border: '1px solid rgba(56,189,248,0.3)', color: '#38bdf8' }}
+                    >
+                      {duplicating === trip.id
+                        ? <Loader2 size={14} className="animate-spin" />
+                        : <Copy size={14} />}
+                      Duplicate
                     </button>
                     <button
                       onClick={() => handleDelete(trip.id)}

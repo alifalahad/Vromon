@@ -81,4 +81,4 @@ def seed_database(db: Session):
         db.add(hotel)
 
     db.commit()
-    print("✅ Database seeded with Cox's Bazar demo data.")
+    print("[OK] Database seeded with Cox's Bazar demo data.")

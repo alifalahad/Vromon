@@ -93,6 +93,9 @@ export const tripsApi = {
 
   adapt: (tripId: number, adaptation_type: string, parameters: object = {}) =>
     api.post(`/trips/${tripId}/adapt`, { adaptation_type, parameters }),
+
+  duplicate: (tripId: number) =>
+    api.post<Trip>(`/trips/${tripId}/duplicate`),
 };
 
 export default api;

@@ -1,8 +1,11 @@
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from typing import List
 
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(env_file=".env", extra="ignore")
+
     database_url: str = "sqlite:///./vromon.db"
     secret_key: str = "vromon-demo-secret-key"
     debug: bool = True
@@ -14,9 +17,6 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> List[str]:
         return [o.strip() for o in self.cors_origins.split(",")]
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
-
 
 settings = Settings()
+

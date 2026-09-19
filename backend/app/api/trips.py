@@ -123,6 +123,56 @@ def delete_trip(trip_id: int, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Duplicate trip
+# ---------------------------------------------------------------------------
+
+@router.post("/{trip_id}/duplicate", response_model=TripOut, status_code=201)
+def duplicate_trip(trip_id: int, db: Session = Depends(get_db)):
+    """Create a copy of an existing trip with its preferences and constraints."""
+    original = _load_trip(db, trip_id)
+
+    new_trip = Trip(
+        destination=original.destination,
+        start_date=original.start_date,
+        end_date=original.end_date,
+        num_travelers=original.num_travelers,
+        total_budget=original.total_budget,
+        title=f"{original.destination} Trip (Copy)",
+        status="draft",
+    )
+    db.add(new_trip)
+    db.flush()
+
+    if original.preference:
+        pref = TripPreference(
+            trip_id=new_trip.id,
+            travel_style=original.preference.travel_style,
+            activity_level=original.preference.activity_level,
+            accommodation_preference=original.preference.accommodation_preference,
+            preferred_start_time=original.preference.preferred_start_time,
+            preferred_end_time=original.preference.preferred_end_time,
+        )
+        pref.interests = original.preference.interests
+        db.add(pref)
+
+    if original.constraints:
+        cons = TripConstraint(
+            trip_id=new_trip.id,
+            max_activities_per_day=original.constraints.max_activities_per_day,
+            max_daily_budget=original.constraints.max_daily_budget,
+            avoid_crowded=original.constraints.avoid_crowded,
+            avoid_high_activity=original.constraints.avoid_high_activity,
+        )
+        cons.must_visit = original.constraints.must_visit
+        cons.excluded_places = original.constraints.excluded_places
+        db.add(cons)
+
+    db.commit()
+    db.refresh(new_trip)
+    return _trip_out(db, new_trip)
+
+
+# ---------------------------------------------------------------------------
 # Itinerary generation
 # ---------------------------------------------------------------------------
 
