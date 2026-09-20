@@ -1,65 +1,99 @@
-# Vromon — Walkthrough & Setup Guide
+# Vromon — Setup & Development Guide
 
-## Changes Made
+## Verified Working Screenshots
 
-### Bug Fixes
-| File | Change |
-|---|---|
-| [seeder.py](file:///e:/Vromon/backend/app/database/seeder.py) | Fixed `UnicodeEncodeError` — replaced ✅ emoji with ASCII text for Windows cp1252 console |
-| [config.py](file:///e:/Vromon/backend/app/config.py) | Migrated from deprecated `class Config` to `model_config = ConfigDict()` (Pydantic v2) |
-| [requirements.txt](file:///e:/Vromon/backend/requirements.txt) | Relaxed version pins (`==` → `>=`) so pip can find pre-built wheels for Python 3.14 |
+### Day 1 — Beach & Nature itinerary with interactive map
+![Day 1 itinerary with map](C:/Users/mdsul/.gemini/antigravity-ide/brain/cb2b0823-3218-4ec2-bd5c-c4ca456e5ffc/itinerary_day1_view_1789891909710.png)
 
-### New Features
-| File | Change |
-|---|---|
-| [trips.py](file:///e:/Vromon/backend/app/api/trips.py) | Added `POST /api/trips/{id}/duplicate` endpoint — copies a trip with preferences & constraints |
-| [api.ts](file:///e:/Vromon/frontend/src/services/api.ts) | Added `tripsApi.duplicate()` method |
-| [SavedTripsPage.tsx](file:///e:/Vromon/frontend/src/pages/SavedTripsPage.tsx) | Added **Duplicate** button with loading state, matching the Master Prompt §22 requirement |
-
-### Setup Files
-| File | Change |
-|---|---|
-| [backend/.env](file:///e:/Vromon/backend/.env) | Created from `.env.example` so server starts without manual config |
-| [vite.config.ts](file:///e:/Vromon/frontend/vite.config.ts) | Added `host: '0.0.0.0'` for phone access on same network |
+### Day 2 — Nature & Food with updated map markers
+![Day 2 itinerary with updated map](C:/Users/mdsul/.gemini/antigravity-ide/brain/cb2b0823-3218-4ec2-bd5c-c4ca456e5ffc/itinerary_day2_view_1789891994750.png)
 
 ---
 
-## Verification Results
+## Changes Made (Bug Fixes + Features)
 
-### Backend Tests: ✅ 13/13 Passed
-```
-tests/test_services.py::TestRecommendation::test_interest_match_scores_higher PASSED
-tests/test_services.py::TestRecommendation::test_excluded_places_not_returned PASSED
-tests/test_services.py::TestRecommendation::test_must_visit_always_included PASSED
-tests/test_services.py::TestRecommendation::test_crowded_penalty PASSED
-tests/test_services.py::TestRecommendation::test_score_clamped_0_1 PASSED
-tests/test_services.py::TestRecommendation::test_reasons_provided PASSED
-tests/test_services.py::TestUtils::test_time_to_minutes PASSED
-tests/test_services.py::TestUtils::test_minutes_to_time PASSED
-tests/test_services.py::TestUtils::test_haversine_same_point PASSED
-tests/test_services.py::TestUtils::test_haversine_known_distance PASSED
-tests/test_services.py::TestItineraryService::test_generates_for_each_day PASSED
-tests/test_services.py::TestItineraryService::test_no_overlapping_activities PASSED
-tests/test_services.py::TestItineraryService::test_respects_max_activities PASSED
-```
-
-### Frontend TypeScript: ✅ No Errors
-TypeScript compiles cleanly with `tsc --noEmit`.
-
-### Backend Import: ✅ Starts Successfully
-Backend initializes, creates tables, and seeds demo data without errors.
+| File | Change |
+|---|---|
+| `frontend/src/components/Map/TripMap.tsx` | **Fixed blank page crash** — rewrote to vanilla Leaflet (react-leaflet v4 incompatible with React 19) |
+| `backend/app/database/seeder.py` | Fixed UTF-8 encoding for JSON + emoji crash on Windows |
+| `backend/app/config.py` | Migrated Pydantic v2 deprecated config |
+| `backend/requirements.txt` | Relaxed version pins for Python 3.14+ |
+| `backend/app/api/trips.py` | Added `POST /api/trips/{id}/duplicate` endpoint |
+| `frontend/src/services/api.ts` | Added `tripsApi.duplicate()` |
+| `frontend/src/pages/SavedTripsPage.tsx` | Added Duplicate button |
+| `frontend/vite.config.ts` | Added `host: '0.0.0.0'` for phone access |
+| `backend/.env` | Created (not committed — add to .gitignore) |
 
 ---
 
-## How to Run — Step by Step
+## Step 1 — Push Everything from Windows PC to GitHub
 
-### Step 1: Start the Backend
-
-Open a **terminal** (PowerShell/CMD) and run:
+Run these commands in PowerShell in `e:\Vromon`:
 
 ```powershell
-cd e:\Vromon\backend
-venv\Scripts\activate
+cd e:\Vromon
+
+# Stage all changes (new files + modifications)
+git add .
+
+# Check what will be committed
+git status
+
+# Commit
+git commit -m "feat: fix map crash, add duplicate trip, fix UTF-8 encoding"
+
+# Push to GitHub
+git push origin main
+```
+
+> [!IMPORTANT]
+> The `backend/.env` file contains secrets and should NOT be committed. Make sure it is in `.gitignore`. You can check:
+> ```powershell
+> git status   # .env should NOT appear in the list
+> ```
+> If it appears, run: `echo "backend/.env" >> .gitignore`
+
+---
+
+## Step 2 — Pull on MacBook Air
+
+Open **Terminal** on your Mac and run:
+
+```bash
+# Navigate to where you want the project
+cd ~/Developer   # or wherever you keep projects
+
+# Clone the repo (first time)
+git clone https://github.com/YOUR_USERNAME/Vromon.git
+cd Vromon
+
+# OR if you already have it cloned, just pull
+git pull origin main
+```
+
+---
+
+## Step 3 — Backend Setup on MacBook Air
+
+```bash
+# Make sure Python 3.11+ is installed
+# If not: brew install python  (requires Homebrew: https://brew.sh)
+python3 --version
+
+# Create a virtual environment
+cd backend
+python3 -m venv venv
+
+# Activate it (Mac/Linux uses 'source', not 'venv\Scripts\activate')
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Create the .env file (needed — not committed to git)
+cp ../.env.example .env
+
+# Start the backend
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -69,106 +103,106 @@ INFO:     Uvicorn running on http://127.0.0.1:8000
 INFO:     [OK] Database seeded with Cox's Bazar demo data.
 ```
 
-> [!TIP]
-> Check the API docs at **http://localhost:8000/docs** — this is the Swagger UI showing all endpoints.
-
 ---
 
-### Step 2: Start the Frontend
+## Step 4 — Frontend Setup on MacBook Air
 
-Open a **second terminal** and run:
+Open a **second Terminal tab** (`Cmd+T`):
 
-```powershell
-cd e:\Vromon\frontend
+```bash
+# Make sure Node.js is installed
+# If not: brew install node
+node --version   # should be 18+
+
+cd ~/Developer/Vromon/frontend
+
+# Install dependencies
+npm install
+
+# Start the dev server
 npm run dev
 ```
 
 You should see:
 ```
-VITE v8.x.x  ready in XXX ms
+  VITE v8.x.x  ready in XXX ms
 
-➜  Local:   http://localhost:5173/
-➜  Network: http://192.168.x.x:5173/
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://192.168.x.x:5173/   Wi-Fi
+```
+
+Open **http://localhost:5173** in Safari or Chrome.
+
+---
+
+## Step 5 — Access from iPhone/iPad (Same WiFi)
+
+1. Find your Mac's IP address:
+   ```bash
+   ipconfig getifaddr en0
+   # Example output: 192.168.0.105
+   ```
+2. Open `http://192.168.0.105:5173` on your phone's browser.
+
+> [!NOTE]
+> The Vite proxy automatically forwards `/api` calls to `localhost:8000`, so both frontend and backend must be running on your Mac for the phone to work.
+
+---
+
+## Day-to-Day Development Workflow
+
+### On Windows PC → push changes:
+```powershell
+cd e:\Vromon
+git add .
+git commit -m "your message here"
+git push origin main
+```
+
+### On MacBook Air → pull changes and continue:
+```bash
+cd ~/Developer/Vromon
+git pull origin main
+
+# If new Python packages were added:
+cd backend && source venv/bin/activate && pip install -r requirements.txt && cd ..
+
+# If new npm packages were added:
+cd frontend && npm install && cd ..
+
+# Start both servers
+# Terminal 1:
+cd backend && source venv/bin/activate && uvicorn app.main:app --reload --port 8000
+
+# Terminal 2:
+cd frontend && npm run dev
 ```
 
 ---
 
-### Step 3: Test the Demo Flow
+## Useful Commands Reference
 
-Open **http://localhost:5173** in your browser and follow this flow:
-
-1. **Landing page** → Click **Plan My Trip**
-2. **Step 1**: Destination is pre-set to Cox's Bazar. Pick dates (any 3-day range) and travelers
-3. **Step 2**: Select budget (৳15,000) and accommodation preference
-4. **Step 3**: Pick interests — Beach, Nature, Food, Photography
-5. **Step 4**: Choose travel style (Relaxed) and activity level (Medium)
-6. **Step 5**: Set constraints — max 4 activities/day, toggle "Avoid crowded"
-7. **Step 6**: Review and click **Generate My Itinerary**
-8. **Itinerary page**: See the day-by-day timeline with recommendation reasons
-9. Click the **expand arrow** on any activity to see "Why we recommend this"
-10. Click **Regenerate Day** on any day
-11. Click **Adapt** → "Make it more relaxed"
-12. Check the **Budget Dashboard** on the right panel
-13. Give a **star rating** and submit feedback
-14. Click **Save Trip**
-15. Navigate to **My Trips** to see saved trip
-16. Try **Duplicate** and **Delete** on saved trips
+| Task | Windows (PowerShell) | Mac (Terminal) |
+|---|---|---|
+| Activate Python venv | `venv\Scripts\activate` | `source venv/bin/activate` |
+| Deactivate venv | `deactivate` | `deactivate` |
+| Start backend | `uvicorn app.main:app --reload --port 8000` | same |
+| Start frontend | `npm run dev` | same |
+| Run tests | `python -m pytest tests/ -v` | same |
+| Find Mac IP | `ipconfig` | `ipconfig getifaddr en0` |
+| Open Swagger API docs | `http://localhost:8000/docs` | same |
 
 ---
 
-## How to Access on Your Phone
+## What's in .gitignore (should NOT be committed)
 
-### Same WiFi Network
-
-1. Make sure your phone is on the **same WiFi** as your PC
-2. Find your PC's local IP address:
-   ```powershell
-   ipconfig
-   ```
-   Look for `IPv4 Address` under your WiFi adapter (e.g., `192.168.1.105`)
-
-3. When you start the frontend with `npm run dev`, Vite will show a **Network** URL like:
-   ```
-   ➜  Network: http://192.168.1.105:5173/
-   ```
-
-4. Open that Network URL on your phone's browser
-
-> [!IMPORTANT]
-> The Vite proxy (`/api → localhost:8000`) only works when accessing via Vite's dev server. If you're accessing from your phone, the API calls go through Vite's proxy, so the backend must be running on your PC too.
-
-> [!WARNING]
-> If your phone can't connect, check Windows Firewall — you may need to allow port 5173 through. Run this in an **admin PowerShell**:
-> ```powershell
-> netsh advfirewall firewall add rule name="Vite Dev" dir=in action=allow protocol=TCP localport=5173
-> ```
-
----
-
-## What's Complete (per Master Prompt §42 Acceptance Criteria)
-
-| Step | Status |
-|---|---|
-| Open application | ✅ |
-| Landing page | ✅ |
-| Click "Plan My Trip" | ✅ |
-| Select Cox's Bazar | ✅ |
-| Select dates | ✅ |
-| Enter budget | ✅ |
-| Select interests | ✅ |
-| Select travel style | ✅ |
-| Set constraints | ✅ |
-| Review | ✅ |
-| Generate itinerary | ✅ |
-| View multi-day itinerary | ✅ |
-| View map | ✅ |
-| See recommendation reasons | ✅ |
-| Edit activity (remove) | ✅ |
-| Regenerate day | ✅ |
-| View updated budget | ✅ |
-| Give feedback | ✅ |
-| Adapt itinerary | ✅ |
-| Save trip | ✅ |
-| Open saved trip | ✅ |
-| Duplicate trip | ✅ (newly added) |
-| Delete trip | ✅ |
+Make sure `e:\Vromon\.gitignore` contains at least:
+```
+backend/.env
+backend/vromon.db
+backend/venv/
+frontend/node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+```
