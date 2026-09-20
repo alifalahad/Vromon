@@ -17,7 +17,7 @@ def seed_database(db: Session):
     if db.query(Place).count() > 0:
         return  # Already seeded
 
-    with open(DATA_FILE, "r") as f:
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     # Seed Places

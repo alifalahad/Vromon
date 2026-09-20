@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { useEffect, useRef, useMemo, Component, type ReactNode } from 'react';
 import L from 'leaflet';
 import type { Place, Hotel, ItineraryDay } from '../../types';
 
@@ -11,51 +10,45 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-// Custom colored markers
-const createIcon = (color: string, size: number = 10) =>
-  L.divIcon({
-    className: '',
-    html: `
-      <div style="
-        width:${size + 8}px; height:${size + 8}px;
-        border-radius:50%;
-        background:${color};
-        border: 3px solid white;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-        display:flex;align-items:center;justify-content:center;
-      "></div>
-    `,
-    iconSize: [size + 8, size + 8],
-    iconAnchor: [(size + 8) / 2, (size + 8) / 2],
-  });
+const DAY_COLORS = ['#38bdf8', '#4ade80', '#f472b6', '#facc15', '#a78bfa', '#fb923c'];
 
-const hotelIcon = L.divIcon({
-  className: '',
-  html: `
-    <div style="
-      width:32px; height:32px; border-radius:8px;
-      background: linear-gradient(135deg,#818cf8,#a78bfa);
-      border: 2px solid white;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-      display:flex;align-items:center;justify-content:center;
-      font-size:16px;
-    ">🏨</div>
-  `,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-});
-
-function AutoFitBounds({ places }: { places: Place[] }) {
-  const map = useMap();
-  useEffect(() => {
-    if (places.length > 0) {
-      const bounds = L.latLngBounds(places.map(p => [p.latitude, p.longitude]));
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+// ---------------------------------------------------------------------------
+// Error boundary so a map crash doesn't take down the whole page
+// ---------------------------------------------------------------------------
+class MapErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(30,41,59,0.7)',
+            borderRadius: 12,
+            color: '#64748b',
+            fontSize: 14,
+          }}
+        >
+          Map could not be loaded.
+        </div>
+      );
     }
-  }, [places, map]);
-  return null;
+    return this.props.children;
+  }
 }
 
+// ---------------------------------------------------------------------------
+// Vanilla Leaflet map component — avoids react-leaflet's React 19 issues
+// ---------------------------------------------------------------------------
 interface TripMapProps {
   days: ItineraryDay[];
   hotel?: Hotel | null;
@@ -63,15 +56,16 @@ interface TripMapProps {
   height?: string;
 }
 
-export default function TripMap({ days, hotel, selectedDay, height = '400px' }: TripMapProps) {
+function TripMapInner({ days, hotel, selectedDay, height = '400px' }: TripMapProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+
   const activeDays = selectedDay != null
     ? days.filter(d => d.day_number === selectedDay)
     : days;
 
   // Collect all places to show
   const allPlaces: Place[] = [];
-  const dayColors = ['#38bdf8', '#4ade80', '#f472b6', '#facc15', '#a78bfa', '#fb923c'];
-
   activeDays.forEach(day => {
     day.items.forEach(item => {
       if (item.place) allPlaces.push(item.place);
@@ -83,7 +77,7 @@ export default function TripMap({ days, hotel, selectedDay, height = '400px' }: 
     const pts = day.items
       .filter(i => i.place)
       .map(i => [i.place!.latitude, i.place!.longitude] as [number, number]);
-    return { pts, color: dayColors[di % dayColors.length] };
+    return { pts, color: DAY_COLORS[di % DAY_COLORS.length] };
   });
 
   const center: [number, number] = hotel
@@ -92,84 +86,172 @@ export default function TripMap({ days, hotel, selectedDay, height = '400px' }: 
     ? [allPlaces[0].latitude, allPlaces[0].longitude]
     : [21.43, 92.01];
 
-  return (
-    <div style={{ height, borderRadius: '12px', overflow: 'hidden' }}>
-      <MapContainer
-        center={center}
-        zoom={12}
-        style={{ height: '100%', width: '100%' }}
-        zoomControl={true}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+  // Stable key for knowing when to rebuild markers/routes
+  const dataKey = useMemo(
+    () => `${selectedDay ?? 'all'}-${days.map(d => d.id).join(',')}`,
+    [selectedDay, days]
+  );
 
-        {/* Route polylines */}
-        {routes.map(({ pts, color }, i) =>
-          pts.length > 1 ? (
-            <Polyline
-              key={i}
-              positions={pts}
-              pathOptions={{ color, weight: 3, opacity: 0.7, dashArray: '8, 4' }}
-            />
-          ) : null
-        )}
+  // Initialize the Leaflet map once
+  useEffect(() => {
+    if (!containerRef.current) return;
 
-        {/* Hotel marker */}
-        {hotel && (
-          <Marker position={[hotel.latitude, hotel.longitude]} icon={hotelIcon}>
-            <Popup>
-              <div style={{ fontFamily: 'Inter, sans-serif', minWidth: '180px' }}>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>🏨 {hotel.name}</div>
-                <div style={{ fontSize: '12px', color: '#94a3b8' }}>{hotel.category} · ৳{hotel.price_per_night}/night</div>
-                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: 2 }}>⭐ {hotel.rating}</div>
+    // If there's already a map, remove it first
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
+
+    const map = L.map(containerRef.current, {
+      center,
+      zoom: 12,
+      zoomControl: true,
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+
+    mapRef.current = map;
+
+    // Invalidate size after container is visible
+    setTimeout(() => map.invalidateSize(), 200);
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
+
+  // Update markers and polylines when data changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Clear all existing layers except the tile layer
+    map.eachLayer(layer => {
+      if (!(layer instanceof L.TileLayer)) {
+        map.removeLayer(layer);
+      }
+    });
+
+    // Add hotel marker
+    if (hotel) {
+      const hotelIcon = L.divIcon({
+        className: '',
+        html: `
+          <div style="
+            width:32px; height:32px; border-radius:8px;
+            background: linear-gradient(135deg,#818cf8,#a78bfa);
+            border: 2px solid white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            display:flex;align-items:center;justify-content:center;
+            font-size:16px;
+          ">🏨</div>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      });
+
+      L.marker([hotel.latitude, hotel.longitude], { icon: hotelIcon })
+        .bindPopup(`
+          <div style="font-family:Inter,sans-serif;min-width:180px">
+            <div style="font-weight:700;margin-bottom:4px">🏨 ${hotel.name}</div>
+            <div style="font-size:12px;color:#94a3b8">${hotel.category} · ৳${hotel.price_per_night}/night</div>
+            <div style="font-size:12px;color:#94a3b8;margin-top:2px">⭐ ${hotel.rating}</div>
+          </div>
+        `)
+        .addTo(map);
+    }
+
+    // Add route polylines
+    routes.forEach(({ pts, color }) => {
+      if (pts.length > 1) {
+        L.polyline(pts, {
+          color,
+          weight: 3,
+          opacity: 0.7,
+          dashArray: '8, 4',
+        }).addTo(map);
+      }
+    });
+
+    // Add place markers
+    const boundsPoints: [number, number][] = [];
+
+    activeDays.forEach((day, di) => {
+      const dayColor = DAY_COLORS[di % DAY_COLORS.length];
+
+      day.items
+        .filter(i => i.place)
+        .forEach(item => {
+          const place = item.place!;
+          boundsPoints.push([place.latitude, place.longitude]);
+
+          const icon = L.divIcon({
+            className: '',
+            html: `
+              <div style="
+                width:18px; height:18px;
+                border-radius:50%;
+                background:${dayColor};
+                border: 3px solid white;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+              "></div>
+            `,
+            iconSize: [18, 18],
+            iconAnchor: [9, 9],
+          });
+
+          const costHtml = place.estimated_cost > 0
+            ? `<span>৳${place.estimated_cost}</span>`
+            : '';
+
+          const descHtml = place.description
+            ? `<div style="font-size:11px;color:#64748b;margin-top:6px;line-height:1.4">${place.description.slice(0, 100)}...</div>`
+            : '';
+
+          L.marker([place.latitude, place.longitude], { icon })
+            .bindPopup(`
+              <div style="font-family:Inter,sans-serif;min-width:200px">
+                <div style="font-weight:700;font-size:14px;margin-bottom:6px">Day ${day.day_number} · ${item.start_time}</div>
+                <div style="font-weight:600;font-size:15px;margin-bottom:4px">${place.name}</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">${place.category}</div>
+                <div style="display:flex;gap:12px;font-size:12px">
+                  <span>⭐ ${place.rating}</span>
+                  <span>⏱ ${item.duration_minutes}min</span>
+                  ${costHtml}
+                </div>
+                ${descHtml}
               </div>
-            </Popup>
-          </Marker>
-        )}
+            `)
+            .addTo(map);
+        });
+    });
 
-        {/* Place markers */}
-        {activeDays.map((day, di) =>
-          day.items
-            .filter(i => i.place)
-            .map((item) => (
-              <Marker
-                key={`${day.id}-${item.id}`}
-                position={[item.place!.latitude, item.place!.longitude]}
-                icon={createIcon(dayColors[di % dayColors.length])}
-              >
-                <Popup>
-                  <div style={{ fontFamily: 'Inter, sans-serif', minWidth: '200px' }}>
-                    <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: 6 }}>
-                      Day {day.day_number} · {item.start_time}
-                    </div>
-                    <div style={{ fontWeight: 600, fontSize: '15px', marginBottom: 4 }}>
-                      {item.place!.name}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: 4 }}>
-                      {item.place!.category}
-                    </div>
-                    <div style={{ display: 'flex', gap: 12, fontSize: '12px' }}>
-                      <span>⭐ {item.place!.rating}</span>
-                      <span>⏱ {item.duration_minutes}min</span>
-                      {item.place!.estimated_cost > 0 && (
-                        <span>৳{item.place!.estimated_cost}</span>
-                      )}
-                    </div>
-                    {item.place!.description && (
-                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: 6, lineHeight: 1.4 }}>
-                        {item.place!.description.slice(0, 100)}...
-                      </div>
-                    )}
-                  </div>
-                </Popup>
-              </Marker>
-            ))
-        )}
+    // Fit bounds to show all markers
+    if (boundsPoints.length > 0) {
+      const bounds = L.latLngBounds(boundsPoints);
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+    } else {
+      map.setView(center, 12);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataKey, hotel]);
 
-        {allPlaces.length > 0 && <AutoFitBounds places={allPlaces} />}
-      </MapContainer>
-    </div>
+  return (
+    <div
+      ref={containerRef}
+      style={{ height, borderRadius: '12px', overflow: 'hidden' }}
+    />
+  );
+}
+
+export default function TripMap(props: TripMapProps) {
+  return (
+    <MapErrorBoundary>
+      <TripMapInner {...props} />
+    </MapErrorBoundary>
   );
 }
