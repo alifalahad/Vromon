@@ -1,0 +1,23 @@
+{
+  "name": "Vromon — Intelligent Travel Planner",
+  "short_name": "Vromon",
+  "description": "AI-powered travel itinerary planning for Bangladesh. Plan personalized trips with smart recommendations and budget-aware scheduling.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["travel", "lifestyle"],
+  "lang": "en",
+  "dir": "ltr",
+  "scope": "/",
+  "prefer_related_applications": false
+}

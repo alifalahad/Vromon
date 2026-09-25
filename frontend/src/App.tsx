@@ -4,6 +4,7 @@ import PlanTripPage from './pages/PlanTripPage';
 import ItineraryPage from './pages/ItineraryPage';
 import SavedTripsPage from './pages/SavedTripsPage';
 import Navbar from './components/layout/Navbar';
+import InstallPrompt from './components/InstallPrompt';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="/trip/:id" element={<ItineraryPage />} />
           <Route path="/trips" element={<SavedTripsPage />} />
         </Routes>
+        <InstallPrompt />
       </div>
     </BrowserRouter>
   );

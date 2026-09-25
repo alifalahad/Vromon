@@ -257,3 +257,23 @@ body {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
+
+/* PWA install banner slide-up animation */
+@keyframes slideUp {
+  from { transform: translateY(100px); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+
+/* Safe area for phones with notches / gesture bars */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* When running as installed PWA, hide the address bar padding */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top, 0);
+  }
+}
