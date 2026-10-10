@@ -1,11 +1,13 @@
 from app.models.models import (
-    Place, Restaurant, Hotel, Trip,
-    TripPreference, TripConstraint,
-    Itinerary, ItineraryItem, Feedback
+    Destination, Place, Restaurant, Hotel,
+    Trip, TripPreference, TripConstraint,
+    Itinerary, ItineraryItem, Feedback,
+    SourceDocument, DocumentChunk,
 )
 
 __all__ = [
-    "Place", "Restaurant", "Hotel", "Trip",
-    "TripPreference", "TripConstraint",
+    "Destination", "Place", "Restaurant", "Hotel",
+    "Trip", "TripPreference", "TripConstraint",
     "Itinerary", "ItineraryItem", "Feedback",
+    "SourceDocument", "DocumentChunk",
 ]

@@ -1,6 +1,7 @@
 """
-RecommendationService — Weighted scoring engine (Version 1).
+RecommendationService — Weighted scoring engine (Version 2).
 
+Ported from demo v1 with improved documentation and structure.
 Scoring formula:
     score = interest_match   (35%)
           + rating_score     (20%)
@@ -10,19 +11,21 @@ Scoring formula:
           + popularity       (5%)
           - crowd_penalty    (5%)
 
-Weights are configurable from RECOMMENDATION_WEIGHTS.
-This service is designed to be replaced with a RAG-powered
-semantic recommender in future iterations.
+Weights are configurable via RECOMMENDATION_WEIGHTS.
 """
 
 from __future__ import annotations
+
+import logging
 from typing import List, Tuple
 from sqlalchemy.orm import Session
 
 from app.models.models import Place
 
+logger = logging.getLogger("vromon.recommendation")
+
 # ---------------------------------------------------------------------------
-# Configurable weights (all should sum to 1.0)
+# Configurable weights (all positive values should sum to ~1.0)
 # ---------------------------------------------------------------------------
 RECOMMENDATION_WEIGHTS = {
     "interest_match": 0.35,
@@ -34,14 +37,14 @@ RECOMMENDATION_WEIGHTS = {
     "crowd_penalty": -0.05,
 }
 
-# Travel-style → preferred number of activities mapping
+# Travel-style → preferred activity density
 TRAVEL_STYLE_ACTIVITY_DENSITY = {
     "Relaxed": 3,
     "Balanced": 4,
     "Packed": 6,
 }
 
-# Activity-level → preferred place activity level
+# Activity-level → which place activity levels are preferred
 ACTIVITY_LEVEL_MAP = {
     "Low": ["Low"],
     "Medium": ["Low", "Medium"],
@@ -53,28 +56,23 @@ class RecommendationService:
     """
     Scores places based on user preferences and returns ranked candidates.
 
-    Future enhancement: replace `score_place` with a RAG context-augmented
-    semantic similarity calculation.
+    Returns list of (Place, score, reasons) tuples.
     """
 
-    def __init__(self, weights: dict = None):
+    def __init__(self, weights: dict | None = None):
         self.weights = weights or RECOMMENDATION_WEIGHTS
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
     def recommend(
         self,
         db: Session,
         destination: str,
         interests: List[str],
-        travel_style: str,
-        activity_level: str,
-        daily_budget: float,
+        travel_style: str = "Balanced",
+        activity_level: str = "Medium",
+        daily_budget: float = 5000.0,
         avoid_crowded: bool = False,
-        exclude_ids: List[int] = None,
-        must_visit_ids: List[int] = None,
+        exclude_ids: List[int] | None = None,
+        must_visit_ids: List[int] | None = None,
         limit: int = 20,
     ) -> List[Tuple[Place, float, List[str]]]:
         """
@@ -87,7 +85,7 @@ class RecommendationService:
         # Fetch all active places for destination
         all_places: List[Place] = (
             db.query(Place)
-            .filter(Place.destination == destination, Place.is_active == True)
+            .filter(Place.destination_name == destination, Place.is_active == True)
             .all()
         )
 
@@ -132,10 +130,6 @@ class RecommendationService:
         result = must_visit_scored + scored[:limit]
         return result
 
-    # ------------------------------------------------------------------
-    # Scoring logic
-    # ------------------------------------------------------------------
-
     def score_place(
         self,
         place: Place,
@@ -145,9 +139,7 @@ class RecommendationService:
         daily_budget: float,
         avoid_crowded: bool = False,
     ) -> Tuple[float, List[str]]:
-        """
-        Returns (normalised_score [0–1], reasons list).
-        """
+        """Returns (normalised_score [0–1], reasons list)."""
         score = 0.0
         reasons: List[str] = []
         w = self.weights
@@ -171,18 +163,17 @@ class RecommendationService:
             reasons.append(f"Matches your interest in {', '.join(matching_interests[:2])}")
 
         # ── Rating ─────────────────────────────────────────────────────
-        rating_norm = (place.rating - 1.0) / 4.0   # normalise 1–5 → 0–1
+        rating_norm = (place.rating - 1.0) / 4.0  # normalise 1–5 → 0–1
         rating_score = w["rating"] * rating_norm
         score += rating_score
         if place.rating >= 4.5:
-            reasons.append(f"Excellent rating ({place.rating}★)")
+            reasons.append(f"Excellent rating ({place.rating}\u2605)")
         elif place.rating >= 4.0:
-            reasons.append(f"Good rating ({place.rating}★)")
+            reasons.append(f"Good rating ({place.rating}\u2605)")
 
         # ── Budget match ───────────────────────────────────────────────
         if daily_budget > 0:
             cost_ratio = min(place.estimated_cost / daily_budget, 1.0) if daily_budget else 0.5
-            # Places that cost < 20% of daily budget are ideal
             if cost_ratio <= 0.2:
                 budget_score = w["budget_match"] * 1.0
                 reasons.append("Fits comfortably in your budget")
@@ -196,7 +187,6 @@ class RecommendationService:
         score += budget_score
 
         # ── Travel style ───────────────────────────────────────────────
-        style_density = TRAVEL_STYLE_ACTIVITY_DENSITY.get(travel_style, 4)
         if travel_style == "Relaxed" and place.activity_level == "Low":
             ts_score = w["travel_style"] * 1.0
             reasons.append("Ideal for a relaxed trip")
@@ -227,7 +217,7 @@ class RecommendationService:
         if avoid_crowded and place.crowd_level == "High":
             crowd_penalty = abs(w["crowd_penalty"])
             score -= crowd_penalty
-            reasons.append("⚠ Usually crowded (penalised)")
+            reasons.append("Usually crowded (penalised)")
         elif place.crowd_level == "Low":
             reasons.append("Relatively uncrowded")
 

@@ -1,59 +1,116 @@
 """
 Vromon — Intelligent Adaptive Travel Itinerary Planning System
-FastAPI application entry point.
+FastAPI application entry point (v2).
 """
 
-from fastapi import FastAPI
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from app.config import settings
-from app.database.database import Base, engine
-from app.database.seeder import seed_database
-from app.database.database import SessionLocal
-from app.api import destinations, places, trips
+from app.core.config import settings
+from app.core.logging import setup_logging
+from app.db.base import Base, engine, SessionLocal
+from app.db.seeder import seed_database
+from app.api.v1.router import router as v1_router
 
-# Create all tables
-Base.metadata.create_all(bind=engine)
+# Configure logging
+setup_logging(debug=settings.app_debug)
+logger = logging.getLogger("vromon")
 
-# Seed demo data on startup
-db = SessionLocal()
-try:
-    seed_database(db)
-finally:
-    db.close()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: startup and shutdown events."""
+    # Startup
+    logger.info(f"Vromon backend starting (env={settings.app_env})")
+    logger.info(f"Database: {'SQLite' if settings.is_sqlite else 'PostgreSQL'}")
+
+    # Create tables
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database tables created/verified.")
+
+    # Seed demo data
+    db = SessionLocal()
+    try:
+        seed_database(db)
+    finally:
+        db.close()
+
+    logger.info("Vromon backend ready.")
+    yield
+
+    # Shutdown
+    logger.info("Vromon backend shutting down.")
+
 
 app = FastAPI(
     title="Vromon API",
-    description="Intelligent Adaptive Travel Itinerary Planning System — Demo",
-    version="1.0.0",
+    description=(
+        "Intelligent Adaptive Travel Itinerary Planning and Recommendation System. "
+        "Uses RAG and Constraint Optimization for personalized travel planning."
+    ),
+    version="2.0.0",
+    lifespan=lifespan,
 )
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Routers
-app.include_router(destinations.router)
-app.include_router(places.router)
-app.include_router(trips.router)
+# Mount API v1
+app.include_router(v1_router)
 
 
-@app.get("/")
+# ---------------------------------------------------------------------------
+# Root and health endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/", tags=["system"])
 def root():
+    """Application information."""
     return {
         "app": "Vromon",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "status": "running",
-        "demo_destination": "Cox's Bazar, Bangladesh",
-        "docs": "/docs",
+        "api_docs": "/docs",
+        "api_prefix": "/api/v1",
     }
 
 
-@app.get("/api/health")
+@app.get("/health", tags=["system"])
 def health():
-    return {"status": "healthy"}
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "version": "2.0.0",
+        "database": "sqlite" if settings.is_sqlite else "postgresql",
+        "llm_configured": settings.has_llm,
+        "embeddings_configured": settings.has_embeddings,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Global exception handler
+# ---------------------------------------------------------------------------
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch unhandled exceptions and return safe error response."""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "An internal error occurred. Please try again later.",
+            "type": type(exc).__name__,
+        },
+    )

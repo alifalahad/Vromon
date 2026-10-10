@@ -1,1 +1,1 @@
-from app.api import destinations, places, trips
+# API package

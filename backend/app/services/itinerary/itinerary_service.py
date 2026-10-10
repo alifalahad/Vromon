@@ -1,6 +1,7 @@
 """
-ItineraryService — Heuristic day-by-day trip scheduler (Version 1).
+ItineraryService — Heuristic day-by-day trip scheduler (Version 2).
 
+Ported from demo v1, adapted for new model structure.
 Algorithm:
   1. Use RecommendationService to rank all candidate places.
   2. For each day, greedily pick top-scoring places that fit:
@@ -11,13 +12,13 @@ Algorithm:
   3. Insert meal breaks between activities.
   4. Calculate travel time using Haversine distance + estimated speed.
   5. Return structured Itinerary + ItineraryItems.
-
-Future enhancement: Replace greedy selection with OptimizationService
-(OR-Tools / CP-SAT) for globally optimal scheduling.
 """
 
 from __future__ import annotations
+
 import math
+import random
+import logging
 from datetime import date, timedelta
 from typing import List, Tuple, Optional
 from sqlalchemy.orm import Session
@@ -29,7 +30,9 @@ from app.models.models import (
 )
 from app.services.recommendation.recommendation_service import RecommendationService
 
-# Average travel speed (km/h) — approximate, clearly a heuristic
+logger = logging.getLogger("vromon.itinerary")
+
+# Average travel speed (km/h) — approximate heuristic
 AVERAGE_TRAVEL_SPEED_KMH = 30.0
 
 DAY_THEMES = {
@@ -68,7 +71,7 @@ def _minutes_to_time(minutes: int) -> str:
     return f"{h:02d}:{m:02d}"
 
 
-def _travel_minutes(p1: Place, p2: Place) -> Tuple[float, float]:
+def _travel_minutes(p1, p2) -> Tuple[float, float]:
     """Returns (travel_minutes, distance_km)."""
     dist = _haversine_km(p1.latitude, p1.longitude, p2.latitude, p2.longitude)
     travel_min = (dist / AVERAGE_TRAVEL_SPEED_KMH) * 60
@@ -78,22 +81,14 @@ def _travel_minutes(p1: Place, p2: Place) -> Tuple[float, float]:
 class ItineraryService:
     """
     Generates a multi-day itinerary for a trip.
-    Designed with clean interfaces so OptimizationService can be
-    plugged in to replace the greedy scheduling step.
+    Uses greedy heuristic scheduling (baseline).
     """
 
     def __init__(self):
         self.recommender = RecommendationService()
 
-    # ------------------------------------------------------------------
-    # Main entry point
-    # ------------------------------------------------------------------
-
     def generate(self, db: Session, trip: Trip) -> List[Itinerary]:
-        """
-        Generate and persist day-by-day itineraries.
-        Returns the list of Itinerary objects.
-        """
+        """Generate and persist day-by-day itineraries."""
         pref: TripPreference = trip.preference
         cons: TripConstraint = trip.constraints
 
@@ -111,7 +106,7 @@ class ItineraryService:
             limit=50,
         )
 
-        # Fetch a reference hotel (for map display)
+        # Fetch a reference hotel
         hotel = self._pick_hotel(db, trip)
 
         # Build itinerary for each day
@@ -136,11 +131,9 @@ class ItineraryService:
         db.commit()
         for d in days:
             db.refresh(d)
-        return days
 
-    # ------------------------------------------------------------------
-    # Day builder
-    # ------------------------------------------------------------------
+        logger.info(f"Generated {len(days)}-day itinerary for trip {trip.id}")
+        return days
 
     def _build_day(
         self,
@@ -213,7 +206,7 @@ class ItineraryService:
             if last_place:
                 travel_min, dist_km = _travel_minutes(last_place, place)
             elif hotel:
-                travel_min, dist_km = _travel_minutes_hotel(hotel, place)
+                travel_min, dist_km = _travel_minutes(hotel, place)
 
             arrive_min = int(current_time + travel_min)
             finish_min = arrive_min + visit_min
@@ -231,7 +224,6 @@ class ItineraryService:
 
             # Insert lunch break before afternoon activities
             if not lunch_inserted and arrive_min >= _time_to_minutes("12:00"):
-                # Schedule lunch at max(12:30, current_time) to avoid overlap
                 lunch_start = max(_time_to_minutes("12:30"), current_time)
                 lunch_rest = self._pick_meal(db, trip.destination, "Lunch")
                 lunch_item = self._make_meal_item(
@@ -291,7 +283,7 @@ class ItineraryService:
             day_cost += lunch_item.cost
             current_time = _time_to_minutes(lunch_item.end_time)
 
-        # Dinner — schedule at max(19:00, current_time) to never overlap
+        # Dinner
         dinner_start = max(_time_to_minutes("19:00"), current_time)
         dinner_rest = self._pick_meal(db, trip.destination, "Dinner")
         dinner_item = self._make_meal_item(
@@ -328,32 +320,25 @@ class ItineraryService:
         cat = pref.accommodation_preference if pref else "Standard"
         hotel = (
             db.query(Hotel)
-            .filter(Hotel.destination == trip.destination, Hotel.category == cat, Hotel.is_active == True)
+            .filter(Hotel.destination_name == trip.destination, Hotel.category == cat, Hotel.is_active == True)
             .first()
         )
         if not hotel:
-            hotel = db.query(Hotel).filter(Hotel.destination == trip.destination, Hotel.is_active == True).first()
+            hotel = db.query(Hotel).filter(Hotel.destination_name == trip.destination, Hotel.is_active == True).first()
         return hotel
 
     def _pick_meal(self, db: Session, destination: str, meal_type: str) -> Optional[Restaurant]:
         """Pick a restaurant for the given meal type."""
-        import random
         restaurants = (
             db.query(Restaurant)
-            .filter(Restaurant.destination == destination, Restaurant.is_active == True)
+            .filter(Restaurant.destination_name == destination, Restaurant.is_active == True)
             .all()
         )
         if not restaurants:
             return None
-        # Pick a random one for variety; could be improved with scoring
         return random.choice(restaurants)
 
-    def _make_meal_item(
-        self,
-        meal_name: str,
-        restaurant,
-        start_min: int,
-    ) -> ItineraryItem:
+    def _make_meal_item(self, meal_name: str, restaurant, start_min: int) -> ItineraryItem:
         duration = 60
         cost = restaurant.average_meal_cost if restaurant else 300.0
         item = ItineraryItem(
@@ -369,17 +354,15 @@ class ItineraryService:
             recommendation_score=0.0,
             order_index=0,
         )
-        item.recommendation_reasons = [f"Meal break — {meal_name}"]
+        item.recommendation_reasons = [f"Meal break \u2014 {meal_name}"]
         return item
 
     def _day_theme_interests(self, trip: Trip, day_number: int) -> List[str]:
         """Return a list of interests to prioritise for this day."""
         pref = trip.preference
         user_interests = pref.interests if pref else []
-        # Rotate through user interests, or fallback to day themes
         if user_interests:
             idx = (day_number - 1) % max(len(user_interests), 1)
-            # Give each day a different primary interest + secondary
             primary = user_interests[idx % len(user_interests)]
             secondary = user_interests[(idx + 1) % len(user_interests)] if len(user_interests) > 1 else primary
             return [primary, secondary]
@@ -390,9 +373,3 @@ class ItineraryService:
         if not interests:
             return f"Day {day_number}"
         return " & ".join(interests[:2])
-
-
-def _travel_minutes_hotel(hotel: Hotel, place: Place) -> Tuple[float, float]:
-    dist = _haversine_km(hotel.latitude, hotel.longitude, place.latitude, place.longitude)
-    travel_min = (dist / AVERAGE_TRAVEL_SPEED_KMH) * 60
-    return travel_min, dist

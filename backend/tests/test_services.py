@@ -1,5 +1,5 @@
 """
-Tests for Vromon core services.
+Tests for Vromon core services (v2).
 
 Run with: pytest tests/ -v
 """
@@ -7,11 +7,16 @@ Run with: pytest tests/ -v
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.database.database import Base
-from app.models.models import Place, TripPreference, TripConstraint, Trip
-from app.services.recommendation.recommendation_service import RecommendationService
-from app.services.itinerary.itinerary_service import _time_to_minutes, _minutes_to_time, _haversine_km
 from datetime import date, timedelta
+
+from app.db.base import Base
+from app.models.models import (
+    Destination, Place, TripPreference, TripConstraint, Trip,
+)
+from app.services.recommendation.recommendation_service import RecommendationService
+from app.services.itinerary.itinerary_service import (
+    _time_to_minutes, _minutes_to_time, _haversine_km,
+)
 
 # ---------------------------------------------------------------------------
 # Test DB setup
@@ -39,9 +44,25 @@ def db():
 # ---------------------------------------------------------------------------
 # Sample data helpers
 # ---------------------------------------------------------------------------
-def make_place(db, id, name, category, tags, rating=4.5, cost=0, crowd="Medium", activity="Medium"):
+
+def make_destination(db):
+    dest = Destination(
+        id=1,
+        name="Cox's Bazar",
+        country="Bangladesh",
+        latitude=21.4272,
+        longitude=92.0058,
+    )
+    db.add(dest)
+    db.commit()
+    return dest
+
+
+def make_place(db, id, name, category, tags, rating=4.5, cost=0,
+               crowd="Medium", activity="Medium", dest_id=1):
     p = Place(
-        id=id, name=name, destination="Cox's Bazar",
+        id=id, name=name, destination_id=dest_id,
+        destination_name="Cox's Bazar",
         category=category, latitude=21.43, longitude=92.00,
         rating=rating, review_count=100,
         average_visit_duration=2.0, estimated_cost=cost,
@@ -54,7 +75,8 @@ def make_place(db, id, name, category, tags, rating=4.5, cost=0, crowd="Medium",
     return p
 
 
-def make_trip(db, interests, travel_style, activity_level, budget=15000, avoid_crowded=False, max_acts=4):
+def make_trip(db, interests, travel_style, activity_level,
+              budget=15000, avoid_crowded=False, max_acts=4):
     trip = Trip(
         destination="Cox's Bazar",
         start_date=date.today(),
@@ -98,8 +120,9 @@ class TestRecommendation:
 
     def test_interest_match_scores_higher(self, db):
         """Places matching user interests should score higher."""
-        beach = make_place(db, 1, "Beach A", "Beach", ["Beach", "Relaxation"])
-        culture = make_place(db, 2, "Museum", "Culture", ["Culture", "History"])
+        make_destination(db)
+        make_place(db, 1, "Beach A", "Beach", ["Beach", "Relaxation"])
+        make_place(db, 2, "Museum", "Culture", ["Culture", "History"])
 
         rec = RecommendationService()
         results = rec.recommend(
@@ -116,8 +139,9 @@ class TestRecommendation:
 
     def test_excluded_places_not_returned(self, db):
         """Excluded places must not appear in results."""
-        p1 = make_place(db, 1, "Place A", "Beach", ["Beach"])
-        p2 = make_place(db, 2, "Place B", "Nature", ["Nature"])
+        make_destination(db)
+        make_place(db, 1, "Place A", "Beach", ["Beach"])
+        make_place(db, 2, "Place B", "Nature", ["Nature"])
 
         rec = RecommendationService()
         results = rec.recommend(
@@ -134,8 +158,9 @@ class TestRecommendation:
 
     def test_must_visit_always_included(self, db):
         """Must-visit places must be included with max score."""
-        p1 = make_place(db, 1, "Popular Beach", "Beach", ["Beach"], rating=2.0)
-        p2 = make_place(db, 2, "Must Visit", "Culture", ["Culture"], rating=2.0)
+        make_destination(db)
+        make_place(db, 1, "Popular Beach", "Beach", ["Beach"], rating=2.0)
+        make_place(db, 2, "Must Visit", "Culture", ["Culture"], rating=2.0)
 
         rec = RecommendationService()
         results = rec.recommend(
@@ -149,13 +174,13 @@ class TestRecommendation:
         )
         returned_ids = [p.id for p, _, _ in results]
         assert 2 in returned_ids, "Must-visit place must always be included"
-        # Must-visit should be first
-        assert results[0][0].id == 2
+        assert results[0][0].id == 2, "Must-visit should be first"
 
     def test_crowded_penalty(self, db):
         """High-crowd places should be penalised when avoid_crowded is True."""
-        quiet = make_place(db, 1, "Quiet Beach", "Beach", ["Beach"], crowd="Low")
-        crowded = make_place(db, 2, "Crowded Beach", "Beach", ["Beach"], crowd="High")
+        make_destination(db)
+        make_place(db, 1, "Quiet Beach", "Beach", ["Beach"], crowd="Low")
+        make_place(db, 2, "Crowded Beach", "Beach", ["Beach"], crowd="High")
 
         rec = RecommendationService()
         results = rec.recommend(
@@ -173,6 +198,7 @@ class TestRecommendation:
 
     def test_score_clamped_0_1(self, db):
         """All scores must be in [0, 1]."""
+        make_destination(db)
         make_place(db, 1, "Test Place", "Beach", ["Beach", "Nature", "Food"])
         make_place(db, 2, "Low Place", "Culture", [], rating=1.0)
 
@@ -190,7 +216,9 @@ class TestRecommendation:
 
     def test_reasons_provided(self, db):
         """Each result should include at least one reason."""
+        make_destination(db)
         make_place(db, 1, "Beach Place", "Beach", ["Beach"])
+
         rec = RecommendationService()
         results = rec.recommend(
             db=db,
@@ -239,7 +267,7 @@ class TestItineraryService:
 
     def test_generates_for_each_day(self, db):
         from app.services.itinerary.itinerary_service import ItineraryService
-        from app.database.seeder import seed_database
+        from app.db.seeder import seed_database
 
         seed_database(db)
         trip = make_trip(db, ["Beach", "Nature"], "Balanced", "Medium", budget=25000)
@@ -251,7 +279,7 @@ class TestItineraryService:
 
     def test_no_overlapping_activities(self, db):
         from app.services.itinerary.itinerary_service import ItineraryService
-        from app.database.seeder import seed_database
+        from app.db.seeder import seed_database
 
         seed_database(db)
         trip = make_trip(db, ["Beach"], "Balanced", "Medium")
@@ -268,7 +296,7 @@ class TestItineraryService:
 
     def test_respects_max_activities(self, db):
         from app.services.itinerary.itinerary_service import ItineraryService
-        from app.database.seeder import seed_database
+        from app.db.seeder import seed_database
 
         seed_database(db)
         max_acts = 3
@@ -280,3 +308,127 @@ class TestItineraryService:
             actual = len([i for i in day.items if i.item_type == "activity"])
             assert actual <= max_acts, \
                 f"Day {day.day_number}: {actual} activities > max {max_acts}"
+
+
+# ---------------------------------------------------------------------------
+# API endpoint tests
+# ---------------------------------------------------------------------------
+
+class TestHealthEndpoint:
+    """Tests for system endpoints."""
+
+    def test_health_returns_healthy(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        client = TestClient(app)
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
+
+    def test_root_returns_info(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        client = TestClient(app)
+        response = client.get("/")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["app"] == "Vromon"
+        assert data["version"] == "2.0.0"
+
+
+class TestDestinationEndpoints:
+    """Tests for destination API endpoints."""
+
+    def test_list_destinations(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        client = TestClient(app)
+        response = client.get("/api/v1/destinations")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        # Should have at least Cox's Bazar from seed data
+        assert len(data) >= 1
+        assert data[0]["name"] == "Cox's Bazar"
+
+    def test_get_destination_places(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        client = TestClient(app)
+        response = client.get("/api/v1/destinations/1/places")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) > 0
+
+
+class TestTripEndpoints:
+    """Tests for trip API endpoints."""
+
+    def test_create_trip(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        client = TestClient(app)
+        trip_data = {
+            "destination": "Cox's Bazar",
+            "start_date": str(date.today()),
+            "end_date": str(date.today() + timedelta(days=2)),
+            "num_travelers": 2,
+            "total_budget": 15000,
+            "preference": {
+                "interests": ["Beach", "Nature"],
+                "travel_style": "Balanced",
+                "activity_level": "Medium",
+            },
+            "constraints": {
+                "max_activities_per_day": 4,
+                "avoid_crowded": False,
+            },
+        }
+        response = client.post("/api/v1/trips", json=trip_data)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["destination"] == "Cox's Bazar"
+        assert data["status"] == "draft"
+
+    def test_create_trip_invalid_dates(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        client = TestClient(app)
+        trip_data = {
+            "destination": "Cox's Bazar",
+            "start_date": "2026-12-15",
+            "end_date": "2026-12-10",  # before start
+            "total_budget": 15000,
+        }
+        response = client.post("/api/v1/trips", json=trip_data)
+        assert response.status_code == 422, "Should reject invalid date range"
+
+    def test_create_trip_invalid_budget(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        client = TestClient(app)
+        trip_data = {
+            "destination": "Cox's Bazar",
+            "start_date": "2026-12-10",
+            "end_date": "2026-12-15",
+            "total_budget": -1000,
+        }
+        response = client.post("/api/v1/trips", json=trip_data)
+        assert response.status_code == 422, "Should reject negative budget"
+
+    def test_list_trips(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        client = TestClient(app)
+        response = client.get("/api/v1/trips")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    def test_get_nonexistent_trip(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        client = TestClient(app)
+        response = client.get("/api/v1/trips/99999")
+        assert response.status_code == 404

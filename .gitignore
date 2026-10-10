@@ -4,8 +4,6 @@
 env/
 venv/
 ENV/
-env.bak/
-venv.bak/
 
 # Python
 __pycache__/
@@ -14,22 +12,9 @@ __pycache__/
 *.so
 .Python
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
 *.egg-info/
-.installed.cfg
 *.egg
-MANIFEST
 
 # Node
 node_modules/
@@ -41,11 +26,24 @@ yarn-error.log
 *.db
 vromon.db
 
-# OS generated files
+# OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Expo
+.expo/
+dist/
+
+# Misc
+*.log

@@ -1,33 +1,23 @@
 """
-AdaptationService — Rule-based itinerary adaptation (Version 1).
+AdaptationService — Rule-based itinerary adaptation (Version 2).
 
-Handles user commands such as:
-  - "make_trip_relaxed"  → reduce activity count, remove lowest-priority
-  - "reduce_budget"       → replace expensive activities with cheaper ones
-  - "avoid_crowds"        → re-run excluding high-crowd places
-  - "energise"            → add higher-activity places
-
-Future: Replace rule-based logic with a feedback-learning model
-(e.g., preference-vector updates, bandit algorithms, or RL).
+Handles user commands: relax, reduce_budget, avoid_crowds, energise.
+Ported from demo v1.
 """
 
 from __future__ import annotations
-from typing import List, Optional
+
+import logging
+from typing import List
 from sqlalchemy.orm import Session
 
-from app.models.models import (
-    Trip, Itinerary, ItineraryItem, Place, TripConstraint
-)
-from app.services.recommendation.recommendation_service import RecommendationService
+from app.models.models import Trip, Itinerary, ItineraryItem
+
+logger = logging.getLogger("vromon.adaptation")
 
 
 class AdaptationService:
-    """
-    Rule-based adaptation engine.
-
-    adapt_trip() is the main entry point. It modifies the existing
-    itinerary based on the adaptation_type and returns updated days.
-    """
+    """Rule-based adaptation engine."""
 
     def adapt_trip(
         self,
@@ -36,15 +26,7 @@ class AdaptationService:
         adaptation_type: str,
         parameters: dict = None,
     ) -> List[Itinerary]:
-        """
-        Apply adaptation to all itinerary days.
-
-        adaptation_type options:
-          "relax"          — remove 1 lowest-score activity per day
-          "reduce_budget"  — remove most expensive activity per day
-          "avoid_crowds"   — remove high-crowd activities
-          "energise"       — no-op currently (return as-is)
-        """
+        """Apply adaptation to all itinerary days."""
         parameters = parameters or {}
         days = trip.itinerary_days
 
@@ -56,17 +38,15 @@ class AdaptationService:
             elif adaptation_type == "avoid_crowds":
                 self._remove_crowded(db, day)
             elif adaptation_type == "energise":
-                pass  # Placeholder — future: add high-activity alternatives
+                pass  # Placeholder
             self._recalculate_day(day)
 
         db.commit()
         for day in days:
             db.refresh(day)
-        return list(days)
 
-    # ------------------------------------------------------------------
-    # Adaptation strategies
-    # ------------------------------------------------------------------
+        logger.info(f"Applied '{adaptation_type}' adaptation to trip {trip.id}")
+        return list(days)
 
     def _remove_lowest_priority(self, db: Session, day: Itinerary):
         """Remove the activity with the lowest recommendation score."""
@@ -96,7 +76,6 @@ class AdaptationService:
 
     def _recalculate_day(self, day: Itinerary):
         """Recalculate day totals after items change."""
-        # Refresh items list
-        items = [i for i in day.items if i not in []]
+        items = list(day.items)
         day.total_cost = round(sum(i.cost for i in items), 2)
         day.total_travel_time = round(sum(i.travel_time_to_next for i in items), 1)
