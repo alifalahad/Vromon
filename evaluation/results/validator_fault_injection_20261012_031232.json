@@ -1,0 +1,1020 @@
+{
+  "run_at": "2026-10-11T21:12:32.448262+00:00",
+  "clean_itineraries": 14,
+  "clean_with_hard_violations": 0,
+  "per_fault": {
+    "overlap": {
+      "injected": 14,
+      "detected": 14
+    },
+    "outside_hours": {
+      "injected": 14,
+      "detected": 14
+    },
+    "excluded": {
+      "injected": 14,
+      "detected": 14
+    },
+    "duplicate": {
+      "injected": 14,
+      "detected": 14
+    },
+    "over_limit": {
+      "injected": 14,
+      "detected": 14
+    },
+    "missing_must": {
+      "injected": 14,
+      "detected": 14
+    },
+    "over_budget": {
+      "injected": 14,
+      "detected": 14
+    }
+  },
+  "detection_rate": 1.0,
+  "clean_rows": [
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "heuristic",
+      "hard": []
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "cpsat",
+      "hard": []
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "heuristic",
+      "hard": []
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "cpsat",
+      "hard": []
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "heuristic",
+      "hard": []
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "cpsat",
+      "hard": []
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "heuristic",
+      "hard": []
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "cpsat",
+      "hard": []
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "heuristic",
+      "hard": []
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "cpsat",
+      "hard": []
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "heuristic",
+      "hard": []
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "cpsat",
+      "hard": []
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "heuristic",
+      "hard": []
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "cpsat",
+      "hard": []
+    }
+  ],
+  "fault_rows": [
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "heuristic",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "heuristic",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "heuristic",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "heuristic",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "heuristic",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "heuristic",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "heuristic",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "cpsat",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "cpsat",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "cpsat",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "cpsat",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED",
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "cpsat",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "cpsat",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "weekend_beach",
+      "algorithm": "cpsat",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "heuristic",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS",
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "heuristic",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS",
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "heuristic",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "heuristic",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "heuristic",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "heuristic",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "heuristic",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "cpsat",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "cpsat",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "cpsat",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "cpsat",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "cpsat",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "cpsat",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "culture_food_early",
+      "algorithm": "cpsat",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "heuristic",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "heuristic",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS",
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "heuristic",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "heuristic",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "heuristic",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "heuristic",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "heuristic",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "cpsat",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "cpsat",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS",
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "cpsat",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "cpsat",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED",
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "cpsat",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "cpsat",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "adventure_long",
+      "algorithm": "cpsat",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "heuristic",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "heuristic",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "heuristic",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "heuristic",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED",
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "heuristic",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "heuristic",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "heuristic",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "cpsat",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "cpsat",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "cpsat",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "cpsat",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED",
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "cpsat",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "cpsat",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "relaxed_short_day",
+      "algorithm": "cpsat",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "heuristic",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "heuristic",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS",
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "heuristic",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "heuristic",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "heuristic",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "heuristic",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "heuristic",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "cpsat",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "cpsat",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "cpsat",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "cpsat",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED",
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "cpsat",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "cpsat",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "must_visit_mix",
+      "algorithm": "cpsat",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "heuristic",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "heuristic",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "heuristic",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "heuristic",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "heuristic",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "heuristic",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "heuristic",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "cpsat",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "cpsat",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "cpsat",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "cpsat",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED",
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "cpsat",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "cpsat",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "budget_cap",
+      "algorithm": "cpsat",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "heuristic",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "heuristic",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS",
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "heuristic",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "heuristic",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "heuristic",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "heuristic",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "heuristic",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "cpsat",
+      "fault": "overlap",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS",
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "cpsat",
+      "fault": "outside_hours",
+      "detected": true,
+      "codes": [
+        "OUTSIDE_OPENING_HOURS",
+        "TIME_OVERLAP"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "cpsat",
+      "fault": "excluded",
+      "detected": true,
+      "codes": [
+        "EXCLUDED_PLACE_SCHEDULED"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "cpsat",
+      "fault": "duplicate",
+      "detected": true,
+      "codes": [
+        "DUPLICATE_PLACE",
+        "OUTSIDE_OPENING_HOURS"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "cpsat",
+      "fault": "over_limit",
+      "detected": true,
+      "codes": [
+        "ACTIVITY_LIMIT_EXCEEDED"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "cpsat",
+      "fault": "missing_must",
+      "detected": true,
+      "codes": [
+        "MUST_VISIT_MISSING"
+      ]
+    },
+    {
+      "scenario": "week_packed",
+      "algorithm": "cpsat",
+      "fault": "over_budget",
+      "detected": true,
+      "codes": [
+        "DAILY_BUDGET_EXCEEDED"
+      ]
+    }
+  ]
+}

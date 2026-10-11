@@ -7,8 +7,12 @@ All API input/output is validated and serialized through these schemas.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import List, Optional
-from pydantic import BaseModel, Field, field_validator
+import re
+from typing import Any, Dict, List, Literal, Optional
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+MAX_TRIP_DAYS = 30
 
 
 # ---------------------------------------------------------------------------
@@ -116,10 +120,17 @@ class TripPreferenceCreate(BaseModel):
     preferred_start_time: str = "09:00"
     preferred_end_time: str = "20:00"
 
+    @field_validator("preferred_start_time", "preferred_end_time")
+    @classmethod
+    def valid_time(cls, v):
+        if not TIME_PATTERN.match(v):
+            raise ValueError("time must be HH:MM in 24-hour format (00:00-23:59)")
+        return v
+
     @field_validator("travel_style")
     @classmethod
     def valid_style(cls, v):
-        allowed = {"Relaxed", "Balanced", "Packed"}
+        allowed = {"Relaxed", "Balanced", "Packed", "Active"}
         if v not in allowed:
             raise ValueError(f"travel_style must be one of {allowed}")
         return v
@@ -136,10 +147,17 @@ class TripPreferenceCreate(BaseModel):
 class TripConstraintCreate(BaseModel):
     max_activities_per_day: int = Field(default=4, ge=1, le=10)
     max_daily_budget: float = Field(default=0.0, ge=0)
-    must_visit: List[int] = []
-    excluded_places: List[int] = []
+    must_visit: List[int] = Field(default_factory=list, max_length=50)
+    excluded_places: List[int] = Field(default_factory=list, max_length=200)
     avoid_crowded: bool = False
     avoid_high_activity: bool = False
+
+    @field_validator("must_visit", "excluded_places")
+    @classmethod
+    def positive_ids(cls, v):
+        if any(i < 1 for i in v):
+            raise ValueError("place IDs must be positive integers")
+        return list(dict.fromkeys(v))  # drop duplicates, keep order
 
 
 class TripCreate(BaseModel):
@@ -158,10 +176,17 @@ class TripCreate(BaseModel):
             raise ValueError("end_date must be on or after start_date")
         return v
 
+    @model_validator(mode="after")
+    def trip_length(self):
+        if (self.end_date - self.start_date).days + 1 > MAX_TRIP_DAYS:
+            raise ValueError(f"trips can be at most {MAX_TRIP_DAYS} days long")
+        return self
+
 
 class TripUpdate(BaseModel):
-    title: Optional[str] = None
-    status: Optional[str] = None
+    """Partial update: only fields present in the request are changed."""
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    status: Optional[Literal["draft", "generated", "saved"]] = None
     preference: Optional[TripPreferenceCreate] = None
     constraints: Optional[TripConstraintCreate] = None
 
@@ -186,6 +211,10 @@ class ItineraryItemOut(BaseModel):
     recommendation_score: float
     recommendation_reasons: List[str] = []
     order_index: int
+    category: Optional[str] = None          # place category, or "Meal"
+    currency: str = "BDT"
+    # "data": cost comes from a place/restaurant record; "placeholder": no record, estimate only
+    cost_source: Literal["data", "placeholder"] = "data"
     place: Optional[PlaceOut] = None
     restaurant: Optional[RestaurantOut] = None
 
@@ -207,6 +236,68 @@ class ItineraryDayOut(BaseModel):
     items: List[ItineraryItemOut] = []
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Validation and generation output
+# ---------------------------------------------------------------------------
+
+class ViolationOut(BaseModel):
+    severity: Literal["hard", "soft", "info"]  # info = data limitation, not a violation
+    code: str
+    message: str
+    day_number: Optional[int] = None
+    item_id: Optional[int] = None
+
+
+class ValidationReportOut(BaseModel):
+    trip_id: int
+    valid: bool
+    hard_violation_count: int
+    soft_violation_count: int
+    violations: List[ViolationOut] = []
+
+
+# valid: no problems · valid_with_warnings: only preference (soft) warnings · invalid: hard violations
+GenerationStatus = Literal["valid", "valid_with_warnings", "invalid"]
+
+
+class GenerateMeta(BaseModel):
+    total_places_selected: int
+    estimated_total_activity_cost: float      # per person, activities only
+    estimated_total_cost_per_person: float    # per person, activities + meals
+    algorithm: Literal["heuristic_v1", "cpsat_v1"]
+    hard_violations: int
+    soft_violations: int
+    solver: Optional[Dict[str, Any]] = None   # CP-SAT status, bounds and diagnostics
+
+
+class GenerateResponse(BaseModel):
+    trip_id: int
+    status: GenerationStatus
+    replaced_previous: bool                   # an earlier itinerary for this trip was replaced
+    days_generated: int
+    valid: bool
+    warnings: List[str]
+    meta: GenerateMeta
+    validation: ValidationReportOut
+    itinerary: List[ItineraryDayOut]
+
+
+class ItineraryResponse(BaseModel):
+    trip_id: int
+    destination: str
+    start_date: str
+    end_date: str
+    num_days: int
+    currency: str
+    trip_status: str
+    status: Optional[GenerationStatus] = None  # None when nothing has been generated
+    total_budget: float
+    estimated_cost: float
+    hotel: Optional[Dict[str, Any]] = None
+    days: List[ItineraryDayOut]
+    validation: Optional[ValidationReportOut] = None
 
 
 # ---------------------------------------------------------------------------

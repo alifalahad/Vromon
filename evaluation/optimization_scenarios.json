@@ -1,0 +1,16 @@
+{
+  "description": "Phase 9 fixed comparison scenarios (Cox's Bazar seed data). Place names are resolved to IDs at run time. 'expect' records what a correct planner should do; it is used only for reporting, not for scoring.",
+  "destination": "Cox's Bazar",
+  "start_date": "2026-11-01",
+  "scenarios": [
+    {"id": "weekend_beach", "days": 2, "interests": ["Beach", "Relaxation", "Photography"], "start": "09:00", "end": "20:00", "max_per_day": 4, "expect": "feasible"},
+    {"id": "culture_food_early", "days": 3, "interests": ["Culture", "Food", "History"], "start": "07:00", "end": "18:00", "max_per_day": 5, "expect": "feasible"},
+    {"id": "adventure_long", "days": 5, "interests": ["Adventure", "Nature", "Photography"], "start": "08:00", "end": "21:00", "max_per_day": 5, "expect": "feasible"},
+    {"id": "relaxed_short_day", "days": 1, "interests": ["Relaxation", "Beach"], "start": "10:00", "end": "17:00", "max_per_day": 3, "travel_style": "Relaxed", "expect": "feasible"},
+    {"id": "must_visit_mix", "days": 2, "interests": ["Nature"], "start": "09:00", "end": "20:00", "max_per_day": 4, "must_visit": ["Himchari National Park", "Ramu Buddhist Temple Complex", "Sunset Boat Ride"], "excluded": ["Laboni Beach"], "expect": "feasible"},
+    {"id": "budget_cap", "days": 2, "interests": ["Beach", "Food"], "start": "09:00", "end": "20:00", "max_per_day": 4, "daily_cap": 2500, "expect": "feasible"},
+    {"id": "week_packed", "days": 7, "interests": ["Beach", "Nature", "Culture", "Adventure"], "start": "08:00", "end": "20:00", "max_per_day": 6, "travel_style": "Packed", "expect": "feasible"},
+    {"id": "conflict_must_and_excluded", "days": 1, "interests": ["Beach"], "start": "09:00", "end": "20:00", "max_per_day": 4, "must_visit": ["Laboni Beach"], "excluded": ["Laboni Beach"], "expect": "infeasible"},
+    {"id": "conflict_closed_must_visit", "days": 1, "interests": ["Food"], "start": "11:00", "end": "20:00", "max_per_day": 4, "must_visit": ["Cox's Bazar Fish Market"], "expect": "infeasible"}
+  ]
+}

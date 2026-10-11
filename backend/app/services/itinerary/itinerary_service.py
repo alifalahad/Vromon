@@ -23,6 +23,7 @@ from datetime import date, timedelta
 from typing import List, Tuple, Optional
 from sqlalchemy.orm import Session
 
+from app.services.recommendation.recommendation_service import per_person_daily_budget
 from app.models.models import (
     Place, Restaurant, Hotel,
     Trip, TripPreference, TripConstraint,
@@ -71,6 +72,18 @@ def _minutes_to_time(minutes: int) -> str:
     return f"{h:02d}:{m:02d}"
 
 
+def _meal_cost(restaurant) -> float:
+    """Per-person meal cost; 300 BDT placeholder only when no restaurant data exists."""
+    return restaurant.average_meal_cost if restaurant else 300.0
+
+
+def _meal_seed(trip: Trip, day_number: int) -> str:
+    """Seed derived from trip inputs, so identical requests get identical meals."""
+    pref = trip.preference
+    interests = ",".join(sorted(pref.interests)) if pref else ""
+    return f"{trip.destination}|{trip.start_date}|{trip.num_days}|{interests}|day{day_number}"
+
+
 def _travel_minutes(p1, p2) -> Tuple[float, float]:
     """Returns (travel_minutes, distance_km)."""
     dist = _haversine_km(p1.latitude, p1.longitude, p2.latitude, p2.longitude)
@@ -99,7 +112,7 @@ class ItineraryService:
             interests=pref.interests if pref else [],
             travel_style=pref.travel_style if pref else "Balanced",
             activity_level=pref.activity_level if pref else "Medium",
-            daily_budget=trip.total_budget / max(trip.num_days, 1),
+            daily_budget=per_person_daily_budget(trip.total_budget, trip.num_days, trip.num_travelers),
             avoid_crowded=cons.avoid_crowded if cons else False,
             exclude_ids=cons.excluded_places if cons else [],
             must_visit_ids=cons.must_visit if cons else [],
@@ -164,12 +177,15 @@ class ItineraryService:
             if place.id not in used_place_ids
         ]
 
-        # Bias toward day theme
+        # Bias toward day theme. The bonus only orders the candidates; the stored score
+        # stays the ranking score that the reasons explain (so it never exceeds 100%).
         themed = [
-            (p, s + 0.15 if any(t.lower() in [x.lower() for x in p.tags] for t in theme_interests) else s, r)
+            (p, s + 0.15 if any(t.lower() in [x.lower() for x in p.tags] for t in theme_interests) else s, r, s)
             for p, s, r in available
         ]
-        themed.sort(key=lambda x: x[1], reverse=True)
+        # Must-visit places are tried first (the theme bonus must not push them out of the day)
+        must_visit = set(cons.must_visit) if cons else set()
+        themed.sort(key=lambda x: (x[0].id in must_visit, x[1]), reverse=True)
 
         # Greedily schedule activities
         current_time = start_min
@@ -180,7 +196,11 @@ class ItineraryService:
         last_place: Optional[Place] = None
 
         # Breakfast slot
-        breakfast_rest = self._pick_meal(db, trip.destination, "Breakfast")
+        seed = _meal_seed(trip, day_number)
+        breakfast_rest = self._pick_meal(db, trip.destination, "Breakfast", seed)
+        # Lunch and dinner are chosen up front so their cost can be reserved under the daily cap
+        lunch_rest = self._pick_meal(db, trip.destination, "Lunch", seed)
+        dinner_rest = self._pick_meal(db, trip.destination, "Dinner", seed)
         breakfast_item = self._make_meal_item(
             meal_name="Breakfast",
             restaurant=breakfast_rest,
@@ -192,7 +212,7 @@ class ItineraryService:
 
         # Activity slots
         lunch_inserted = False
-        for place, score, reasons in themed:
+        for place, _order_score, reasons, score in themed:
             if activity_count >= max_activities:
                 break
 
@@ -215,17 +235,17 @@ class ItineraryService:
             if arrive_min < open_min:
                 arrive_min = open_min
                 finish_min = arrive_min + visit_min
-            if arrive_min >= close_min or finish_min > end_min + 60:
+            if finish_min > close_min or finish_min > end_min + 60:
                 continue
 
             # Budget check
-            if daily_budget_cap > 0 and day_cost + place.estimated_cost > daily_budget_cap:
+            pending_meals = (0.0 if lunch_inserted else _meal_cost(lunch_rest)) + _meal_cost(dinner_rest)
+            if daily_budget_cap > 0 and day_cost + place.estimated_cost + pending_meals > daily_budget_cap:
                 continue
 
             # Insert lunch break before afternoon activities
             if not lunch_inserted and arrive_min >= _time_to_minutes("12:00"):
                 lunch_start = max(_time_to_minutes("12:30"), current_time)
-                lunch_rest = self._pick_meal(db, trip.destination, "Lunch")
                 lunch_item = self._make_meal_item(
                     meal_name="Lunch",
                     restaurant=lunch_rest,
@@ -235,10 +255,10 @@ class ItineraryService:
                 day_cost += lunch_item.cost
                 current_time = _time_to_minutes(lunch_item.end_time)
                 lunch_inserted = True
-                # Recalculate arrival after lunch
-                arrive_min = int(current_time + travel_min)
+                # Recalculate arrival after lunch (re-applying opening hours)
+                arrive_min = max(int(current_time + travel_min), open_min)
                 finish_min = arrive_min + visit_min
-                if arrive_min >= close_min or finish_min > end_min + 60:
+                if finish_min > close_min or finish_min > end_min + 60:
                     continue
 
             # Update travel info on previous item
@@ -273,7 +293,6 @@ class ItineraryService:
         # Lunch if not yet inserted
         if not lunch_inserted:
             lunch_start = max(_time_to_minutes("12:30"), current_time)
-            lunch_rest = self._pick_meal(db, trip.destination, "Lunch")
             lunch_item = self._make_meal_item(
                 meal_name="Lunch",
                 restaurant=lunch_rest,
@@ -285,7 +304,6 @@ class ItineraryService:
 
         # Dinner
         dinner_start = max(_time_to_minutes("19:00"), current_time)
-        dinner_rest = self._pick_meal(db, trip.destination, "Dinner")
         dinner_item = self._make_meal_item(
             meal_name="Dinner",
             restaurant=dinner_rest,
@@ -327,20 +345,21 @@ class ItineraryService:
             hotel = db.query(Hotel).filter(Hotel.destination_name == trip.destination, Hotel.is_active == True).first()
         return hotel
 
-    def _pick_meal(self, db: Session, destination: str, meal_type: str) -> Optional[Restaurant]:
-        """Pick a restaurant for the given meal type."""
+    def _pick_meal(self, db: Session, destination: str, meal_type: str, seed: str = "") -> Optional[Restaurant]:
+        """Pick a restaurant for the given meal type (deterministic for the same seed)."""
         restaurants = (
             db.query(Restaurant)
             .filter(Restaurant.destination_name == destination, Restaurant.is_active == True)
+            .order_by(Restaurant.id)
             .all()
         )
         if not restaurants:
             return None
-        return random.choice(restaurants)
+        return random.Random(f"{seed}|{meal_type}").choice(restaurants)
 
     def _make_meal_item(self, meal_name: str, restaurant, start_min: int) -> ItineraryItem:
         duration = 60
-        cost = restaurant.average_meal_cost if restaurant else 300.0
+        cost = _meal_cost(restaurant)
         item = ItineraryItem(
             item_type="meal",
             restaurant_id=restaurant.id if restaurant else None,
@@ -372,4 +391,4 @@ class ItineraryService:
     def _theme_label(self, interests: List[str], day_number: int) -> str:
         if not interests:
             return f"Day {day_number}"
-        return " & ".join(interests[:2])
+        return " & ".join(dict.fromkeys(interests[:2]))  # one interest → "Culture", not "Culture & Culture"

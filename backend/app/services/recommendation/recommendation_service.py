@@ -52,6 +52,11 @@ ACTIVITY_LEVEL_MAP = {
 }
 
 
+def per_person_daily_budget(total_budget: float, num_days: int, num_travelers: int) -> float:
+    """Place prices are per person, so ranking compares them with each person's daily share."""
+    return total_budget / max(num_days, 1) / max(num_travelers, 1)
+
+
 class RecommendationService:
     """
     Scores places based on user preferences and returns ranked candidates.
@@ -190,9 +195,9 @@ class RecommendationService:
         if travel_style == "Relaxed" and place.activity_level == "Low":
             ts_score = w["travel_style"] * 1.0
             reasons.append("Ideal for a relaxed trip")
-        elif travel_style == "Packed" and place.activity_level == "High":
+        elif travel_style in ("Packed", "Active") and place.activity_level == "High":
             ts_score = w["travel_style"] * 1.0
-            reasons.append("Good for a packed itinerary")
+            reasons.append(f"Good for a {travel_style.lower()} itinerary")
         elif travel_style == "Balanced":
             ts_score = w["travel_style"] * 0.8
         else:

@@ -12,6 +12,10 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Accepted spellings for the Google Gemini API provider.
+GOOGLE_PROVIDER_NAMES = ("gemini", "google")
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -32,13 +36,32 @@ class Settings(BaseSettings):
     # --- LLM ---
     llm_provider: str = ""
     llm_api_key: str = ""
-    llm_model: str = "gemini-2.0-flash"
+    llm_model: str = "gemini-3.6-flash"
+    llm_temperature: float = 0.2
+    llm_timeout_seconds: float = 30.0
 
     # --- Embeddings ---
     embedding_provider: str = ""
     embedding_api_key: str = ""
-    embedding_model: str = "text-embedding-004"
+    embedding_model: str = "gemini-embedding-001"
     embedding_dimension: int = 768
+
+    # --- Grounded RAG generation ---
+    # Minimum cosine similarity for a retrieved chunk to count as evidence.
+    # Calibrate against evaluation/rag_generation_eval.py for the chosen embedding model.
+    rag_min_score: float = 0.55
+    rag_top_k: int = 5
+
+    # --- CP-SAT itinerary optimizer ---
+    # Deterministic work limit (CP-SAT units, roughly seconds on a fast core) → reproducible results.
+    optimizer_deterministic_limit: float = 5.0
+    # Wall-clock safety cap; if this stops the search the result may not be reproducible.
+    optimizer_time_limit_seconds: float = 15.0
+    optimizer_workers: int = 8
+
+    # --- Admin ---
+    # Required as X-Admin-Token for admin endpoints (e.g. RAG ingest) outside development.
+    admin_token: str = ""
 
     # --- CORS ---
     cors_origins: str = "http://localhost:3000,http://localhost:8081,http://localhost:19006"
@@ -64,11 +87,11 @@ class Settings(BaseSettings):
 
     @property
     def has_llm(self) -> bool:
-        return bool(self.llm_api_key and self.llm_provider)
+        return bool(self.llm_api_key and self.llm_provider.lower() in GOOGLE_PROVIDER_NAMES)
 
     @property
     def has_embeddings(self) -> bool:
-        return bool(self.embedding_api_key and self.embedding_provider)
+        return bool(self.embedding_api_key and self.embedding_provider.lower() in GOOGLE_PROVIDER_NAMES)
 
     @field_validator("database_url")
     @classmethod

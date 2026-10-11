@@ -9,28 +9,38 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.services.recommendation.recommendation_service import per_person_daily_budget
 from app.db import get_db
 from app.models.models import (
+    Destination,
     Trip, TripPreference, TripConstraint,
     Itinerary, ItineraryItem, Feedback, Place, Restaurant, Hotel,
 )
 from app.schemas.schemas import (
     TripCreate, TripUpdate, TripOut, TripSummaryOut,
     FeedbackCreate, FeedbackOut, AdaptRequest,
+    GenerateResponse, ItineraryResponse,
 )
 from app.services.itinerary.itinerary_service import ItineraryService
+from app.services.itinerary.constraint_validator import ConstraintValidator
+from app.services.itinerary.cpsat_scheduler import CpSatItineraryService
 from app.services.adaptation.adaptation_service import AdaptationService
+from app.services.itinerary import editing_service as edits
+from app.services.itinerary.editing_service import EditError
 
 logger = logging.getLogger("vromon.api.trips")
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 itinerary_service = ItineraryService()
 adaptation_service = AdaptationService()
+constraint_validator = ConstraintValidator()
 
 
 # ---------------------------------------------------------------------------
@@ -40,6 +50,11 @@ adaptation_service = AdaptationService()
 @router.post("", response_model=TripOut, status_code=201)
 def create_trip(payload: TripCreate, db: Session = Depends(get_db)):
     """Create a new trip with preferences and constraints."""
+    _validate_trip_settings(
+        db, payload.destination,
+        payload.preference.preferred_start_time, payload.preference.preferred_end_time,
+        payload.constraints.must_visit, payload.constraints.excluded_places,
+    )
     trip = Trip(
         destination=payload.destination,
         start_date=payload.start_date,
@@ -96,28 +111,29 @@ def get_trip(trip_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/{trip_id}", response_model=TripOut)
 def update_trip(trip_id: int, payload: TripUpdate, db: Session = Depends(get_db)):
-    """Update trip title, status, preferences, or constraints."""
+    """Update trip title, status, preferences, or constraints (only the fields sent)."""
     trip = _load_trip(db, trip_id)
     if payload.title is not None:
         trip.title = payload.title
     if payload.status is not None:
         trip.status = payload.status
     if payload.preference and trip.preference:
-        pref = trip.preference
-        pref.travel_style = payload.preference.travel_style
-        pref.activity_level = payload.preference.activity_level
-        pref.accommodation_preference = payload.preference.accommodation_preference
-        pref.preferred_start_time = payload.preference.preferred_start_time
-        pref.preferred_end_time = payload.preference.preferred_end_time
-        pref.interests = payload.preference.interests
+        for field in payload.preference.model_fields_set:
+            setattr(trip.preference, field, getattr(payload.preference, field))
     if payload.constraints and trip.constraints:
-        cons = trip.constraints
-        cons.max_activities_per_day = payload.constraints.max_activities_per_day
-        cons.max_daily_budget = payload.constraints.max_daily_budget
-        cons.avoid_crowded = payload.constraints.avoid_crowded
-        cons.avoid_high_activity = payload.constraints.avoid_high_activity
-        cons.must_visit = payload.constraints.must_visit
-        cons.excluded_places = payload.constraints.excluded_places
+        for field in payload.constraints.model_fields_set:
+            setattr(trip.constraints, field, getattr(payload.constraints, field))
+    try:
+        _validate_trip_settings(
+            db, trip.destination,
+            trip.preference.preferred_start_time if trip.preference else "09:00",
+            trip.preference.preferred_end_time if trip.preference else "20:00",
+            trip.constraints.must_visit if trip.constraints else [],
+            trip.constraints.excluded_places if trip.constraints else [],
+        )
+    except HTTPException:
+        db.rollback()
+        raise
     trip.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(trip)
@@ -147,7 +163,7 @@ def duplicate_trip(trip_id: int, db: Session = Depends(get_db)):
         end_date=original.end_date,
         num_travelers=original.num_travelers,
         total_budget=original.total_budget,
-        title=f"{original.destination} Trip (Copy)",
+        title=f"{original.title or original.destination + ' Trip'} (Copy)",
         status="draft",
     )
     db.add(new_trip)
@@ -186,63 +202,123 @@ def duplicate_trip(trip_id: int, db: Session = Depends(get_db)):
 # Itinerary generation
 # ---------------------------------------------------------------------------
 
-@router.post("/{trip_id}/generate")
-def generate_itinerary(trip_id: int, db: Session = Depends(get_db)):
-    """Generate a complete itinerary for the trip."""
+Algorithm = Literal["heuristic", "cpsat"]
+
+
+@router.post("/{trip_id}/generate", response_model=GenerateResponse)
+def generate_itinerary(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    algorithm: Algorithm = Query("heuristic", description="heuristic (greedy baseline) or cpsat (OR-Tools)"),
+):
+    """
+    Generate a complete itinerary for the trip.
+
+    - `heuristic`: the deterministic greedy baseline (default).
+    - `cpsat`: OR-Tools CP-SAT optimization. If the solver finds no feasible
+      schedule, returns 422 with the solver status and diagnostics and leaves
+      any existing itinerary unchanged.
+
+    A trip has one current itinerary: generating again replaces it
+    (`replaced_previous` says whether one existed). Overlapping requests for the same
+    trip are serialised, and a failure before the commit leaves the saved itinerary
+    untouched. The result is always re-checked by the independent validator and
+    saved with its `status` (`valid`, `valid_with_warnings` or `invalid`).
+    """
+    # Serialise generations of the same trip: row lock on PostgreSQL; SQLite allows one writer.
+    db.query(Trip.id).filter(Trip.id == trip_id).with_for_update().first()
     trip = _load_trip(db, trip_id)
+    _require_eligible_places(db, trip)
 
-    # Clear existing itinerary
-    for day in trip.itinerary_days:
-        db.delete(day)
-    db.flush()
+    solver_meta = None
+    if algorithm == "cpsat":
+        # Solve first (read-only) so a failure does not destroy the saved itinerary
+        cpsat = CpSatItineraryService()
+        result, context = cpsat.solve_for_trip(db, trip)
+        if not result.succeeded:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": "No itinerary satisfies all hard constraints.",
+                    "algorithm": "cpsat_v1",
+                    "solver": result.meta(),
+                },
+            )
+        solver_meta = result.meta()
 
-    days = itinerary_service.generate(db, trip)
+    replaced = _clear_itinerary(db, trip)
+
+    if algorithm == "cpsat":
+        days = cpsat.persist(db, trip, result, context)
+    else:
+        days = itinerary_service.generate(db, trip)
     trip.status = "generated"
     trip.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(trip)
 
-    total_cost = sum(d.total_cost for d in days)
-    total_places = sum(len([i for i in d.items if i.item_type == "activity"]) for d in days)
+    # Independent validation
+    report = constraint_validator.validate(trip, days)
+
+    activity_items = [i for d in days for i in d.items if i.item_type == "activity"]
 
     return {
         "trip_id": trip_id,
+        "status": _generation_status(report),
+        "replaced_previous": replaced,
         "days_generated": len(days),
+        "valid": not report.has_hard_violations,
+        "warnings": report.warnings,
         "meta": {
-            "total_places_selected": total_places,
-            "estimated_total_activity_cost": total_cost,
-            "algorithm": "heuristic_v1",
+            "total_places_selected": len(activity_items),
+            "estimated_total_activity_cost": round(sum(i.cost for i in activity_items), 2),
+            "estimated_total_cost_per_person": round(sum(d.total_cost for d in days), 2),
+            "algorithm": "cpsat_v1" if algorithm == "cpsat" else "heuristic_v1",
+            "hard_violations": len(report.hard_violations),
+            "soft_violations": len(report.soft_violations),
+            "solver": solver_meta,
         },
+        "validation": report.to_dict(),
         "itinerary": [_day_out(db, d) for d in days],
     }
 
 
-@router.post("/{trip_id}/regenerate")
-def regenerate_itinerary(trip_id: int, db: Session = Depends(get_db)):
+@router.post("/{trip_id}/regenerate", response_model=GenerateResponse)
+def regenerate_itinerary(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    algorithm: Algorithm = Query("heuristic", description="heuristic (greedy baseline) or cpsat (OR-Tools)"),
+):
     """Regenerate the entire itinerary (alias for generate)."""
-    return generate_itinerary(trip_id, db)
+    return generate_itinerary(trip_id, db, algorithm)
 
 
 # ---------------------------------------------------------------------------
 # Itinerary retrieval
 # ---------------------------------------------------------------------------
 
-@router.get("/{trip_id}/itinerary")
+@router.get("/{trip_id}/itinerary", response_model=ItineraryResponse)
 def get_itinerary(trip_id: int, db: Session = Depends(get_db)):
-    """Get the current itinerary for a trip."""
+    """Get the current itinerary for a trip, re-validated against the trip's current constraints."""
     trip = _load_trip(db, trip_id)
-    days = trip.itinerary_days
+    days = sorted(trip.itinerary_days, key=lambda d: d.day_number)
     total_cost = sum(d.total_cost for d in days)
     hotel = _get_hotel_info(db, trip)
+    report = constraint_validator.validate(trip, days) if days else None
     return {
         "trip_id": trip_id,
         "destination": trip.destination,
         "start_date": str(trip.start_date),
         "end_date": str(trip.end_date),
+        "num_days": trip.num_days,
+        "currency": trip.currency,
+        "trip_status": trip.status,
+        "status": _generation_status(report) if report else None,
         "total_budget": trip.total_budget,
         "estimated_cost": total_cost,
         "hotel": hotel,
         "days": [_day_out(db, d) for d in days],
+        "validation": report.to_dict() if report else None,
     }
 
 
@@ -252,74 +328,126 @@ def get_itinerary(trip_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/{trip_id}/items/{item_id}", status_code=200)
 def remove_item(trip_id: int, item_id: int, db: Session = Depends(get_db)):
-    """Remove an activity from the itinerary."""
-    item = db.query(ItineraryItem).filter(ItineraryItem.id == item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    day = item.itinerary
-    db.delete(item)
-    db.flush()
-    day.total_cost = round(sum(i.cost for i in day.items if i.id != item_id), 2)
+    """Remove an activity, recompute the day and re-validate the trip."""
+    trip = _load_trip(db, trip_id)
+    item = _load_item(trip, item_id)
+    title = item.title
+    try:
+        day = edits.remove_activity(db, trip, item, _hotel(db, trip))
+    except EditError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message)
     db.commit()
-    return {"success": True, "message": "Activity removed"}
+    return _edit_response(db, trip_id, day, f"Removed '{title}'")
+
+
+@router.get("/{trip_id}/items/{item_id}/alternatives")
+def item_alternatives(trip_id: int, item_id: int, db: Session = Depends(get_db)):
+    """Places that could replace this activity in the same time slot (best ranked first)."""
+    trip = _load_trip(db, trip_id)
+    item = _load_item(trip, item_id)
+    if item.item_type != "activity":
+        raise HTTPException(status_code=422, detail="Only activities have alternatives.")
+    fits = edits.alternatives_for_item(db, trip, item, limit=5)
+    return {
+        "item_id": item_id,
+        "is_must_visit": edits.is_must_visit(trip, item),
+        "alternatives": [
+            {
+                "place": _place_out(f.place),
+                "recommendation_score": round(f.score, 3),
+                "recommendation_reasons": f.reasons,
+                "start_time": edits._minutes_to_time(f.start_min),
+                "end_time": edits._minutes_to_time(f.end_min),
+                "travel_from_previous_min": round(f.travel_in_min, 1),
+            }
+            for f in fits
+        ],
+    }
+
+
+class ReplaceRequest(BaseModel):
+    place_id: Optional[int] = Field(None, description="Place to use; omit to pick the best-ranked fit")
+
+
+@router.post("/{trip_id}/items/{item_id}/replace")
+def replace_item(trip_id: int, item_id: int, payload: ReplaceRequest, db: Session = Depends(get_db)):
+    """Replace an activity with another place that fits the same slot; re-validates the trip."""
+    trip = _load_trip(db, trip_id)
+    item = _load_item(trip, item_id)
+    old_title = item.title
+    try:
+        new_item = edits.replace_activity(db, trip, item, payload.place_id, _hotel(db, trip))
+    except EditError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status, detail=exc.message)
+    db.commit()
+    return _edit_response(db, trip_id, new_item.itinerary, f"Replaced '{old_title}' with '{new_item.title}'")
 
 
 @router.post("/{trip_id}/days/{day_id}/regenerate")
 def regenerate_day(trip_id: int, day_id: int, db: Session = Depends(get_db)):
-    """Regenerate a single day of the itinerary."""
+    """
+    Rebuild one day with fresh alternatives (heuristic scheduler).
+
+    Places currently on the day are avoided so the result actually changes,
+    except must-visit places, which are kept. If no alternatives remain, the
+    day's current places are allowed again. Other days are never touched.
+    """
     trip = _load_trip(db, trip_id)
-    day = db.query(Itinerary).filter(
-        Itinerary.id == day_id, Itinerary.trip_id == trip_id
-    ).first()
-    if not day:
+    day = next((d for d in trip.itinerary_days if d.id == day_id), None)
+    if day is None:
         raise HTTPException(status_code=404, detail="Day not found")
 
-    used_ids = set()
-    for other_day in trip.itinerary_days:
-        if other_day.id != day_id:
-            for item in other_day.items:
-                if item.place_id:
-                    used_ids.add(item.place_id)
+    must = edits.must_visit_ids(trip)
+    other_days_ids = {
+        i.place_id for d in trip.itinerary_days if d.id != day_id for i in d.items if i.place_id
+    }
+    this_day_ids = {i.place_id for i in day.items if i.place_id}
+    keep_must = sorted(this_day_ids & must)
 
-    # Delete existing day items
-    for item in day.items:
-        db.delete(item)
-    db.flush()
-
-    # Rebuild
     svc = ItineraryService()
-    pref = trip.preference
-    cons = trip.constraints
+    pref, cons = trip.preference, trip.constraints
     candidates = svc.recommender.recommend(
         db=db,
         destination=trip.destination,
         interests=pref.interests if pref else [],
         travel_style=pref.travel_style if pref else "Balanced",
         activity_level=pref.activity_level if pref else "Medium",
-        daily_budget=trip.total_budget / max(trip.num_days, 1),
+        daily_budget=per_person_daily_budget(trip.total_budget, trip.num_days, trip.num_travelers),
         avoid_crowded=cons.avoid_crowded if cons else False,
         exclude_ids=cons.excluded_places if cons else [],
+        must_visit_ids=keep_must,
         limit=50,
     )
     hotel = svc._pick_hotel(db, trip)
-    new_day = svc._build_day(
-        db=db,
-        trip=trip,
-        day_number=day.day_number,
-        day_date=day.day_date,
-        candidates=candidates,
-        used_place_ids=used_ids,
-        hotel=hotel,
-    )
+
+    def build(avoid: set):
+        return svc._build_day(
+            db=db, trip=trip, day_number=day.day_number, day_date=day.day_date,
+            candidates=candidates, used_place_ids=set(other_days_ids | avoid), hotel=hotel,
+        )
+
+    new_day = build(this_day_ids - must)
+    note = "Regenerated with different places"
+    if not any(i.item_type == "activity" for i in new_day.items if i.place_id not in must):
+        new_day = build(set())
+        note = "No unused alternatives fit this day; regenerated from all available places"
+
+    for item in list(day.items):
+        day.items.remove(item)
+        db.delete(item)
+    db.flush()
     day.theme = new_day.theme
-    day.total_cost = new_day.total_cost
-    day.total_travel_time = new_day.total_travel_time
-    for item in new_day.items:
-        item.itinerary_id = day.id
-        db.add(item)
+    # Copy the generated items onto the existing day; the throwaway day object must
+    # never enter the session (it would be persisted as an extra day row).
+    for generated in new_day.items:
+        day.items.append(_copy_item(generated))
+    if new_day in db:
+        db.expunge(new_day)
+    db.flush()
+    edits.recompute_day(day, hotel)
     db.commit()
-    db.refresh(day)
-    return _day_out(db, day)
+    return _edit_response(db, trip_id, day, note)
 
 
 # ---------------------------------------------------------------------------
@@ -364,22 +492,259 @@ def get_feedback(trip_id: int, db: Session = Depends(get_db)):
 def adapt_trip(trip_id: int, payload: AdaptRequest, db: Session = Depends(get_db)):
     """Adapt the itinerary based on user request."""
     trip = _load_trip(db, trip_id)
-    days = adaptation_service.adapt_trip(
+    if not trip.itinerary_days:
+        raise HTTPException(status_code=409, detail="Generate an itinerary before adapting it.")
+    result = adaptation_service.adapt_trip(
         db=db,
         trip=trip,
         adaptation_type=payload.adaptation_type,
         parameters=payload.parameters,
+        hotel=_hotel(db, trip),
     )
+    trip = _load_trip(db, trip_id)
     return {
         "trip_id": trip_id,
         "adaptation_applied": payload.adaptation_type,
-        "days": [_day_out(db, d) for d in days],
+        "changed": bool(result.changes),
+        "changes": result.changes,
+        "message": (
+            f"{len(result.changes)} change(s) applied."
+            if result.changes else "No change: nothing in the itinerary matched this adaptation."
+        ),
+        "days": [_day_out(db, d) for d in trip.itinerary_days],
+        "validation": constraint_validator.validate(trip, trip.itinerary_days).to_dict(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Budget
+# ---------------------------------------------------------------------------
+
+@router.get("/{trip_id}/budget")
+def budget_breakdown(trip_id: int, db: Session = Depends(get_db)):
+    """
+    Cost breakdown computed from the saved itinerary and seed price data.
+
+    Activity and meal costs in the data are per person and are multiplied by the
+    number of travellers. Hotel cost = price per night × nights × rooms, assuming
+    2 travellers per room. Only costs from real records in the trip's currency
+    count towards `known_total`. Placeholder meal prices (no restaurant data) are
+    kept separate in `placeholder_total`; items in another currency are left out
+    (no conversion rate). Local transport is not estimated (no data).
+    `estimated_total` = known + placeholder, and `incomplete_reasons` lists every gap.
+    """
+    trip = _load_trip(db, trip_id)
+    days = sorted(trip.itinerary_days, key=lambda d: d.day_number)
+    n = trip.num_travelers
+    currency = trip.currency
+    nights = max(trip.num_days - 1, 0)
+    rooms = -(-n // 2)
+    hotel = _get_hotel_info(db, trip)
+    hotel_ok = bool(hotel) and hotel.get("currency", currency) == currency
+    hotel_total = hotel["price_per_night"] * nights * rooms if hotel_ok else 0.0
+
+    per_day = []
+    placeholder_meals = 0
+    other_currency: dict[str, int] = {}
+    for d in days:
+        act = meal = placeholder = 0.0
+        for i in d.items:
+            if _cost_source(i) == "placeholder":
+                placeholder += i.cost
+                placeholder_meals += 1
+                continue
+            item_currency = _item_currency(i)
+            if item_currency != currency:
+                other_currency[item_currency] = other_currency.get(item_currency, 0) + 1
+                continue
+            if i.item_type == "activity":
+                act += i.cost
+            elif i.item_type == "meal":
+                meal += i.cost
+        per_day.append({
+            "day_number": d.day_number,
+            "activities_per_person": round(act, 2),
+            "meals_per_person": round(meal, 2),
+            "placeholder_per_person": round(placeholder, 2),
+            "total_for_group": round((act + meal) * n, 2),
+            "daily_cap_per_person": trip.constraints.max_daily_budget if trip.constraints else 0.0,
+        })
+    activities = sum(p["activities_per_person"] for p in per_day) * n
+    meals = sum(p["meals_per_person"] for p in per_day) * n
+    placeholder_total = sum(p["placeholder_per_person"] for p in per_day) * n
+    free_activities = sum(
+        1 for d in days for i in d.items if i.item_type == "activity" and not i.cost
+    )
+    known_total = activities + meals + hotel_total
+    total = known_total + placeholder_total
+
+    incomplete = ["Local transport is not included (no price data available)."]
+    if not hotel:
+        incomplete.append("Accommodation is not included (no hotel data for this destination).")
+    elif not hotel_ok:
+        incomplete.append(f"Accommodation is priced in {hotel.get('currency')}, not {currency}, and is not included.")
+    if placeholder_meals:
+        incomplete.append(
+            f"{placeholder_meals} meal(s) have no restaurant data; their placeholder price is shown separately, not as a real cost."
+        )
+    for cur, count in sorted(other_currency.items()):
+        incomplete.append(f"{count} item(s) priced in {cur} are left out (no conversion to {currency}).")
+
+    return {
+        "trip_id": trip_id,
+        "currency": currency,
+        "num_travelers": n,
+        "nights": nights,
+        "total_budget": trip.total_budget,
+        "categories": {
+            "activities": round(activities, 2),
+            "meals": round(meals, 2),
+            "accommodation": round(hotel_total, 2),
+            "transport": None,
+        },
+        "known_total": round(known_total, 2),
+        "placeholder_total": round(placeholder_total, 2),
+        "placeholder_meals": placeholder_meals,
+        "excluded_other_currency": sum(other_currency.values()),
+        "estimated_total": round(total, 2),
+        "remaining": round(trip.total_budget - total, 2),
+        "over_budget": total > trip.total_budget,
+        "per_day": per_day,
+        "hotel": hotel,
+        "assumptions": [
+            "Activity and meal prices are per person, multiplied by the number of travellers.",
+            f"Accommodation assumes {rooms} room(s) (2 travellers per room) for {nights} night(s).",
+            "Prices come from the sample seed dataset and are estimates, not quotes.",
+        ],
+        "not_included": ["Local transport (no price data available)"],
+        "incomplete_reasons": incomplete,
+        "free_activities": free_activities,
     }
 
 
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
+
+def _validate_trip_settings(
+    db: Session, destination: str, start_time: str, end_time: str, must_visit: list, excluded: list
+) -> None:
+    """Cross-field and database checks shared by create and update (422 with all problems listed)."""
+    errors = []
+    if not db.query(Destination).filter(Destination.name == destination, Destination.is_active == True).first():  # noqa: E712
+        errors.append(f"Unknown destination '{destination}'.")
+    if end_time <= start_time:
+        errors.append("preferred_end_time must be later than preferred_start_time.")
+    both = sorted(set(must_visit) & set(excluded))
+    if both:
+        errors.append(f"Place(s) {both} cannot be both must-visit and excluded.")
+    ids = set(must_visit) | set(excluded)
+    if ids:
+        known = {
+            pid for (pid,) in db.query(Place.id).filter(
+                Place.id.in_(ids), Place.destination_name == destination, Place.is_active == True  # noqa: E712
+            )
+        }
+        unknown = sorted(ids - known)
+        if unknown:
+            errors.append(f"Place ID(s) {unknown} do not exist at {destination}.")
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
+
+
+def _require_eligible_places(db: Session, trip: Trip) -> None:
+    """422 before anything is changed when no place can be scheduled at all."""
+    excluded = set(trip.constraints.excluded_places) if trip.constraints else set()
+    eligible = [
+        pid for (pid,) in db.query(Place.id).filter(
+            Place.destination_name == trip.destination, Place.is_active == True  # noqa: E712
+        )
+        if pid not in excluded
+    ]
+    if not eligible:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": (
+                    f"No places at {trip.destination} can be scheduled: every place is excluded or unavailable. "
+                    "Remove some exclusions and try again. Your saved itinerary was not changed."
+                ),
+                "eligible_places": 0,
+            },
+        )
+
+
+def _clear_itinerary(db: Session, trip: Trip) -> bool:
+    """
+    Delete every saved day of the trip, reading from the database rather than the
+    possibly stale `trip.itinerary_days`, so an overlapping request cannot leave
+    duplicate days behind. Returns whether an itinerary existed.
+    """
+    for day in list(trip.itinerary_days):
+        for item in list(day.items):
+            db.expunge(item)
+        db.expunge(day)
+    day_ids = select(Itinerary.id).where(Itinerary.trip_id == trip.id)
+    db.query(ItineraryItem).filter(ItineraryItem.itinerary_id.in_(day_ids)).delete(synchronize_session=False)
+    removed = db.query(Itinerary).filter(Itinerary.trip_id == trip.id).delete(synchronize_session=False)
+    db.expire(trip, ["itinerary_days"])
+    return removed > 0
+
+
+def _generation_status(report) -> str:
+    if report.has_hard_violations:
+        return "invalid"
+    return "valid_with_warnings" if report.soft_violations else "valid"
+
+
+def _cost_source(item: ItineraryItem) -> str:
+    """A meal without a restaurant record has a placeholder price, not real data."""
+    return "placeholder" if item.item_type == "meal" and item.restaurant_id is None else "data"
+
+
+def _item_currency(item: ItineraryItem) -> str:
+    source = item.place or item.restaurant
+    # Placeholder meal prices are defined in BDT (itinerary_service._meal_cost)
+    return source.currency if source is not None and source.currency else "BDT"
+
+
+def _load_item(trip: Trip, item_id: int) -> ItineraryItem:
+    """Find an item that belongs to this trip (404 otherwise, even if it exists elsewhere)."""
+    for day in trip.itinerary_days:
+        for item in day.items:
+            if item.id == item_id:
+                return item
+    raise HTTPException(status_code=404, detail=f"Item {item_id} not found in trip {trip.id}")
+
+
+def _copy_item(src: ItineraryItem) -> ItineraryItem:
+    item = ItineraryItem(
+        item_type=src.item_type, place_id=src.place_id, restaurant_id=src.restaurant_id,
+        title=src.title, start_time=src.start_time, end_time=src.end_time,
+        duration_minutes=src.duration_minutes, cost=src.cost, travel_time_to_next=0.0,
+        distance_to_next=0.0, notes=src.notes, recommendation_score=src.recommendation_score,
+        order_index=src.order_index,
+    )
+    item.recommendation_reasons = src.recommendation_reasons
+    return item
+
+
+def _hotel(db: Session, trip: Trip):
+    return ItineraryService()._pick_hotel(db, trip)
+
+
+def _edit_response(db: Session, trip_id: int, day: Itinerary, message: str) -> dict:
+    """Common response for edits: the changed day plus a fresh validation of the whole trip."""
+    db.expire_all()
+    trip = _load_trip(db, trip_id)
+    day = next(d for d in trip.itinerary_days if d.id == day.id)
+    return {
+        "success": True,
+        "message": message,
+        "day": _day_out(db, day),
+        "validation": constraint_validator.validate(trip, trip.itinerary_days).to_dict(),
+    }
+
 
 def _load_trip(db: Session, trip_id: int) -> Trip:
     trip = (
@@ -468,6 +833,9 @@ def _item_out(item: ItineraryItem) -> dict:
         "recommendation_score": item.recommendation_score,
         "recommendation_reasons": item.recommendation_reasons,
         "order_index": item.order_index,
+        "category": item.place.category if item.place else ("Meal" if item.item_type == "meal" else None),
+        "currency": _item_currency(item),
+        "cost_source": _cost_source(item),
         "place": _place_out(item.place) if item.place else None,
         "restaurant": _restaurant_out(item.restaurant) if item.restaurant else None,
     }
@@ -573,6 +941,7 @@ def _get_hotel_info(db: Session, trip: Trip) -> dict | None:
         "name": hotel.name,
         "category": hotel.category,
         "price_per_night": hotel.price_per_night,
+        "currency": hotel.currency,
         "rating": hotel.rating,
         "latitude": hotel.latitude,
         "longitude": hotel.longitude,

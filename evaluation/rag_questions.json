@@ -1,0 +1,18 @@
+{
+  "description": "Phase 8 grounded-generation evaluation set for the Cox's Bazar seed dataset. 'strong' questions are directly answerable from one seed record; 'weak' need inference across records or are only partly covered; 'none' are not covered by any ingested source and must return insufficient_evidence.",
+  "destination": "Cox's Bazar",
+  "questions": [
+    {"id": "s1", "category": "strong", "question": "What are the opening hours of Himchari National Park?", "expected_sources": ["Himchari National Park"]},
+    {"id": "s2", "category": "strong", "question": "How much does the Sunset Boat Ride cost?", "expected_sources": ["Sunset Boat Ride"]},
+    {"id": "s3", "category": "strong", "question": "When is the Cox's Bazar Fish Market open?", "expected_sources": ["Cox's Bazar Fish Market"]},
+    {"id": "s4", "category": "strong", "question": "What kind of food does Poushee Restaurant serve?", "expected_sources": ["Poushee Restaurant"]},
+    {"id": "s5", "category": "strong", "question": "What is the nightly price at Coral Reef Guest House?", "expected_sources": ["Coral Reef Guest House"]},
+    {"id": "w1", "category": "weak", "question": "Which places are good for watching the sunrise?", "expected_sources": ["Laboni Beach", "Seagull Beach"]},
+    {"id": "w2", "category": "weak", "question": "Where can I learn about Buddhist culture?", "expected_sources": ["Ramu Buddhist Temple Complex", "Aggmeda Khyang Buddhist Monastery"]},
+    {"id": "w3", "category": "weak", "question": "Is there anything to do in the evening after dark?", "expected_sources": ["Cox's Bazar Night Market"]},
+    {"id": "n1", "category": "none", "question": "What documents do I need for a Bangladesh tourist visa?", "expected_sources": []},
+    {"id": "n2", "category": "none", "question": "How much is a flight from Dhaka to Cox's Bazar?", "expected_sources": []},
+    {"id": "n3", "category": "none", "question": "Is there a casino in Cox's Bazar?", "expected_sources": []},
+    {"id": "n4", "category": "none", "question": "What is the weather forecast for next week?", "expected_sources": []}
+  ]
+}

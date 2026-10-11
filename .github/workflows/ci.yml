@@ -1,0 +1,47 @@
+# Vromon CI: backend tests (offline, no API keys) and mobile typecheck/lint/tests.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.lock
+      - name: Install exact tested dependencies
+        run: |
+          pip install -r requirements.lock
+          pip install -e . --no-deps
+      - name: Tests (live LLM tests are skipped without VROMON_LIVE_TESTS)
+        run: python -m pytest -q
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx eslint . --max-warnings 0
+      - run: npm test -- --ci

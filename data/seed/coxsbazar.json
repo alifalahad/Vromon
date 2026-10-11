@@ -1,5 +1,12 @@
 {
   "destination": "Cox's Bazar",
+  "source": "Sample data carried over from the Vromon demo (demo/backend). Prices, hours, ratings and descriptions are illustrative and not independently verified.",
+  "destination_info": {
+    "country": "Bangladesh",
+    "latitude": 21.4272,
+    "longitude": 92.0058,
+    "description": "Cox's Bazar is home to the world's longest natural sea beach at 120 km. Located in the Chittagong Division of Bangladesh, it features stunning beaches, Buddhist temples, and diverse cuisine."
+  },
   "places": [
     {
       "id": 1,

@@ -19,6 +19,16 @@ logger = logging.getLogger("vromon.seeder")
 # Seed data path relative to the repository root
 SEED_DATA_DIR = Path(__file__).parent.parent.parent.parent / "data" / "seed"
 
+# Place fields the planners and validator rely on. The schema cannot store "unknown"
+# for them (NOT NULL with defaults), so a record without them would silently get an
+# invented price or opening hours. The seeder warns about such records.
+REQUIRED_PLACE_FIELDS = ("estimated_cost", "opening_time", "closing_time")
+
+
+def missing_place_fields(record: dict) -> list[str]:
+    """Required place fields absent (or null) in a seed record."""
+    return [f for f in REQUIRED_PLACE_FIELDS if record.get(f) is None]
+
 
 def seed_database(db: Session) -> None:
     """Seed database with Cox's Bazar demo data if not already seeded."""
@@ -37,25 +47,28 @@ def seed_database(db: Session) -> None:
         data = json.load(f)
 
     destination_name = data.get("destination", "Cox's Bazar")
+    info = data.get("destination_info", {})
 
-    # Create Destination record
+    # Create Destination record (descriptive text comes from the seed file, not code)
     dest = Destination(
         id=1,
         name=destination_name,
-        country="Bangladesh",
-        description=(
-            "Cox's Bazar is home to the world's longest natural sea beach at 120 km. "
-            "Located in the Chittagong Division of Bangladesh, it features stunning beaches, "
-            "Buddhist temples, and diverse cuisine."
-        ),
-        latitude=21.4272,
-        longitude=92.0058,
+        country=info.get("country", "Bangladesh"),
+        description=info.get("description"),
+        latitude=info.get("latitude", 0.0),
+        longitude=info.get("longitude", 0.0),
     )
     db.add(dest)
     db.flush()
 
     # Seed Places
     for p in data.get("places", []):
+        missing = missing_place_fields(p)
+        if missing:
+            logger.warning(
+                "Place %r has no %s in the seed file; the schema default will be used and is NOT real data.",
+                p.get("name"), ", ".join(missing),
+            )
         place = Place(
             id=p["id"],
             name=p["name"],

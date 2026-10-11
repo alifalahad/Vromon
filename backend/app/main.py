@@ -41,6 +41,18 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    # RAG ingestion (idempotent — skips unchanged chunks)
+    db = SessionLocal()
+    try:
+        from app.services.rag.ingestion import ingest_all_seed_files
+        rag_results = ingest_all_seed_files(db)
+        for r in rag_results:
+            logger.info(f"RAG: {r}")
+    except Exception as exc:
+        logger.warning(f"RAG ingestion failed at startup (non-fatal): {exc}")
+    finally:
+        db.close()
+
     logger.info("Vromon backend ready.")
     yield
 
@@ -59,12 +71,13 @@ app = FastAPI(
 )
 
 # CORS
+# Browser origins come from CORS_ORIGINS. Native mobile apps are not subject to CORS.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept", "X-Admin-Token"],
 )
 
 # Mount API v1
@@ -109,8 +122,5 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={
-            "detail": "An internal error occurred. Please try again later.",
-            "type": type(exc).__name__,
-        },
+        content={"detail": "An internal error occurred. Please try again later."},
     )

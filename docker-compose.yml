@@ -1,0 +1,48 @@
+# Vromon local stack: PostgreSQL 16 (+ pgvector extension available) and the backend.
+#
+#   docker compose up --build        # API on http://localhost:8000 (docs at /docs); BACKEND_PORT=8001 to change
+#   docker compose down              # stop (data kept in the "pgdata" volume)
+#   docker compose down -v           # stop and delete the database
+#
+# Optional AI features: put LLM_*/EMBEDDING_* keys in a root-level .env file
+# (git-ignored); Compose substitutes them below. Without keys, everything except
+# grounded AI answers works.
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.0-pg16
+    environment:
+      POSTGRES_USER: vromon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vromon-local-only}
+      POSTGRES_DB: vromon
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vromon -d vromon"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: postgresql+psycopg://vromon:${POSTGRES_PASSWORD:-vromon-local-only}@db:5432/vromon
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8081,http://localhost:19006,http://localhost:3000}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gemini-3.6-flash}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-gemini-embedding-001}
+
+volumes:
+  pgdata:
