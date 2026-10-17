@@ -15,6 +15,23 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # PostgreSQL for the migration tests (tests/test_migrations.py); same image as docker-compose
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.0-pg16
+        env:
+          POSTGRES_USER: vromon
+          POSTGRES_PASSWORD: vromon-ci-only
+          POSTGRES_DB: vromon_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vromon"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_POSTGRES_URL: postgresql+psycopg://vromon:vromon-ci-only@localhost:5432/vromon_test
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

@@ -15,11 +15,14 @@ import logging
 import secrets
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user
+from app.core.rate_limit import LLM_LIMIT, limiter
 from app.db.base import get_db
+from app.models.models import User
 from app.services.llm.provider import (
     LLMError,
     LLMProvider,
@@ -112,6 +115,7 @@ def rag_search(
     ),
     top_k: int = Query(5, ge=1, le=20, description="Number of results to return"),
     db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),  # embedding calls are paid: signed-in users only
 ):
     """
     Perform semantic search over all ingested travel content.
@@ -202,7 +206,14 @@ def rag_status(db: Session = Depends(get_db)):
 
 
 @router.post("/ask", response_model=GroundedAnswer, summary="Grounded question answering")
-def rag_ask(payload: AskRequest, db: Session = Depends(get_db), llm: LLMProvider | LLMError = Depends(get_llm)):
+@limiter.limit(LLM_LIMIT)
+def rag_ask(
+    request: Request,  # required by the rate limiter
+    payload: AskRequest,
+    db: Session = Depends(get_db),
+    llm: LLMProvider | LLMError = Depends(get_llm),
+    _user: User = Depends(get_current_user),
+):
     """
     Answer a travel question using only retrieved evidence.
 
@@ -229,11 +240,14 @@ def rag_ask(payload: AskRequest, db: Session = Depends(get_db), llm: LLMProvider
     response_model=GroundedAnswer,
     summary="Grounded explanation of a scheduled activity",
 )
+@limiter.limit(LLM_LIMIT)
 def explain_item(
+    request: Request,  # required by the rate limiter
     trip_id: int,
     item_id: int,
     db: Session = Depends(get_db),
     llm: LLMProvider | LLMError = Depends(get_llm),
+    user: User = Depends(get_current_user),
 ):
     """
     Explain why an itinerary activity was chosen, using its source record and the
@@ -242,9 +256,8 @@ def explain_item(
     from app.models.models import Itinerary, ItineraryItem, Trip
     from app.services.rag.generation import explain_itinerary_item
 
-    llm = _require_llm(llm)
     trip = db.get(Trip, trip_id)
-    if trip is None:
+    if trip is None or trip.user_id != user.id:
         raise HTTPException(status_code=404, detail=f"Trip {trip_id} not found")
     item = (
         db.query(ItineraryItem)
@@ -254,6 +267,8 @@ def explain_item(
     )
     if item is None:
         raise HTTPException(status_code=404, detail=f"Item {item_id} not found in trip {trip_id}")
+
+    llm = _require_llm(llm)  # after the ownership check: strangers get 404, not 503
 
     try:
         return explain_itinerary_item(trip, item, db, llm)

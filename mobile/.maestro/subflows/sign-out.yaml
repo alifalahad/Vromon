@@ -1,0 +1,18 @@
+# Signs out from Settings (the account's data on the server is untouched).
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+---
+- tapOn:
+    id: tab-settings
+- scrollUntilVisible:
+    element:
+      id: settings-sign-out
+    direction: DOWN
+- tapOn:
+    id: settings-sign-out
+- tapOn: "(?i)sign out"
+- extendedWaitUntil:
+    visible:
+      id: email-input
+    timeout: 20000

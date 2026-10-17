@@ -44,6 +44,9 @@ export const tripFormSchema = z
     avoid_crowded: z.boolean().default(false),
     must_visit: z.array(z.number().int()).default([]),
     excluded_places: z.array(z.number().int()).default([]),
+    // Decision D7: where the trip starts (optional) and how you get to the destination
+    origin: z.object({ city_geonameid: z.number().int(), label: z.string() }).nullable().default(null),
+    transport_mode: z.enum(['plane', 'bus', 'train', 'car', 'boat', 'walk']).nullable().default(null),
   })
   .refine((d) => d.end_date >= d.start_date, {
     message: 'End date must be on or after the start date',
@@ -98,6 +101,8 @@ export function defaultTripForm(today: Date = new Date(), destination = ''): Tri
     avoid_crowded: false,
     must_visit: [],
     excluded_places: [],
+    origin: null,
+    transport_mode: null,
   };
 }
 
@@ -124,6 +129,8 @@ export function toTripPayload(v: TripFormValues): TripCreate {
       must_visit: v.must_visit,
       excluded_places: v.excluded_places,
     },
+    origin: v.origin ? { city_geonameid: v.origin.city_geonameid } : null,
+    transport_mode: v.transport_mode,
   };
 }
 

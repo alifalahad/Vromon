@@ -26,6 +26,9 @@ yarn-error.log
 *.db
 vromon.db
 
+# Local photo storage (PHOTO_STORAGE=local, development only)
+backend/media/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -47,3 +50,7 @@ dist/
 
 # Misc
 *.log
+
+# Geo pipeline: downloads and large build outputs (regenerate with scripts/geo/build.sh)
+data/geo/raw/
+data/geo/build/

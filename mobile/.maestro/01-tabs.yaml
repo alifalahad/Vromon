@@ -1,0 +1,28 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: Four tabs in order, no Passport
+---
+- assertVisible:
+    id: tab-index
+- assertVisible:
+    id: tab-trips
+- assertVisible:
+    id: tab-friends
+- assertVisible:
+    id: tab-settings
+- assertNotVisible: "Passport"
+- tapOn:
+    id: tab-trips
+- assertVisible:
+    id: trip-stats-card
+- tapOn:
+    id: tab-friends
+- assertVisible: "Friends"
+- tapOn:
+    id: tab-settings
+- assertVisible: "Settings"
+- tapOn:
+    id: tab-index
+- assertVisible:
+    id: map-screen

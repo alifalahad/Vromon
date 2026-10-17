@@ -1,0 +1,42 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: Add a friend by code, the friend accepts, compare maps
+---
+- tapOn:
+    id: tab-friends
+- tapOn:
+    id: add-friend-fab
+- tapOn:
+    id: friend-search
+- inputText: ${FRIEND_CODE}
+- tapOn:
+    id: use-code
+- assertVisible:
+    id: code-preview
+- tapOn:
+    id: code-add
+- assertVisible: "Requested"
+# The second account accepts over the API (a second phone in real life)
+- runScript:
+    file: scripts/accept-request.js
+    env:
+      API_URL: ${API_URL}
+      FRIEND_TOKEN: ${FRIEND_TOKEN}
+- back
+- back
+- tapOn:
+    id: tab-trips
+- tapOn:
+    id: tab-friends
+- extendedWaitUntil:
+    visible:
+      id: friend-${FRIEND_USERNAME}
+    timeout: 15000
+- tapOn:
+    id: friend-${FRIEND_USERNAME}
+- tapOn:
+    id: compare-maps
+- assertVisible:
+    id: compare-legend
+- back

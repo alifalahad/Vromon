@@ -37,6 +37,7 @@ from app.services.rag.generation import (
     answer_question,
     explain_itinerary_item,
 )
+from tests.conftest import TEST_USER_ID
 
 SEED_FILE = Path(__file__).parents[2] / "data" / "seed" / "coxsbazar.json"
 
@@ -141,6 +142,7 @@ def _chunk_result(db, title: str, score: float) -> dict:
 def make_generated_trip(client, db, interests=("Beach", "Nature")) -> Trip:
     today = date.today()
     trip = Trip(
+        user_id=TEST_USER_ID,
         destination="Cox's Bazar", start_date=today, end_date=today, num_travelers=2,
         total_budget=20000, title="RAG Test Trip", status="draft",
     )

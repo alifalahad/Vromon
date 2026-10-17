@@ -1,0 +1,34 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: Sign in with a test account
+---
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: "email-input|tab-index"
+    timeout: 90000
+# Signed in as someone else (e.g. the phone owner): sign out first
+- runFlow:
+    when:
+      visible:
+        id: tab-index
+    file: subflows/sign-out.yaml
+- runFlow:
+    when:
+      visible:
+        id: email-input
+    commands:
+      - tapOn:
+          id: email-input
+      - inputText: ${EMAIL}
+      - tapOn:
+          id: password-input
+      - inputText: ${PASSWORD}
+      - hideKeyboard
+      - tapOn:
+          id: sign-in-button
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 30000

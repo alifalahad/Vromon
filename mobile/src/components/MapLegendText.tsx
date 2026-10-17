@@ -1,10 +1,11 @@
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Text } from 'react-native';
 
-import { colors } from '../theme';
+import { makeStyles } from '../ui/theme';
 
 /** Shared disclaimer: map lines and travel times are estimates, not road routing. */
 export function MapLegendText() {
+  const styles = useStyles();
   return (
     <Text style={styles.caption}>
       Travel times are straight-line estimates at 30 km/h, not road routes.
@@ -12,6 +13,6 @@ export function MapLegendText() {
   );
 }
 
-const styles = StyleSheet.create({
-  caption: { color: colors.textDim, fontSize: 11, lineHeight: 16 },
-});
+const useStyles = makeStyles((t) => ({
+  caption: { color: t.colors.textTertiary, fontSize: 11, lineHeight: 16 },
+}));

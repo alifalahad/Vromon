@@ -1,0 +1,24 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: Plan a trip from the + button, back on the Trips tab
+---
+- tapOn:
+    id: tab-trips
+- tapOn:
+    id: plan-trip-fab
+- tapOn: "Cox's Bazar"
+- tapOn:
+    id: mode-bus
+- tapOn: "Next →"
+- tapOn: "Next →"
+- tapOn: "Next →"
+- tapOn: "Beach"
+- tapOn: "Next →"
+- tapOn: "Next →"
+- assertVisible: "Bus"
+- tapOn: "Create trip ✓"
+- extendedWaitUntil:
+    visible:
+      id: section-upcoming
+    timeout: 20000

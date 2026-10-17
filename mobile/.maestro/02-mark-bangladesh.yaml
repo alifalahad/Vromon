@@ -1,0 +1,26 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: Mark Bangladesh visited (Countries view)
+---
+- tapOn:
+    id: map-view-pill
+- tapOn:
+    id: map-view-countries
+- tapOn:
+    id: add-place-fab
+- tapOn:
+    id: place-search
+- inputText: "Bangladesh"
+- hideKeyboard
+- tapOn:
+    text: "Bangladesh"
+    index: 1
+- tapOn:
+    id: add-status-visited
+- tapOn:
+    id: add-place-save
+- extendedWaitUntil:
+    visible:
+      id: map-screen
+    timeout: 10000

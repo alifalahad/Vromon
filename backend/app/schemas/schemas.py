@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 import re
+import uuid
 from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -160,6 +161,48 @@ class TripConstraintCreate(BaseModel):
         return list(dict.fromkeys(v))  # drop duplicates, keep order
 
 
+# ---------------------------------------------------------------------------
+# Trip stops (decision D7)
+# ---------------------------------------------------------------------------
+
+TransportMode = Literal["plane", "bus", "train", "car", "boat", "walk"]
+MAX_STOPS = 20
+
+
+class TripStopIn(BaseModel):
+    """A city (GeoNames id) or, failing that, just a country. The mode is how you get there."""
+    city_geonameid: Optional[int] = None
+    country_iso2: Optional[str] = Field(None, min_length=2, max_length=2)
+    transport_mode: Optional[TransportMode] = None
+    arrive_on: Optional[date] = None
+    depart_on: Optional[date] = None
+
+    @model_validator(mode="after")
+    def place_and_dates(self):
+        if self.city_geonameid is None and self.country_iso2 is None:
+            raise ValueError("a stop needs a city or a country")
+        if self.country_iso2:
+            self.country_iso2 = self.country_iso2.upper()
+        if self.arrive_on and self.depart_on and self.depart_on < self.arrive_on:
+            raise ValueError("depart_on must be on or after arrive_on")
+        return self
+
+
+class TripStopsIn(BaseModel):
+    stops: List[TripStopIn] = Field(min_length=1, max_length=MAX_STOPS)
+
+
+class TripStopOut(BaseModel):
+    position: int
+    city_geonameid: Optional[int] = None
+    city_name: Optional[str] = None
+    country_iso2: str
+    country_name: str
+    transport_mode: Optional[str] = None
+    arrive_on: Optional[date] = None
+    depart_on: Optional[date] = None
+
+
 class TripCreate(BaseModel):
     destination: str
     start_date: date
@@ -168,6 +211,9 @@ class TripCreate(BaseModel):
     total_budget: float = Field(gt=0)
     preference: TripPreferenceCreate = TripPreferenceCreate()
     constraints: TripConstraintCreate = TripConstraintCreate()
+    # Where the trip starts (optional) and how you get to the destination
+    origin: Optional[TripStopIn] = None
+    transport_mode: Optional[TransportMode] = None
 
     @field_validator("end_date")
     @classmethod
@@ -345,6 +391,9 @@ class TripOut(BaseModel):
     constraints: Optional[TripConstraintOut] = None
     itinerary_days: List[ItineraryDayOut] = []
     feedback: Optional["FeedbackOut"] = None
+    user_id: Optional[uuid.UUID] = None
+    stops: List[TripStopOut] = []
+    visited_prompt: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -361,8 +410,40 @@ class TripSummaryOut(BaseModel):
     status: str
     num_days: int
     created_at: datetime
+    user_id: Optional[uuid.UUID] = None
+    stops: List[TripStopOut] = []
+    visited_prompt: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+
+class MarkVisitedIn(BaseModel):
+    mark: bool
+
+
+class MarkVisitedOut(BaseModel):
+    visited_prompt: str
+    places_marked: int
+
+
+class TripStatsOut(BaseModel):
+    """Completed trips only (end date before `today`)."""
+    trips: int
+    total_days: int
+    weeks: float
+    months: float
+    years: float
+    average_days: float
+    continents: int
+    countries: int
+    cities: int
+    continent_names: List[str] = []
+    longest_trip: Optional[Dict[str, Any]] = None
+    most_visited_country: Optional[Dict[str, Any]] = None
+    per_year: List[Dict[str, Any]] = []
+    transport_modes: List[Dict[str, Any]] = []
+    upcoming: int = 0
+    ongoing: int = 0
 
 
 # ---------------------------------------------------------------------------

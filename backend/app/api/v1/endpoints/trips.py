@@ -8,18 +8,22 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
+from app.services.photos import StorageError, delete_photos
+from app.services.photos.storage import PhotoStore, optional_photo_store
+from app.services.privacy import viewer_can_see
 from app.services.recommendation.recommendation_service import per_person_daily_budget
+from app.core.auth import get_current_user
 from app.db import get_db
 from app.models.models import (
-    Destination,
+    Destination, Photo, User,
     Trip, TripPreference, TripConstraint,
     Itinerary, ItineraryItem, Feedback, Place, Restaurant, Hotel,
 )
@@ -27,7 +31,9 @@ from app.schemas.schemas import (
     TripCreate, TripUpdate, TripOut, TripSummaryOut,
     FeedbackCreate, FeedbackOut, AdaptRequest,
     GenerateResponse, ItineraryResponse,
+    MarkVisitedIn, MarkVisitedOut, TripStopIn, TripStopsIn,
 )
+from app.services.trip_stops import initial_stops, mark_trip_visited, set_stops, stop_out
 from app.services.itinerary.itinerary_service import ItineraryService
 from app.services.itinerary.constraint_validator import ConstraintValidator
 from app.services.itinerary.cpsat_scheduler import CpSatItineraryService
@@ -48,7 +54,7 @@ constraint_validator = ConstraintValidator()
 # ---------------------------------------------------------------------------
 
 @router.post("", response_model=TripOut, status_code=201)
-def create_trip(payload: TripCreate, db: Session = Depends(get_db)):
+def create_trip(payload: TripCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Create a new trip with preferences and constraints."""
     _validate_trip_settings(
         db, payload.destination,
@@ -56,6 +62,7 @@ def create_trip(payload: TripCreate, db: Session = Depends(get_db)):
         payload.constraints.must_visit, payload.constraints.excluded_places,
     )
     trip = Trip(
+        user_id=user.id,
         destination=payload.destination,
         start_date=payload.start_date,
         end_date=payload.end_date,
@@ -89,6 +96,8 @@ def create_trip(payload: TripCreate, db: Session = Depends(get_db)):
     cons.excluded_places = payload.constraints.excluded_places
     db.add(cons)
 
+    initial_stops(db, trip, payload.origin, payload.transport_mode)
+
     db.commit()
     db.refresh(trip)
     logger.info(f"Created trip {trip.id}: {trip.destination}")
@@ -96,23 +105,26 @@ def create_trip(payload: TripCreate, db: Session = Depends(get_db)):
 
 
 @router.get("", response_model=List[TripSummaryOut])
-def list_trips(db: Session = Depends(get_db)):
-    """List all trips (most recent first)."""
-    trips = db.query(Trip).order_by(Trip.created_at.desc()).all()
+def list_trips(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """List the signed-in user's trips (most recent first)."""
+    trips = (
+        db.query(Trip).filter(Trip.user_id == user.id).options(selectinload(Trip.stops))
+        .order_by(Trip.created_at.desc()).all()
+    )
     return [_trip_summary_out(t) for t in trips]
 
 
 @router.get("/{trip_id}", response_model=TripOut)
-def get_trip(trip_id: int, db: Session = Depends(get_db)):
-    """Get a trip with full details including itinerary."""
-    trip = _load_trip(db, trip_id)
+def get_trip(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Get a trip with full details including itinerary (owner, or a friend read-only)."""
+    trip = _load_trip(db, trip_id, user, friends_may_read=True)
     return _trip_out(db, trip)
 
 
 @router.patch("/{trip_id}", response_model=TripOut)
-def update_trip(trip_id: int, payload: TripUpdate, db: Session = Depends(get_db)):
+def update_trip(trip_id: int, payload: TripUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Update trip title, status, preferences, or constraints (only the fields sent)."""
-    trip = _load_trip(db, trip_id)
+    trip = _load_trip(db, trip_id, user)
     if payload.title is not None:
         trip.title = payload.title
     if payload.status is not None:
@@ -141,11 +153,56 @@ def update_trip(trip_id: int, payload: TripUpdate, db: Session = Depends(get_db)
 
 
 @router.delete("/{trip_id}", status_code=204)
-def delete_trip(trip_id: int, db: Session = Depends(get_db)):
-    """Delete a trip and all associated data."""
-    trip = _load_trip(db, trip_id)
+def delete_trip(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    store: Optional[PhotoStore] = Depends(optional_photo_store),
+):
+    """Delete a trip and all associated data. Its photos stay if they belong to a place too."""
+    trip = _load_trip(db, trip_id, user)
+    photos = db.scalars(select(Photo).where(Photo.trip_id == trip.id)).all()
+    try:
+        delete_photos(db, store, [p for p in photos if p.place_type is None])
+    except StorageError as exc:
+        logger.error("Trip %s: deleting its photos failed: %s", trip.id, exc)
+        raise HTTPException(status_code=502, detail="Photo storage is unavailable. Please try again.")
+    for p in photos:
+        if p.place_type is not None:
+            p.trip_id = None
     db.delete(trip)
     db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Stops and "mark these places as visited" (Android Phase 7)
+# ---------------------------------------------------------------------------
+
+@router.put("/{trip_id}/stops", response_model=TripOut)
+def replace_stops(trip_id: int, payload: TripStopsIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Replace the trip's route (stops in order, each with how you get there)."""
+    trip = _load_trip(db, trip_id, user)
+    set_stops(db, trip, payload.stops)
+    trip.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(trip)
+    return _trip_out(db, trip)
+
+
+@router.post("/{trip_id}/mark-visited", response_model=MarkVisitedOut)
+def mark_visited(trip_id: int, payload: MarkVisitedIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    Answer the offer shown when a trip has ended: mark its stops' cities and
+    countries visited on the map, or dismiss the offer. Either way it isn't shown again.
+    """
+    trip = _load_trip(db, trip_id, user)
+    # A day of slack: the phone's "today" may be ahead of the server's UTC date
+    if trip.end_date >= date.today() + timedelta(days=1):
+        raise HTTPException(status_code=409, detail="This trip hasn't ended yet")
+    marked = mark_trip_visited(db, trip) if payload.mark else 0
+    trip.visited_prompt = "marked" if payload.mark else "dismissed"
+    db.commit()
+    return MarkVisitedOut(visited_prompt=trip.visited_prompt, places_marked=marked)
 
 
 # ---------------------------------------------------------------------------
@@ -153,11 +210,12 @@ def delete_trip(trip_id: int, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.post("/{trip_id}/duplicate", response_model=TripOut, status_code=201)
-def duplicate_trip(trip_id: int, db: Session = Depends(get_db)):
+def duplicate_trip(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Create a copy of an existing trip with its preferences and constraints."""
-    original = _load_trip(db, trip_id)
+    original = _load_trip(db, trip_id, user)
 
     new_trip = Trip(
+        user_id=user.id,
         destination=original.destination,
         start_date=original.start_date,
         end_date=original.end_date,
@@ -193,6 +251,13 @@ def duplicate_trip(trip_id: int, db: Session = Depends(get_db)):
         cons.excluded_places = original.constraints.excluded_places
         db.add(cons)
 
+    if original.stops:
+        set_stops(db, new_trip, [
+            TripStopIn(city_geonameid=st.city_geonameid, country_iso2=st.country_iso2, transport_mode=st.transport_mode,
+                       arrive_on=st.arrive_on, depart_on=st.depart_on)
+            for st in original.stops
+        ])
+
     db.commit()
     db.refresh(new_trip)
     return _trip_out(db, new_trip)
@@ -209,6 +274,7 @@ Algorithm = Literal["heuristic", "cpsat"]
 def generate_itinerary(
     trip_id: int,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
     algorithm: Algorithm = Query("heuristic", description="heuristic (greedy baseline) or cpsat (OR-Tools)"),
 ):
     """
@@ -227,7 +293,7 @@ def generate_itinerary(
     """
     # Serialise generations of the same trip: row lock on PostgreSQL; SQLite allows one writer.
     db.query(Trip.id).filter(Trip.id == trip_id).with_for_update().first()
-    trip = _load_trip(db, trip_id)
+    trip = _load_trip(db, trip_id, user)
     _require_eligible_places(db, trip)
 
     solver_meta = None
@@ -287,10 +353,11 @@ def generate_itinerary(
 def regenerate_itinerary(
     trip_id: int,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
     algorithm: Algorithm = Query("heuristic", description="heuristic (greedy baseline) or cpsat (OR-Tools)"),
 ):
     """Regenerate the entire itinerary (alias for generate)."""
-    return generate_itinerary(trip_id, db, algorithm)
+    return generate_itinerary(trip_id, db, user, algorithm)
 
 
 # ---------------------------------------------------------------------------
@@ -298,9 +365,10 @@ def regenerate_itinerary(
 # ---------------------------------------------------------------------------
 
 @router.get("/{trip_id}/itinerary", response_model=ItineraryResponse)
-def get_itinerary(trip_id: int, db: Session = Depends(get_db)):
-    """Get the current itinerary for a trip, re-validated against the trip's current constraints."""
-    trip = _load_trip(db, trip_id)
+def get_itinerary(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Get the current itinerary for a trip, re-validated against the trip's current constraints.
+    Owner, or a friend read-only."""
+    trip = _load_trip(db, trip_id, user, friends_may_read=True)
     days = sorted(trip.itinerary_days, key=lambda d: d.day_number)
     total_cost = sum(d.total_cost for d in days)
     hotel = _get_hotel_info(db, trip)
@@ -327,9 +395,9 @@ def get_itinerary(trip_id: int, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.delete("/{trip_id}/items/{item_id}", status_code=200)
-def remove_item(trip_id: int, item_id: int, db: Session = Depends(get_db)):
+def remove_item(trip_id: int, item_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Remove an activity, recompute the day and re-validate the trip."""
-    trip = _load_trip(db, trip_id)
+    trip = _load_trip(db, trip_id, user)
     item = _load_item(trip, item_id)
     title = item.title
     try:
@@ -337,13 +405,13 @@ def remove_item(trip_id: int, item_id: int, db: Session = Depends(get_db)):
     except EditError as exc:
         raise HTTPException(status_code=exc.status, detail=exc.message)
     db.commit()
-    return _edit_response(db, trip_id, day, f"Removed '{title}'")
+    return _edit_response(db, trip_id, user, day, f"Removed '{title}'")
 
 
 @router.get("/{trip_id}/items/{item_id}/alternatives")
-def item_alternatives(trip_id: int, item_id: int, db: Session = Depends(get_db)):
+def item_alternatives(trip_id: int, item_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Places that could replace this activity in the same time slot (best ranked first)."""
-    trip = _load_trip(db, trip_id)
+    trip = _load_trip(db, trip_id, user)
     item = _load_item(trip, item_id)
     if item.item_type != "activity":
         raise HTTPException(status_code=422, detail="Only activities have alternatives.")
@@ -370,9 +438,9 @@ class ReplaceRequest(BaseModel):
 
 
 @router.post("/{trip_id}/items/{item_id}/replace")
-def replace_item(trip_id: int, item_id: int, payload: ReplaceRequest, db: Session = Depends(get_db)):
+def replace_item(trip_id: int, item_id: int, payload: ReplaceRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Replace an activity with another place that fits the same slot; re-validates the trip."""
-    trip = _load_trip(db, trip_id)
+    trip = _load_trip(db, trip_id, user)
     item = _load_item(trip, item_id)
     old_title = item.title
     try:
@@ -381,11 +449,11 @@ def replace_item(trip_id: int, item_id: int, payload: ReplaceRequest, db: Sessio
         db.rollback()
         raise HTTPException(status_code=exc.status, detail=exc.message)
     db.commit()
-    return _edit_response(db, trip_id, new_item.itinerary, f"Replaced '{old_title}' with '{new_item.title}'")
+    return _edit_response(db, trip_id, user, new_item.itinerary, f"Replaced '{old_title}' with '{new_item.title}'")
 
 
 @router.post("/{trip_id}/days/{day_id}/regenerate")
-def regenerate_day(trip_id: int, day_id: int, db: Session = Depends(get_db)):
+def regenerate_day(trip_id: int, day_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """
     Rebuild one day with fresh alternatives (heuristic scheduler).
 
@@ -393,7 +461,7 @@ def regenerate_day(trip_id: int, day_id: int, db: Session = Depends(get_db)):
     except must-visit places, which are kept. If no alternatives remain, the
     day's current places are allowed again. Other days are never touched.
     """
-    trip = _load_trip(db, trip_id)
+    trip = _load_trip(db, trip_id, user)
     day = next((d for d in trip.itinerary_days if d.id == day_id), None)
     if day is None:
         raise HTTPException(status_code=404, detail="Day not found")
@@ -447,7 +515,7 @@ def regenerate_day(trip_id: int, day_id: int, db: Session = Depends(get_db)):
     db.flush()
     edits.recompute_day(day, hotel)
     db.commit()
-    return _edit_response(db, trip_id, day, note)
+    return _edit_response(db, trip_id, user, day, note)
 
 
 # ---------------------------------------------------------------------------
@@ -455,9 +523,9 @@ def regenerate_day(trip_id: int, day_id: int, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.post("/{trip_id}/feedback", response_model=FeedbackOut, status_code=201)
-def submit_feedback(trip_id: int, payload: FeedbackCreate, db: Session = Depends(get_db)):
+def submit_feedback(trip_id: int, payload: FeedbackCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Submit or update feedback for a trip."""
-    trip = _load_trip(db, trip_id)
+    trip = _load_trip(db, trip_id, user)
     existing = trip.feedback
     if existing:
         existing.rating = payload.rating
@@ -476,9 +544,9 @@ def submit_feedback(trip_id: int, payload: FeedbackCreate, db: Session = Depends
 
 
 @router.get("/{trip_id}/feedback", response_model=Optional[FeedbackOut])
-def get_feedback(trip_id: int, db: Session = Depends(get_db)):
+def get_feedback(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Get feedback for a trip."""
-    trip = _load_trip(db, trip_id)
+    trip = _load_trip(db, trip_id, user)
     if not trip.feedback:
         return None
     return _feedback_out(trip.feedback)
@@ -489,9 +557,9 @@ def get_feedback(trip_id: int, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.post("/{trip_id}/adapt")
-def adapt_trip(trip_id: int, payload: AdaptRequest, db: Session = Depends(get_db)):
+def adapt_trip(trip_id: int, payload: AdaptRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Adapt the itinerary based on user request."""
-    trip = _load_trip(db, trip_id)
+    trip = _load_trip(db, trip_id, user)
     if not trip.itinerary_days:
         raise HTTPException(status_code=409, detail="Generate an itinerary before adapting it.")
     result = adaptation_service.adapt_trip(
@@ -501,7 +569,7 @@ def adapt_trip(trip_id: int, payload: AdaptRequest, db: Session = Depends(get_db
         parameters=payload.parameters,
         hotel=_hotel(db, trip),
     )
-    trip = _load_trip(db, trip_id)
+    trip = _load_trip(db, trip_id, user)
     return {
         "trip_id": trip_id,
         "adaptation_applied": payload.adaptation_type,
@@ -521,7 +589,7 @@ def adapt_trip(trip_id: int, payload: AdaptRequest, db: Session = Depends(get_db
 # ---------------------------------------------------------------------------
 
 @router.get("/{trip_id}/budget")
-def budget_breakdown(trip_id: int, db: Session = Depends(get_db)):
+def budget_breakdown(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """
     Cost breakdown computed from the saved itinerary and seed price data.
 
@@ -532,8 +600,9 @@ def budget_breakdown(trip_id: int, db: Session = Depends(get_db)):
     kept separate in `placeholder_total`; items in another currency are left out
     (no conversion rate). Local transport is not estimated (no data).
     `estimated_total` = known + placeholder, and `incomplete_reasons` lists every gap.
+    Owner, or a friend read-only.
     """
-    trip = _load_trip(db, trip_id)
+    trip = _load_trip(db, trip_id, user, friends_may_read=True)
     days = sorted(trip.itinerary_days, key=lambda d: d.day_number)
     n = trip.num_travelers
     currency = trip.currency
@@ -733,10 +802,10 @@ def _hotel(db: Session, trip: Trip):
     return ItineraryService()._pick_hotel(db, trip)
 
 
-def _edit_response(db: Session, trip_id: int, day: Itinerary, message: str) -> dict:
+def _edit_response(db: Session, trip_id: int, user: User, day: Itinerary, message: str) -> dict:
     """Common response for edits: the changed day plus a fresh validation of the whole trip."""
     db.expire_all()
-    trip = _load_trip(db, trip_id)
+    trip = _load_trip(db, trip_id, user)
     day = next(d for d in trip.itinerary_days if d.id == day.id)
     return {
         "success": True,
@@ -746,7 +815,11 @@ def _edit_response(db: Session, trip_id: int, day: Itinerary, message: str) -> d
     }
 
 
-def _load_trip(db: Session, trip_id: int) -> Trip:
+def _load_trip(db: Session, trip_id: int, owner: User, *, friends_may_read: bool = False) -> Trip:
+    """
+    The trip if `owner` owns it; otherwise 404 (never 403, so existence isn't confirmed).
+    With `friends_may_read` (GET routes only) the owner's accepted friends may read it too.
+    """
     trip = (
         db.query(Trip)
         .options(
@@ -763,7 +836,11 @@ def _load_trip(db: Session, trip_id: int) -> Trip:
         .filter(Trip.id == trip_id)
         .first()
     )
-    if not trip:
+    if trip is not None and trip.user_id is not None and trip.user_id != owner.id and friends_may_read:
+        trip_owner = db.get(User, trip.user_id)
+        if trip_owner is not None and viewer_can_see(db, owner, trip_owner):
+            return trip
+    if trip is None or trip.user_id != owner.id:
         raise HTTPException(status_code=404, detail="Trip not found")
     return trip
 
@@ -872,6 +949,9 @@ def _trip_out(db: Session, trip: Trip) -> dict:
         "created_at": trip.created_at.isoformat(),
         "updated_at": trip.updated_at.isoformat(),
         "num_days": trip.num_days,
+        "user_id": trip.user_id,
+        "stops": [stop_out(st) for st in trip.stops],
+        "visited_prompt": trip.visited_prompt,
         "preference": {
             "id": pref.id,
             "interests": pref.interests,
@@ -908,6 +988,9 @@ def _trip_summary_out(trip: Trip) -> dict:
         "status": trip.status,
         "num_days": trip.num_days,
         "created_at": trip.created_at.isoformat(),
+        "user_id": trip.user_id,
+        "stops": [stop_out(st) for st in trip.stops],
+        "visited_prompt": trip.visited_prompt,
     }
 
 

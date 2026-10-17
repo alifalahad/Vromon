@@ -14,6 +14,8 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
     "python-multipart>=0.0.9",
+    "pillow>=12.3.0",
+    "sentry-sdk>=2.71.0",
 
     # Database
     "sqlalchemy>=2.0.31",
@@ -28,6 +30,11 @@ dependencies = [
 
     # HTTP client
     "httpx>=0.28.1",
+
+    # Auth (Supabase JWT verification) and rate limiting
+    "pyjwt[crypto]>=2.10,<3",
+    "certifi>=2024.2.2",
+    "slowapi>=0.1.9,<0.2",
 
     # AI/ML
     "google-genai>=2.25.0,<3",

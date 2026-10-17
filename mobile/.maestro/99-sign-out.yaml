@@ -1,0 +1,6 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: Sign the test account out again
+---
+- runFlow: subflows/sign-out.yaml

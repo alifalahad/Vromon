@@ -39,8 +39,11 @@ cd mobile
 npm ci
 cp .env.example .env                     # set EXPO_PUBLIC_API_URL (your computer's LAN IP for a phone)
 npm run typecheck && npm run lint && npm test
-npx expo start                           # scan the QR code with Expo Go (SDK 57); press w for web
+npm run android                          # builds and installs the development build on a USB phone/emulator
+npx expo start                           # afterwards: start Metro for the installed dev build; press w for web
 ```
+
+The app uses native modules that Expo Go doesn't include (haptics, Reanimated, bottom sheets, and from Phase 3 MapLibre), so it runs as a **development build**, not in Expo Go. `npm run android` (`expo run:android`) generates `android/` from `app.config.ts` and needs the Android SDK and JDK 17–25 (`JAVA_HOME`). Never edit `android/` by hand. Cloud builds use `eas.json` (`npx eas-cli@latest build --profile development|preview|production`).
 
 **Which `EXPO_PUBLIC_API_URL`?** `localhost` on a phone or emulator means the device itself, not your computer.
 
@@ -48,7 +51,7 @@ npx expo start                           # scan the QR code with Expo Go (SDK 57
 |---|---|
 | Web preview (`w`) or iOS Simulator on the same Mac | `http://127.0.0.1:8000` |
 | Android Emulator | `http://10.0.2.2:8000` (the emulator's alias for your computer) |
-| Physical phone on the same Wi-Fi (Expo Go) | `http://<your computer's LAN IP>:8000`, e.g. from `ipconfig getifaddr en0` on macOS |
+| Physical phone on the same Wi-Fi (development build) | `http://<your computer's LAN IP>:8000`, e.g. from `ipconfig getifaddr en0` on macOS |
 
 For a phone, start the backend with `--host 0.0.0.0` and allow incoming connections if the firewall asks. Restart `npx expo start` after changing `.env`. Only the public API URL belongs in this file; LLM keys stay in `backend/.env`.
 

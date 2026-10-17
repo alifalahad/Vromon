@@ -21,8 +21,9 @@ from app.api.v1.endpoints import trips as trips_api
 from app.db.base import Base, get_db
 from app.db.seeder import missing_place_fields, seed_database
 from app.main import app
-from app.models.models import Itinerary, ItineraryItem, Place, Restaurant
+from app.models.models import Itinerary, ItineraryItem, Place, Restaurant, User
 from app.services.itinerary.itinerary_service import _time_to_minutes
+from tests.conftest import TEST_USER_ID
 
 _engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 _Session = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
@@ -261,10 +262,11 @@ class TestPersistence:
         try:
             # Request A reads the trip (no days yet) and keeps it, as a request does.
             # The identity map holds objects weakly, so the reference must stay alive.
-            held = trips_api._load_trip(stale, trip_id)
+            owner = stale.get(User, TEST_USER_ID)
+            held = trips_api._load_trip(stale, trip_id, owner)
             assert held.itinerary_days == []
             assert generate(client, trip_id).status_code == 200   # request B saves 2 days
-            trips_api.generate_itinerary(trip_id, stale, "heuristic")  # request A continues
+            trips_api.generate_itinerary(trip_id, stale, owner, "heuristic")  # request A continues
         finally:
             stale.close()
         assert db_day_rows(trip_id) == [1, 2]

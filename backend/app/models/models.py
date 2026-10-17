@@ -8,12 +8,13 @@ with improved typing, relationships, and PostgreSQL compatibility.
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime, date
 from typing import Optional, List
 
 from sqlalchemy import (
     Integer, String, Float, Boolean, DateTime, Date,
-    Text, ForeignKey, Index, Numeric,
+    Text, ForeignKey, Index, Numeric, JSON, Uuid, UniqueConstraint, CheckConstraint, text, true as sa_true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -184,6 +185,196 @@ class Hotel(Base):
 
 
 # ---------------------------------------------------------------------------
+# Users (Android Phase 2: accounts and privacy)
+# ---------------------------------------------------------------------------
+
+class User(Base):
+    """An app account. Identity lives in Supabase Auth; `auth_subject` is its JWT `sub`."""
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    auth_subject: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    # Informational copy from the token. Not unique: Supabase owns email identity.
+    email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True, index=True)
+    # Stored lowercase (allowed characters a-z 0-9 . _), so uniqueness is case-insensitive.
+    username: Mapped[Optional[str]] = mapped_column(String(20), unique=True, nullable=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    avatar_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    home_country_iso2: Mapped[Optional[str]] = mapped_column(String(2), nullable=True)
+    discoverable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Opaque, rotatable code for QR / invite links; never the internal id.
+    friend_code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    settings: Mapped[Optional["UserSettings"]] = relationship(
+        "UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class UserSettings(Base):
+    """Account-level preferences synced across devices."""
+    __tablename__ = "user_settings"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    language: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)  # null = follow the device
+    appearance: Mapped[str] = mapped_column(String(10), default="system", nullable=False)
+    haptics: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    units: Mapped[str] = mapped_column(String(2), default="km", nullable=False)
+    map_theme: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Push notifications (Phase 5)
+    notify_friend_requests: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa_true(), nullable=False)
+    notify_friend_accepted: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa_true(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user: Mapped["User"] = relationship("User", back_populates="settings")
+
+
+# ---------------------------------------------------------------------------
+# Friends (Android Phase 5)
+# ---------------------------------------------------------------------------
+
+class FriendRequest(Base):
+    """A request from one user to another. At most one pending request per direction."""
+    __tablename__ = "friend_requests"
+    __table_args__ = (
+        Index(
+            "uq_friend_requests_pending", "from_user_id", "to_user_id", unique=True,
+            sqlite_where=text("status = 'pending'"), postgresql_where=text("status = 'pending'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    from_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    to_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(10), default="pending", nullable=False)  # pending / accepted / declined / cancelled
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    responded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class Friendship(Base):
+    """An accepted friendship, stored once with the smaller user id first."""
+    __tablename__ = "friendships"
+    __table_args__ = (CheckConstraint("user_a_id < user_b_id", name="ck_friendships_ordered"),)
+
+    user_a_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    user_b_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Block(Base):
+    """`blocker` blocked `blocked`: hidden from each other's search, requests rejected."""
+    __tablename__ = "blocks"
+
+    blocker_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    blocked_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Device(Base):
+    """A signed-in install that can receive push notifications (Expo push token)."""
+    __tablename__ = "devices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    expo_push_token: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    platform: Mapped[str] = mapped_column(String(10), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# Geography reference data (Android Phase 3) and visits
+# Seeded from data/geo/*.json (Natural Earth, Bangladesh point of view; GeoNames).
+# ---------------------------------------------------------------------------
+
+class Country(Base):
+    __tablename__ = "countries"
+
+    iso2: Mapped[str] = mapped_column(String(2), primary_key=True)
+    iso3: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    name_bn: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    continent: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    type: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # Decision D6: the 193 UN members + 2 observers make up "the world" (195)
+    counts_toward_world: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    label_lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    label_lon: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+
+class Region(Base):
+    """Admin-1 division (state, province, division). Code: ISO 3166-2, else Natural Earth adm1_code."""
+    __tablename__ = "regions"
+
+    code: Mapped[str] = mapped_column(String(20), primary_key=True)
+    country_iso2: Mapped[str] = mapped_column(String(2), ForeignKey("countries.iso2"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    name_bn: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    type: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    lon: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+
+class City(Base):
+    """GeoNames populated place with at least 15,000 people."""
+    __tablename__ = "cities"
+
+    geonameid: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    country_iso2: Mapped[str] = mapped_column(String(2), ForeignKey("countries.iso2"), nullable=False, index=True)
+    region_code: Mapped[Optional[str]] = mapped_column(String(20), ForeignKey("regions.code"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    lat: Mapped[float] = mapped_column(Float, nullable=False)
+    lon: Mapped[float] = mapped_column(Float, nullable=False)
+    population: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class Visit(Base):
+    """A user's status for one place. `place_code`: ISO alpha-2, region code, or GeoNames id."""
+    __tablename__ = "visits"
+    __table_args__ = (
+        UniqueConstraint("user_id", "place_type", "place_code", name="uq_visits_user_place"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    place_type: Mapped[str] = mapped_column(String(10), nullable=False)  # country / region / city
+    place_code: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(10), nullable=False)  # visited / want / lived
+    first_visited_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    last_visited_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class Photo(Base):
+    """
+    A user's photo of a place and/or a trip. The files live in the private bucket
+    under random keys (`app/services/photos/storage.py`); EXIF is gone before upload.
+    The API requires a place or a trip (no CHECK: it would fight the trip FK's SET NULL).
+    """
+
+    __tablename__ = "photos"
+    __table_args__ = (
+        Index("ix_photos_user_place", "user_id", "place_type", "place_code"),
+        CheckConstraint("(place_type IS NULL) = (place_code IS NULL)", name="ck_photos_place_pair"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    storage_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    thumb_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    taken_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    place_type: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # country / region / city
+    place_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    trip_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ---------------------------------------------------------------------------
 # Trip
 # ---------------------------------------------------------------------------
 
@@ -192,6 +383,11 @@ class Trip(Base):
     __tablename__ = "trips"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    # Owner. Nullable only until pre-account trips are claimed or removed (decision D4);
+    # the API never returns a trip without an owner.
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     destination: Mapped[str] = mapped_column(String(100), nullable=False)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -202,8 +398,13 @@ class Trip(Base):
     status: Mapped[str] = mapped_column(String(30), default="draft")  # draft / generated / saved
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # The "mark these places as visited?" offer after the trip ends: None (not answered), "marked", "dismissed"
+    visited_prompt: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
 
     # Relationships
+    stops: Mapped[List["TripStop"]] = relationship(
+        "TripStop", back_populates="trip", cascade="all, delete-orphan", order_by="TripStop.position"
+    )
     preference: Mapped[Optional["TripPreference"]] = relationship(
         "TripPreference", back_populates="trip", uselist=False, cascade="all, delete-orphan"
     )
@@ -221,6 +422,29 @@ class Trip(Base):
     @property
     def num_days(self) -> int:
         return (self.end_date - self.start_date).days + 1
+
+
+class TripStop(Base):
+    """
+    One stop of a trip, in order (decision D7). `transport_mode` is how the traveller
+    gets to this stop. A stop names a GeoNames city, or only a country.
+    """
+
+    __tablename__ = "trip_stops"
+    __table_args__ = (UniqueConstraint("trip_id", "position", name="uq_trip_stops_position"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    trip_id: Mapped[int] = mapped_column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    city_geonameid: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("cities.geonameid"), nullable=True)
+    country_iso2: Mapped[str] = mapped_column(String(2), ForeignKey("countries.iso2"), nullable=False)
+    transport_mode: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # plane / bus / train / car / boat / walk
+    arrive_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    depart_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+
+    trip: Mapped["Trip"] = relationship("Trip", back_populates="stops")
+    city: Mapped[Optional["City"]] = relationship("City", lazy="joined")
+    country: Mapped["Country"] = relationship("Country", lazy="joined")
 
 
 # ---------------------------------------------------------------------------

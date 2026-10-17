@@ -5,24 +5,29 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Text, TextInput, View } from 'react-native';
 
 import { FEEDBACK_TAGS } from '../constants/trip';
 import { tripsApi } from '../services/api';
-import { colors } from '../theme';
+import { haptics } from '../ui/haptics';
+import { PressableScale } from '../ui/PressableScale';
+import { makeStyles, useTheme } from '../ui/theme';
 import type { Feedback } from '../types';
 
 export function FeedbackForm({ tripId }: { tripId: number }) {
+  const { colors } = useTheme();
   const { data: saved, isLoading } = useQuery({
     queryKey: ['feedback', tripId],
     queryFn: () => tripsApi.getFeedback(tripId),
   });
-  if (isLoading) return <ActivityIndicator color={colors.primaryText} />;
+  if (isLoading) return <ActivityIndicator color={colors.link} />;
   // Keyed so the fields re-initialise when saved feedback (re)loads
   return <FeedbackFields key={saved ? `${saved.id}-${saved.created_at}` : 'new'} tripId={tripId} saved={saved ?? null} />;
 }
 
 function FeedbackFields({ tripId, saved }: { tripId: number; saved: Feedback | null }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const queryClient = useQueryClient();
   const [rating, setRating] = useState(saved?.rating ?? 0);
   const [tags, setTags] = useState<string[]>(saved?.tags ?? []);
@@ -32,9 +37,11 @@ function FeedbackFields({ tripId, saved }: { tripId: number; saved: Feedback | n
   const submit = useMutation({
     mutationFn: () => tripsApi.submitFeedback(tripId, rating, tags, comment.trim() || undefined),
     onSuccess: () => {
+      haptics.success();
       setJustSaved(true);
       queryClient.invalidateQueries({ queryKey: ['feedback', tripId] });
     },
+    onError: () => haptics.error(),
   });
 
   return (
@@ -42,40 +49,44 @@ function FeedbackFields({ tripId, saved }: { tripId: number; saved: Feedback | n
       <Text style={styles.title}>⭐ How was this plan?</Text>
       <View style={styles.stars}>
         {[1, 2, 3, 4, 5].map((n) => (
-          <Pressable key={n} onPress={() => setRating(n)} accessibilityLabel={`Rate ${n} stars`} hitSlop={6}>
+          <PressableScale key={n} haptic="selection" onPress={() => setRating(n)} accessibilityLabel={`Rate ${n} stars`} hitSlop={6}>
             <Text style={[styles.star, n <= rating && styles.starOn]}>★</Text>
-          </Pressable>
+          </PressableScale>
         ))}
       </View>
       <View style={styles.tags}>
         {FEEDBACK_TAGS.map((t) => {
           const on = tags.includes(t);
           return (
-            <Pressable
+            <PressableScale
               key={t}
+              haptic="selection"
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: on }}
               onPress={() => setTags(on ? tags.filter((x) => x !== t) : [...tags, t])}
               style={[styles.tag, on && styles.tagOn]}
             >
               <Text style={[styles.tagText, on && styles.tagTextOn]}>{t}</Text>
-            </Pressable>
+            </PressableScale>
           );
         })}
       </View>
       <TextInput
         style={styles.input}
         placeholder="Anything else? (optional)"
-        placeholderTextColor={colors.textDim}
+        placeholderTextColor={colors.textTertiary}
         value={comment}
         onChangeText={setComment}
         multiline
       />
-      <Pressable
+      <PressableScale
+        haptic="medium"
         style={[styles.btn, (rating === 0 || submit.isPending) && styles.btnDisabled]}
         disabled={rating === 0 || submit.isPending}
         onPress={() => submit.mutate()}
       >
-        {submit.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>{saved ? 'Update feedback' : 'Submit feedback'}</Text>}
-      </Pressable>
+        {submit.isPending ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.btnText}>{saved ? 'Update feedback' : 'Submit feedback'}</Text>}
+      </PressableScale>
       {(submit.isSuccess || justSaved) && <Text style={styles.ok}>Thanks! Feedback saved.</Text>}
       {submit.isError && <Text style={styles.err}>{(submit.error as Error).message}</Text>}
       {rating === 0 && <Text style={styles.hint}>Tap a star to rate.</Text>}
@@ -83,22 +94,22 @@ function FeedbackFields({ tripId, saved }: { tripId: number; saved: Feedback | n
   );
 }
 
-const styles = StyleSheet.create({
-  card: { backgroundColor: colors.card, borderRadius: 16, padding: 16, gap: 12, borderWidth: 1, borderColor: colors.border },
-  title: { color: colors.text, fontWeight: '800', fontSize: 16 },
+const useStyles = makeStyles((t) => ({
+  card: { backgroundColor: t.colors.surface, borderRadius: 20, padding: 16, gap: 12 },
+  title: { color: t.colors.textPrimary, fontWeight: '800', fontSize: 16 },
   stars: { flexDirection: 'row', gap: 8 },
-  star: { fontSize: 30, color: colors.border },
-  starOn: { color: colors.warning },
+  star: { fontSize: 30, color: t.colors.border },
+  starOn: { color: t.colors.warning },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tag: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
-  tagOn: { backgroundColor: '#0F3460', borderColor: '#1D4ED8' },
-  tagText: { color: colors.textDim, fontSize: 12 },
-  tagTextOn: { color: colors.primaryText, fontWeight: '600' },
-  input: { backgroundColor: colors.bg, color: colors.text, borderRadius: 10, padding: 12, minHeight: 64, borderWidth: 1, borderColor: colors.border, textAlignVertical: 'top' },
-  btn: { backgroundColor: colors.primary, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
+  tag: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: 'transparent', backgroundColor: t.colors.surfaceInset },
+  tagOn: { backgroundColor: t.colors.accentSoft, borderColor: t.colors.accent },
+  tagText: { color: t.colors.textSecondary, fontSize: 13 },
+  tagTextOn: { color: t.colors.link, fontWeight: '600' },
+  input: { backgroundColor: t.colors.bg, color: t.colors.textPrimary, borderRadius: 12, padding: 12, minHeight: 64, borderWidth: 1, borderColor: t.colors.border, textAlignVertical: 'top' },
+  btn: { backgroundColor: t.colors.accent, paddingVertical: 12, borderRadius: 999, alignItems: 'center' },
   btnDisabled: { opacity: 0.5 },
-  btnText: { color: '#fff', fontWeight: '700' },
-  ok: { color: colors.success, fontSize: 12 },
-  err: { color: colors.danger, fontSize: 12 },
-  hint: { color: colors.textDim, fontSize: 12 },
-});
+  btnText: { color: t.colors.onAccent, fontWeight: '700' },
+  ok: { color: t.colors.success, fontSize: 12 },
+  err: { color: t.colors.danger, fontSize: 12 },
+  hint: { color: t.colors.textTertiary, fontSize: 12 },
+}));

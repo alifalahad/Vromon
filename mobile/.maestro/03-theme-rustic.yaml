@@ -1,0 +1,25 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: Apply the Rustic theme
+---
+- tapOn:
+    id: map-theme-button
+- assertVisible:
+    id: map-theme-screen
+- tapOn:
+    id: map-theme-catalog-themes
+- scrollUntilVisible:
+    element:
+      id: map-theme-card-themes-rustic
+    direction: RIGHT
+    centerElement: true
+- tapOn:
+    id: map-theme-card-themes-rustic
+- assertVisible: "Apply: Rustic"
+- tapOn:
+    id: map-theme-apply
+- extendedWaitUntil:
+    visible:
+      id: map-screen
+    timeout: 10000

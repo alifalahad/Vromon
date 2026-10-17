@@ -6,26 +6,29 @@
 
 import { useQuery } from '@tanstack/react-query';
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 
 import { tripsApi } from '../services/api';
-import { colors } from '../theme';
+import { PressableScale } from '../ui/PressableScale';
+import { makeStyles, useTheme } from '../ui/theme';
 import { formatBDT } from '../utils/format';
 
 export function BudgetPanel({ tripId }: { tripId: number }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['budget', tripId],
     queryFn: () => tripsApi.budget(tripId),
   });
 
-  if (isLoading) return <ActivityIndicator color={colors.primaryText} />;
+  if (isLoading) return <ActivityIndicator color={colors.link} />;
   if (isError || !data) {
     return (
       <View style={{ gap: 8 }}>
         <Text style={styles.error}>{error instanceof Error ? error.message : 'Could not load budget'}</Text>
-        <Pressable style={styles.retry} onPress={() => refetch()} accessibilityRole="button">
+        <PressableScale style={styles.retry} onPress={() => refetch()} accessibilityRole="button">
           <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
+        </PressableScale>
       </View>
     );
   }
@@ -90,6 +93,7 @@ export function BudgetPanel({ tripId }: { tripId: number }) {
 }
 
 function Row({ label, value, bold, muted, color }: { label: string; value: string; bold?: boolean; muted?: boolean; color?: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.row}>
       <Text style={[styles.label, bold && styles.bold, muted && styles.muted]} numberOfLines={1}>{label}</Text>
@@ -98,22 +102,22 @@ function Row({ label, value, bold, muted, color }: { label: string; value: strin
   );
 }
 
-const styles = StyleSheet.create({
-  card: { backgroundColor: colors.cardAlt, borderRadius: 16, padding: 18, gap: 8, borderWidth: 1, borderColor: '#1D4ED8' },
-  title: { color: colors.primaryText, fontSize: 16, fontWeight: '800' },
-  sub: { color: colors.textDim, fontSize: 12, marginBottom: 4 },
-  meter: { height: 8, borderRadius: 4, backgroundColor: colors.card, overflow: 'hidden', marginBottom: 6 },
+const useStyles = makeStyles((t) => ({
+  card: { backgroundColor: t.colors.surface, borderRadius: t.radius.card, padding: 20, gap: 8 },
+  title: { color: t.colors.link, fontSize: 16, fontWeight: '800' },
+  sub: { color: t.colors.textTertiary, fontSize: 12, marginBottom: 4 },
+  meter: { height: 8, borderRadius: 4, backgroundColor: t.colors.surfaceInset, overflow: 'hidden', marginBottom: 6 },
   meterFill: { height: 8 },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  label: { color: colors.textMuted, fontSize: 14, flex: 1 },
-  value: { color: colors.textMuted, fontSize: 14 },
-  bold: { color: colors.text, fontWeight: '800' },
-  muted: { color: colors.textDim, fontStyle: 'italic' },
-  divider: { height: 1, backgroundColor: '#1E3A5F', marginVertical: 4 },
-  section: { color: colors.text, fontWeight: '700', marginTop: 10 },
-  note: { color: colors.textDim, fontSize: 12, lineHeight: 18 },
-  error: { color: colors.danger },
-  incomplete: { color: colors.warning, fontSize: 12, lineHeight: 18 },
-  retry: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 18, borderRadius: 10, borderWidth: 1, borderColor: colors.primary },
-  retryText: { color: colors.primaryText, fontWeight: '600' },
-});
+  label: { color: t.colors.textSecondary, fontSize: 14, flex: 1 },
+  value: { color: t.colors.textSecondary, fontSize: 14 },
+  bold: { color: t.colors.textPrimary, fontWeight: '800' },
+  muted: { color: t.colors.textTertiary, fontStyle: 'italic' },
+  divider: { height: 1, backgroundColor: t.colors.divider, marginVertical: 4 },
+  section: { color: t.colors.textPrimary, fontWeight: '700', marginTop: 10 },
+  note: { color: t.colors.textTertiary, fontSize: 12, lineHeight: 18 },
+  error: { color: t.colors.danger },
+  incomplete: { color: t.colors.warning, fontSize: 12, lineHeight: 18 },
+  retry: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 18, borderRadius: 999, borderWidth: 1, borderColor: t.colors.accent },
+  retryText: { color: t.colors.link, fontWeight: '600' },
+}));

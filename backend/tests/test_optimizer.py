@@ -32,6 +32,7 @@ from app.services.itinerary.cpsat_scheduler import (
     solve,
 )
 from app.services.itinerary.itinerary_service import ItineraryService
+from tests.conftest import TEST_USER_ID
 
 H = 60  # minutes per hour
 
@@ -218,7 +219,7 @@ def client():
 
 def make_trip(db, days=2, interests=("Beach", "Nature"), start="09:00", end="20:00",
               max_per_day=4, must_visit=(), excluded=(), daily_cap=0.0) -> Trip:
-    trip = Trip(destination="Cox's Bazar", start_date=date(2026, 11, 1),
+    trip = Trip(user_id=TEST_USER_ID, destination="Cox's Bazar", start_date=date(2026, 11, 1),
                 end_date=date(2026, 11, 1) + timedelta(days=days - 1),
                 num_travelers=2, total_budget=40000, title="Optimizer test")
     db.add(trip)

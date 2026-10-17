@@ -1,0 +1,17 @@
+# Vromon end-to-end suite (prompt §10). Run from mobile/:
+#   maestro test .maestro -e EMAIL=… -e PASSWORD=… -e FRIEND_CODE=… -e FRIEND_USERNAME=… \
+#     -e FRIEND_TOKEN=… -e API_URL=http://127.0.0.1:8001
+# FRIEND_*: a second test account (its friend code, username and an access token).
+# Use throwaway test accounts: the flows change the signed-in account's map, theme and trips.
+flows:
+  - "*.yaml"
+executionOrder:
+  continueOnFailure: false
+  flowsOrder:
+    - 00-sign-in
+    - 01-tabs
+    - 02-mark-bangladesh
+    - 03-theme-rustic
+    - 04-friend-by-code
+    - 05-plan-trip
+    - 99-sign-out

@@ -1,56 +1,93 @@
 /**
- * Vromon Mobile — Tab navigation layout.
+ * Vromon Mobile — Bottom tabs: Map · Trips · Friends · Settings (01-bottom-nav.jpg,
+ * without Passport). Material icons, accent when active, selection haptic and a
+ * small icon bounce on tab change. Friends shows a badge for incoming requests.
  */
 
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { Text } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { Tabs } from 'expo-router/js-tabs';
+import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { ColorValue } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
+import { useMe } from '../../src/features/account/useMe';
+import { useFriendRequests } from '../../src/features/friends/queries';
+import { haptics } from '../../src/ui/haptics';
+import { useTheme } from '../../src/ui/theme';
+import { useReduceMotion } from '../../src/ui/useReduceMotion';
+
+type IconName = React.ComponentProps<typeof MaterialIcons>['name'];
+
+function TabIcon({ name, color, focused, size }: { name: IconName; color: ColorValue; focused: boolean; size: number }) {
+  const reduceMotion = useReduceMotion();
+  const scale = useSharedValue(1);
+  useEffect(() => {
+    if (focused && !reduceMotion) {
+      scale.value = withSequence(withSpring(1.15, { damping: 10, stiffness: 400 }), withSpring(1, { damping: 12, stiffness: 300 }));
+    }
+  }, [focused, reduceMotion, scale]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
-    <Text style={{ fontSize: focused ? 26 : 22, opacity: focused ? 1 : 0.5 }}>
-      {emoji}
-    </Text>
+    <Animated.View style={style}>
+      <MaterialIcons name={name} size={size} color={color} />
+    </Animated.View>
   );
 }
 
+const TABS: { name: string; labelKey: string; icon: IconName }[] = [
+  { name: 'index', labelKey: 'tabs.map', icon: 'map' },
+  { name: 'trips', labelKey: 'tabs.trips', icon: 'luggage' },
+  { name: 'friends', labelKey: 'tabs.friends', icon: 'people' },
+  { name: 'settings', labelKey: 'tabs.settings', icon: 'settings' },
+];
+
 export default function TabLayout() {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const { data: me } = useMe();
+  const incoming = useFriendRequests('in', !!me).data?.length ?? 0;
+
   return (
     <Tabs
+      screenListeners={{ tabPress: () => haptics.selection() }}
       screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: theme.colors.accent,
+        tabBarInactiveTintColor: theme.colors.textSecondary,
         tabBarStyle: {
-          backgroundColor: '#1E293B',
-          borderTopColor: '#334155',
-          borderTopWidth: 1,
-          height: 64,
-          paddingBottom: 8,
+          backgroundColor: theme.colors.surface,
+          borderTopWidth: 0,
+          elevation: 0,
+          height: 76 + insets.bottom,
+          paddingTop: 10,
+          paddingBottom: insets.bottom + 8,
         },
-        tabBarActiveTintColor: '#60A5FA',
-        tabBarInactiveTintColor: '#64748B',
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-        headerStyle: { backgroundColor: '#0F172A' },
-        headerTintColor: '#60A5FA',
-        headerTitleStyle: { fontWeight: 'bold', color: '#F1F5F9' },
+        tabBarLabelStyle: { ...theme.type.tabLabel, marginTop: 2 },
+        sceneStyle: { backgroundColor: theme.colors.bg },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="🌏" focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="trips"
-        options={{
-          title: 'My Trips',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="🗺️" focused={focused} />
-          ),
-        }}
-      />
+      {TABS.map((tab) => (
+        <Tabs.Screen
+          key={tab.name}
+          name={tab.name}
+          options={{
+            title: t(tab.labelKey),
+            // Without this, TalkBack also reads the icon font's glyph
+            tabBarAccessibilityLabel:
+              tab.name === 'friends' && incoming > 0 ? `${t(tab.labelKey)}, ${t('friends.requestsBadge', { count: incoming })}` : t(tab.labelKey),
+            tabBarButtonTestID: `tab-${tab.name}`,
+            ...(tab.name === 'friends' && incoming > 0
+              ? { tabBarBadge: incoming, tabBarBadgeStyle: { backgroundColor: theme.colors.accent, color: theme.colors.onAccent } }
+              : {}),
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon name={tab.icon} color={color} focused={focused} size={theme.sizes.tabIcon} />
+            ),
+          }}
+        />
+      ))}
     </Tabs>
   );
 }

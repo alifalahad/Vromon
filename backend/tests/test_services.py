@@ -17,6 +17,7 @@ from app.services.recommendation.recommendation_service import RecommendationSer
 from app.services.itinerary.itinerary_service import (
     _time_to_minutes, _minutes_to_time, _haversine_km,
 )
+from tests.conftest import TEST_USER_ID
 
 # ---------------------------------------------------------------------------
 # Test DB setup
@@ -78,6 +79,7 @@ def make_place(db, id, name, category, tags, rating=4.5, cost=0,
 def make_trip(db, interests, travel_style, activity_level,
               budget=15000, avoid_crowded=False, max_acts=4):
     trip = Trip(
+        user_id=TEST_USER_ID,
         destination="Cox's Bazar",
         start_date=date.today(),
         end_date=date.today() + timedelta(days=2),

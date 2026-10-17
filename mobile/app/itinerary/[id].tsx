@@ -11,16 +11,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
+import { useMe } from '../../src/features/account/useMe';
 import { BudgetPanel } from '../../src/components/BudgetPanel';
 import { AlternativesSheet, ExplanationSheet } from '../../src/components/ItemSheets';
 import { TripMap } from '../../src/components/TripMap';
 import { ValidationBanner } from '../../src/components/ValidationBanner';
 import { ADAPTATIONS } from '../../src/constants/trip';
 import { tripsApi } from '../../src/services/api';
-import { colors } from '../../src/theme';
 import type { AdaptationType, Algorithm, Itinerary, ItineraryDay, ItineraryItem, ValidationReport, Violation } from '../../src/types';
+import { haptics } from '../../src/ui/haptics';
+import { PressableScale } from '../../src/ui/PressableScale';
+import { makeStyles, useTheme, type ThemeColors } from '../../src/ui/theme';
 import { confirm, notify } from '../../src/utils/dialogs';
 import { formatBDT, formatMinutes, percent, plural } from '../../src/utils/format';
 import { dayTabLabel, issuesForItem, itemCostLabel, orderedItems, statusLabel } from '../../src/utils/itinerary';
@@ -37,10 +40,11 @@ function useRefreshTrip(tripId: number) {
   };
 }
 
-const ISSUE_COLORS: Record<Violation['severity'], string> = { hard: colors.danger, soft: colors.warning, info: colors.textMuted };
+const issueColors = (colors: ThemeColors): Record<Violation['severity'], string> => ({ hard: colors.danger, soft: colors.warning, info: colors.textSecondary });
 const ISSUE_ICONS: Record<Violation['severity'], string> = { hard: '⛔', soft: '⚠️', info: 'ℹ︎' };
 
 function ActivityRow({
+  readOnly,
   item,
   issues,
   busy,
@@ -48,6 +52,8 @@ function ActivityRow({
   onReplace,
   onRemove,
 }: {
+  /** A friend's trip: no edit actions */
+  readOnly?: boolean;
   item: ItineraryItem;
   issues: Violation[];
   busy: boolean;
@@ -55,13 +61,15 @@ function ActivityRow({
   onReplace: () => void;
   onRemove: () => void;
 }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const isActivity = item.item_type === 'activity';
-  const accent = isActivity ? colors.primary : '#F59E0B';
+  const accent = isActivity ? colors.link : colors.warning;
   return (
     <View style={styles.row} testID={`item-${item.id}`}>
       <View style={styles.timeCol}>
         <Text style={[styles.time, { color: accent }]}>{item.start_time}</Text>
-        <View style={[styles.connector, { backgroundColor: accent + '33' }]} />
+        <View style={[styles.connector, { backgroundColor: accent, opacity: 0.25 }]} />
       </View>
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -79,7 +87,7 @@ function ActivityRow({
         )}
         {item.notes ? <Text style={styles.notes}>💡 Best time: {item.notes}</Text> : null}
         {issues.map((v, i) => (
-          <Text key={i} style={[styles.issue, { color: ISSUE_COLORS[v.severity] }]}>
+          <Text key={i} style={[styles.issue, { color: issueColors(colors)[v.severity] }]}>
             {ISSUE_ICONS[v.severity]} {v.message}
           </Text>
         ))}
@@ -88,7 +96,7 @@ function ActivityRow({
             🚗 ~{formatMinutes(item.travel_time_to_next)} ({item.distance_to_next.toFixed(1)} km straight-line) to next stop
           </Text>
         )}
-        {isActivity && (
+        {isActivity && !readOnly && (
           <View style={styles.actions}>
             <SmallBtn label="Why?" onPress={onWhy} disabled={busy} />
             <SmallBtn label="Replace" onPress={onReplace} disabled={busy} />
@@ -101,15 +109,17 @@ function ActivityRow({
 }
 
 function SmallBtn({ label, onPress, disabled, danger }: { label: string; onPress: () => void; disabled?: boolean; danger?: boolean }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       disabled={disabled}
+      hitSlop={6}
       style={[styles.smallBtn, danger && styles.smallBtnDanger, disabled && styles.disabled]}
-      accessibilityRole="button"
     >
       <Text style={[styles.smallBtnText, danger && { color: colors.danger }]}>{label}</Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -117,25 +127,29 @@ function DayView({
   tripId,
   day,
   report,
+  readOnly,
   onChanged,
 }: {
   tripId: number;
   day: ItineraryDay;
   report: ValidationReport | null;
+  readOnly: boolean;
   onChanged: (message: string) => void;
 }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const [why, setWhy] = useState<ItineraryItem | null>(null);
   const [replacing, setReplacing] = useState<ItineraryItem | null>(null);
 
   const regenerateDay = useMutation({
     mutationFn: () => tripsApi.regenerateDay(tripId, day.id),
     onSuccess: (res) => onChanged(`Day ${day.day_number}: ${res.message}`),
-    onError: (e) => notify('Could not regenerate day', (e as Error).message),
+    onError: (e) => notify('Could not regenerate day', (e as Error).message, 'error'),
   });
   const remove = useMutation({
     mutationFn: (itemId: number) => tripsApi.removeItem(tripId, itemId),
     onSuccess: (res) => onChanged(res.message),
-    onError: (e) => notify('Could not remove', (e as Error).message),
+    onError: (e) => notify('Could not remove', (e as Error).message, 'error'),
   });
   const busy = regenerateDay.isPending || remove.isPending;
   const items = orderedItems(day);
@@ -150,15 +164,17 @@ function DayView({
             {day.day_date ?? ''}{day.theme ? ` · ${day.theme}` : ''}
           </Text>
         </View>
-        <Pressable
+        {!readOnly && (
+        <PressableScale
           style={[styles.outlineBtn, busy && styles.disabled]}
           disabled={busy}
           onPress={() =>
             confirm('New ideas for this day?', 'Day ' + day.day_number + ' will be rebuilt with different places. Must-visit places stay. Other days are not changed.', 'Regenerate', () => regenerateDay.mutate())
           }
         >
-          {regenerateDay.isPending ? <ActivityIndicator color={colors.primaryText} size="small" /> : <Text style={styles.outlineBtnText}>↻ Regenerate day</Text>}
-        </Pressable>
+          {regenerateDay.isPending ? <ActivityIndicator color={colors.link} size="small" /> : <Text style={styles.outlineBtnText}>↻ Regenerate day</Text>}
+        </PressableScale>
+        )}
       </View>
 
       <View style={styles.stats}>
@@ -176,6 +192,7 @@ function DayView({
         items.map((item) => (
           <ActivityRow
             key={item.id}
+            readOnly={readOnly}
             item={item}
             issues={issuesForItem(report, item.id)}
             busy={busy}
@@ -204,6 +221,7 @@ function DayView({
 }
 
 function Stat({ value, label }: { value: string; label: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.stat}>
       <Text style={styles.statValue}>{value}</Text>
@@ -213,6 +231,8 @@ function Stat({ value, label }: { value: string; label: string }) {
 }
 
 export default function ItineraryScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const tripId = Number(id);
   const router = useRouter();
@@ -220,6 +240,10 @@ export default function ItineraryScreen() {
   const [tab, setTab] = useState<Tab>({ kind: 'day', index: 0 });
   const [showAdapt, setShowAdapt] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const me = useMe();
+  const trip = useQuery({ queryKey: ['trip', tripId], queryFn: () => tripsApi.get(tripId), enabled: !!tripId });
+  // A friend's itinerary is read-only; until the owner is known, hide the edit actions
+  const readOnly = !trip.data || !me.data || (!!trip.data.user_id && trip.data.user_id !== me.data.id);
 
   const { data: itinerary, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['itinerary', tripId],
@@ -228,6 +252,7 @@ export default function ItineraryScreen() {
   });
 
   const onChanged = (msg: string) => {
+    haptics.success();
     setMessage(msg);
     refresh();
   };
@@ -240,7 +265,7 @@ export default function ItineraryScreen() {
       onChanged(res.message);
       if (detail) notify('Itinerary adapted', detail);
     },
-    onError: (e) => notify('Adaptation failed', (e as Error).message),
+    onError: (e) => notify('Adaptation failed', (e as Error).message, 'error'),
   });
 
   const regenerate = useMutation({
@@ -249,13 +274,13 @@ export default function ItineraryScreen() {
       setTab({ kind: 'day', index: 0 });
       onChanged(`Regenerated with the ${res.meta.algorithm === 'cpsat_v1' ? 'optimizer' : 'standard planner'}`);
     },
-    onError: (e) => notify('Regeneration failed', (e as Error).message),
+    onError: (e) => notify('Regeneration failed', (e as Error).message, 'error'),
   });
 
   if (isLoading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primaryText} />
+        <ActivityIndicator size="large" color={colors.link} />
         <Text style={styles.muted}>Loading itinerary…</Text>
       </View>
     );
@@ -266,9 +291,9 @@ export default function ItineraryScreen() {
       <View style={styles.center}>
         <Text style={styles.bigEmoji}>⚠️</Text>
         <Text style={styles.errorText}>{error instanceof Error ? error.message : 'Could not load itinerary'}</Text>
-        <Pressable style={styles.outlineBtn} onPress={() => refetch()}>
+        <PressableScale style={styles.outlineBtn} onPress={() => refetch()}>
           <Text style={styles.outlineBtnText}>Retry</Text>
-        </Pressable>
+        </PressableScale>
       </View>
     );
   }
@@ -280,9 +305,9 @@ export default function ItineraryScreen() {
         <Text style={styles.bigEmoji}>🗓️</Text>
         <Text style={styles.title}>No itinerary yet</Text>
         <Text style={styles.muted}>Generate one from the trip screen first.</Text>
-        <Pressable style={styles.outlineBtn} onPress={() => router.back()}>
+        <PressableScale style={styles.outlineBtn} onPress={() => router.back()}>
           <Text style={styles.outlineBtnText}>← Back to trip</Text>
-        </Pressable>
+        </PressableScale>
       </View>
     );
   }
@@ -294,29 +319,45 @@ export default function ItineraryScreen() {
     <View style={styles.container}>
       <View style={styles.toolbar}>
         <Text style={styles.toolbarTitle} numberOfLines={1}>📍 {itinerary.destination}</Text>
-        <Pressable style={[styles.outlineBtn, busy && styles.disabled]} disabled={busy} onPress={() => setShowAdapt((v) => !v)}>
+        {!readOnly && (
+        <>
+        <PressableScale
+          haptic="selection"
+          style={[styles.outlineBtn, busy && styles.disabled]}
+          disabled={busy}
+          accessibilityState={{ expanded: showAdapt, disabled: busy }}
+          onPress={() => setShowAdapt((v) => !v)}
+        >
           <Text style={styles.outlineBtnText}>⚡ Adapt</Text>
-        </Pressable>
-        <Pressable
+        </PressableScale>
+        <PressableScale
           style={[styles.outlineBtn, busy && styles.disabled]}
           disabled={busy}
           onPress={() =>
             confirm('Regenerate all days?', 'The whole itinerary will be replaced. Use the optimizer from the trip screen if you want it.', 'Regenerate', () => regenerate.mutate('heuristic'))
           }
         >
-          {regenerate.isPending ? <ActivityIndicator color={colors.primaryText} size="small" /> : <Text style={styles.outlineBtnText}>↺ Redo</Text>}
-        </Pressable>
+          {regenerate.isPending ? <ActivityIndicator color={colors.link} size="small" /> : <Text style={styles.outlineBtnText}>↺ Redo</Text>}
+        </PressableScale>
+        </>
+        )}
       </View>
 
-      {showAdapt && (
+      {showAdapt && !readOnly && (
         <View style={styles.adaptPanel}>
           {ADAPTATIONS.map((a) => (
-            <Pressable key={a.type} style={[styles.adaptOption, busy && styles.disabled]} disabled={busy} onPress={() => adapt.mutate(a.type)}>
+            <PressableScale
+              key={a.type}
+              haptic="medium"
+              style={[styles.adaptOption, busy && styles.disabled]}
+              disabled={busy}
+              onPress={() => adapt.mutate(a.type)}
+            >
               <Text style={styles.adaptLabel}>{a.emoji} {a.label}</Text>
               <Text style={styles.adaptDesc}>{a.desc}</Text>
-            </Pressable>
+            </PressableScale>
           ))}
-          {adapt.isPending && <ActivityIndicator color={colors.primaryText} />}
+          {adapt.isPending && <ActivityIndicator color={colors.link} />}
           <Text style={styles.adaptNote}>Must-visit places are never removed.</Text>
         </View>
       )}
@@ -331,14 +372,14 @@ export default function ItineraryScreen() {
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         {message && (
-          <Pressable onPress={() => setMessage(null)} style={styles.message}>
+          <PressableScale pressEffect="opacity" onPress={() => setMessage(null)} style={styles.message} accessibilityHint="Dismisses this message">
             <Text style={styles.messageText}>✔ {message}</Text>
-          </Pressable>
+          </PressableScale>
         )}
         <Overview itinerary={itinerary} onBudget={() => setTab({ kind: 'budget' })} />
         <ValidationBanner report={itinerary.validation} />
 
-        {tab.kind === 'day' && <DayView tripId={tripId} day={days[dayIndex]} report={itinerary.validation} onChanged={onChanged} />}
+        {tab.kind === 'day' && <DayView tripId={tripId} day={days[dayIndex]} report={itinerary.validation} readOnly={readOnly} onChanged={onChanged} />}
         {tab.kind === 'map' && <TripMap days={days} hotel={itinerary.hotel} />}
         {tab.kind === 'budget' && <BudgetPanel tripId={tripId} />}
       </ScrollView>
@@ -347,6 +388,8 @@ export default function ItineraryScreen() {
 }
 
 function Overview({ itinerary, onBudget }: { itinerary: Itinerary; onBudget: () => void }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const items = itinerary.days.flatMap((d) => d.items);
   const placeholders = items.filter((i) => i.cost_source === 'placeholder').length;
   const tone = itinerary.status === 'invalid' ? colors.danger : itinerary.status === 'valid' ? colors.success : colors.warning;
@@ -358,86 +401,88 @@ function Overview({ itinerary, onBudget }: { itinerary: Itinerary; onBudget: () 
         </Text>
         <Text style={[styles.statusChip, { color: tone, borderColor: tone }]}>{statusLabel(itinerary.status)}</Text>
       </View>
-      <Pressable onPress={onBudget} accessibilityRole="button" accessibilityLabel="Open budget breakdown">
+      <PressableScale pressEffect="opacity" onPress={onBudget} accessibilityLabel="Open budget breakdown">
         <Text style={styles.overviewCost}>
           ≈ {formatBDT(itinerary.estimated_cost)} per person for activities and meals
           {placeholders ? ` (includes ${plural(placeholders, 'placeholder meal price')})` : ''} · budget {formatBDT(itinerary.total_budget)} for the group ›
         </Text>
-      </Pressable>
+      </PressableScale>
     </View>
   );
 }
 
 function TabBtn({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const styles = useStyles();
   return (
-    <Pressable
+    <PressableScale
+      haptic="selection"
       style={[styles.tab, active && styles.tabActive]}
       onPress={onPress}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
     >
       <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
+const useStyles = makeStyles((t) => ({
+  container: { flex: 1, backgroundColor: t.colors.bg },
+  center: { flex: 1, backgroundColor: t.colors.bg, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
   bigEmoji: { fontSize: 44 },
-  title: { color: colors.text, fontSize: 20, fontWeight: '700' },
-  muted: { color: colors.textMuted, textAlign: 'center' },
-  errorText: { color: colors.danger, textAlign: 'center' },
-  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.card },
-  toolbarTitle: { flex: 1, color: colors.text, fontWeight: '700', fontSize: 15 },
-  outlineBtn: { backgroundColor: colors.card, paddingVertical: 7, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
-  outlineBtnText: { color: colors.primaryText, fontWeight: '600', fontSize: 13 },
+  title: { color: t.colors.textPrimary, fontSize: 20, fontWeight: '700' },
+  muted: { color: t.colors.textSecondary, textAlign: 'center' },
+  errorText: { color: t.colors.danger, textAlign: 'center' },
+  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.colors.surface },
+  toolbarTitle: { flex: 1, color: t.colors.textPrimary, fontWeight: '700', fontSize: 15 },
+  outlineBtn: { backgroundColor: t.colors.surface, paddingVertical: 7, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: t.colors.border, alignItems: 'center' },
+  outlineBtnText: { color: t.colors.link, fontWeight: '600', fontSize: 13 },
   disabled: { opacity: 0.5 },
-  adaptPanel: { padding: 12, gap: 8, borderBottomWidth: 1, borderBottomColor: colors.card },
-  adaptOption: { backgroundColor: colors.card, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: colors.border },
-  adaptLabel: { color: colors.text, fontWeight: '700' },
-  adaptDesc: { color: colors.textDim, fontSize: 12 },
-  adaptNote: { color: colors.textDim, fontSize: 11 },
-  tabs: { maxHeight: 56, borderBottomWidth: 1, borderBottomColor: colors.card },
+  adaptPanel: { padding: 12, gap: 8, borderBottomWidth: 1, borderBottomColor: t.colors.surface },
+  adaptOption: { backgroundColor: t.colors.surface, borderRadius: 10, padding: 10 },
+  adaptLabel: { color: t.colors.textPrimary, fontWeight: '700' },
+  adaptDesc: { color: t.colors.textTertiary, fontSize: 12 },
+  adaptNote: { color: t.colors.textTertiary, fontSize: 11 },
+  tabs: { maxHeight: 56, borderBottomWidth: 1, borderBottomColor: t.colors.surface },
   tabsContent: { paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
-  tab: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.card },
-  tabActive: { backgroundColor: '#1D4ED8' },
-  tabText: { color: colors.textDim, fontWeight: '700', fontSize: 12 },
-  tabTextActive: { color: '#fff' },
+  tab: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 10, backgroundColor: t.colors.surface },
+  tabActive: { backgroundColor: t.colors.accent },
+  tabText: { color: t.colors.textTertiary, fontWeight: '700', fontSize: 12 },
+  tabTextActive: { color: t.colors.onAccent },
   content: { padding: 16, paddingBottom: 48, gap: 12 },
-  message: { backgroundColor: colors.successBg, borderRadius: 10, padding: 10 },
-  messageText: { color: colors.success, fontSize: 13 },
+  message: { backgroundColor: t.colors.successBg, borderRadius: 10, padding: 10 },
+  messageText: { color: t.colors.success, fontSize: 13 },
   dayHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  dayTitle: { color: colors.text, fontSize: 20, fontWeight: '800' },
-  dayMeta: { color: colors.primaryText, fontSize: 13 },
-  stats: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border },
+  dayTitle: { color: t.colors.textPrimary, fontSize: 20, fontWeight: '800' },
+  dayMeta: { color: t.colors.link, fontSize: 13 },
+  stats: { flexDirection: 'row', backgroundColor: t.colors.surface, borderRadius: 12, padding: 12 },
   stat: { flex: 1, alignItems: 'center', gap: 2 },
-  statValue: { color: colors.text, fontWeight: '800', fontSize: 14 },
-  statLabel: { color: colors.textDim, fontSize: 10, fontWeight: '600' },
-  emptyDay: { color: colors.warning, backgroundColor: colors.warningBg, borderRadius: 10, padding: 10, fontSize: 12, lineHeight: 18 },
-  overview: { backgroundColor: colors.card, borderRadius: 12, padding: 12, gap: 6, borderWidth: 1, borderColor: colors.border },
+  statValue: { color: t.colors.textPrimary, fontWeight: '800', fontSize: 14 },
+  statLabel: { color: t.colors.textTertiary, fontSize: 10, fontWeight: '600' },
+  emptyDay: { color: t.colors.warning, backgroundColor: t.colors.warningBg, borderRadius: 10, padding: 10, fontSize: 12, lineHeight: 18 },
+  overview: { backgroundColor: t.colors.surface, borderRadius: 12, padding: 12, gap: 6 },
   overviewTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  overviewDates: { flex: 1, color: colors.text, fontWeight: '700', fontSize: 13 },
+  overviewDates: { flex: 1, color: t.colors.textPrimary, fontWeight: '700', fontSize: 13 },
   statusChip: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2, fontSize: 11, fontWeight: '700', overflow: 'hidden' },
-  overviewCost: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
-  category: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },
+  overviewCost: { color: t.colors.textSecondary, fontSize: 12, lineHeight: 17 },
+  category: { color: t.colors.textSecondary, fontSize: 11, fontWeight: '600' },
   issue: { fontSize: 11, lineHeight: 16 },
   row: { flexDirection: 'row', gap: 10 },
   timeCol: { alignItems: 'center', width: 48, paddingTop: 14 },
   time: { fontSize: 11, fontWeight: '700' },
   connector: { flex: 1, width: 2, marginTop: 4, minHeight: 24 },
-  card: { flex: 1, backgroundColor: colors.card, borderRadius: 14, padding: 12, gap: 5, borderWidth: 1, borderColor: colors.border },
+  card: { flex: 1, backgroundColor: t.colors.surface, borderRadius: 20, padding: 12, gap: 5 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   emoji: { fontSize: 16 },
-  name: { flex: 1, color: colors.text, fontWeight: '700', fontSize: 14 },
-  cost: { color: colors.success, fontWeight: '700', fontSize: 12 },
-  free: { color: colors.textDim },
-  meta: { color: colors.textDim, fontSize: 11 },
-  match: { color: colors.primaryText, fontSize: 11 },
-  notes: { color: '#6EE7B7', fontSize: 11 },
-  travel: { color: '#A78BFA', fontSize: 11 },
+  name: { flex: 1, color: t.colors.textPrimary, fontWeight: '700', fontSize: 14 },
+  cost: { color: t.colors.success, fontWeight: '700', fontSize: 12 },
+  free: { color: t.colors.textTertiary },
+  meta: { color: t.colors.textTertiary, fontSize: 11 },
+  match: { color: t.colors.link, fontSize: 11 },
+  notes: { color: t.colors.success, fontSize: 11 },
+  travel: { color: t.colors.textSecondary, fontSize: 11 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 4, justifyContent: 'flex-end' },
-  smallBtn: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 6, backgroundColor: '#0F3460' },
-  smallBtnDanger: { backgroundColor: colors.dangerBg },
-  smallBtnText: { color: colors.primaryText, fontSize: 11, fontWeight: '600' },
-});
+  smallBtn: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 6, backgroundColor: t.colors.accentSoft },
+  smallBtnDanger: { backgroundColor: t.colors.dangerBg },
+  smallBtnText: { color: t.colors.link, fontSize: 11, fontWeight: '600' },
+}));

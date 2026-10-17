@@ -11,9 +11,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React, { useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Controller, useForm, useWatch } from 'react-hook-form';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ACCOMMODATION, ACTIVITY_LEVELS, BUDGET_PRESETS, INTERESTS, TRAVEL_STYLES } from '../../src/constants/trip';
 import {
@@ -28,17 +31,29 @@ import {
   type TripFormInput,
   type TripFormValues,
 } from '../../src/features/tripForm';
+import { CitySearch } from '../../src/features/trips/CitySearch';
+import { refreshTrips } from '../../src/features/trips/queries';
+import { TRANSPORT_MODES } from '../../src/features/trips/transport';
 import { destinationsApi, placesApi, tripsApi } from '../../src/services/api';
-import { colors } from '../../src/theme';
+import { haptics } from '../../src/ui/haptics';
+import { PressableScale } from '../../src/ui/PressableScale';
+import { makeStyles, useTheme } from '../../src/ui/theme';
 import { formatBDT, nightsBetween, plural } from '../../src/utils/format';
 
 export default function NewTripScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const { t } = useTranslation();
   const router = useRouter();
   // Set when arriving from a destination screen ("Plan a trip here")
   const params = useLocalSearchParams<{ destination?: string }>();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
   const [stepMsg, setStepMsg] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const innerRef = useRef<View>(null);
+  const reveal = useMemo(() => ({ scrollRef, innerRef }), []);
 
   const { control, handleSubmit, trigger, setValue, getValues, getFieldState, formState } = useForm<
     TripFormInput,
@@ -62,9 +77,12 @@ export default function NewTripScreen() {
   const create = useMutation({
     mutationFn: (v: TripFormValues) => tripsApi.create(toTripPayload(v)),
     onSuccess: (trip) => {
-      queryClient.invalidateQueries({ queryKey: ['trips'] });
-      router.replace({ pathname: '/trip/[id]', params: { id: trip.id, created: '1' } });
+      haptics.success();
+      refreshTrips(queryClient, trip.id);
+      // Back to the Trips tab, where the new trip appears under Upcoming
+      router.dismissTo('/trips');
     },
+    onError: () => haptics.error(),
   });
 
   const next = async () => {
@@ -74,6 +92,7 @@ export default function NewTripScreen() {
     const shown = STEP_FIELDS[step].map((f) => getFieldState(f as keyof TripFormInput).error?.message);
     setStepMsg(cross && !shown.includes(cross) ? cross : null);
     if (ok && !cross) setStep((s) => Math.min(s + 1, STEP_NAMES.length - 1));
+    else haptics.error();
   };
   const back = () => {
     setStepMsg(null);
@@ -83,6 +102,7 @@ export default function NewTripScreen() {
   const submit = handleSubmit(
     (v) => create.mutate(v),
     (errors) => {
+      haptics.error();
       setStep(firstStepWithError(Object.keys(errors)));
       setStepMsg('Please fix the highlighted field.');
     },
@@ -94,7 +114,8 @@ export default function NewTripScreen() {
   const placeName = (id: number) => places.data?.find((p) => p.id === id)?.name ?? `#${id}`;
 
   return (
-    <View style={styles.container}>
+    // Edge-to-edge Android doesn't resize the window for the keyboard: pad instead
+    <KeyboardAvoidingView style={styles.container} behavior="padding">
       <View style={styles.stepBar}>
         {STEP_NAMES.map((name, i) => (
           <View key={name} style={styles.stepItem}>
@@ -106,15 +127,16 @@ export default function NewTripScreen() {
         ))}
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} innerViewRef={innerRef as React.RefObject<View>} style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {step === 0 && (
-          <Step title="Where to?" hint="Destinations come from the Vromon database">
-            {destinations.isLoading && <ActivityIndicator color={colors.primaryText} />}
+          <Step title="Where to?" hint="Destinations come from the Vromon database. Tap one to choose it.">
+            {destinations.isLoading && <ActivityIndicator color={colors.link} />}
             {destinations.isError && <LoadError error={destinations.error} onRetry={() => destinations.refetch()} />}
             {destinations.data?.length === 0 && <Text style={styles.hint}>No destinations are available yet.</Text>}
             {destinations.data?.map((d) => (
-              <Pressable
+              <PressableScale
                 key={d.id}
+                haptic="selection"
                 style={[styles.option, values.destination === d.name && styles.optionActive]}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: values.destination === d.name }}
@@ -126,9 +148,67 @@ export default function NewTripScreen() {
               >
                 <Text style={styles.optionTitle}>📍 {d.name}</Text>
                 <Text style={styles.optionDesc}>{d.place_count ?? 0} places · {d.country}</Text>
-              </Pressable>
+                {d.description ? (
+                  <Text style={styles.optionBody} numberOfLines={2}>
+                    {d.description}
+                  </Text>
+                ) : null}
+                <PressableScale
+                  pressEffect="opacity"
+                  hitSlop={12}
+                  style={styles.browseLink}
+                  accessibilityLabel={`Browse places in ${d.name}`}
+                  onPress={() => router.push({ pathname: '/destination/[id]', params: { id: d.id, from: 'wizard' } })}
+                >
+                  <Text style={styles.browseText}>Browse places ›</Text>
+                </PressableScale>
+              </PressableScale>
             ))}
             <FieldError message={err('destination')} />
+
+            <Text style={styles.subTitle}>{t('trips.startingFrom')}</Text>
+            {values.origin ? (
+              <View style={[styles.option, styles.optionActive, styles.originRow]}>
+                <Text style={[styles.optionTitle, styles.flex]}>{values.origin.label}</Text>
+                <PressableScale
+                  pressEffect="opacity"
+                  hitSlop={8}
+                  onPress={() => setValue('origin', null)}
+                  accessibilityLabel={t('trips.removeStop')}
+                  testID="origin-clear"
+                >
+                  <Text style={styles.browseText}>✕</Text>
+                </PressableScale>
+              </View>
+            ) : (
+              <CitySearch
+                label={t('trips.stopSearch')}
+                reveal={reveal}
+                testID="origin-search"
+                onPick={(city, country) => setValue('origin', { city_geonameid: city.geonameid, label: `${city.name}, ${country}` })}
+              />
+            )}
+
+            <Text style={styles.subTitle}>{t('trips.gettingThere')}</Text>
+            <View style={styles.chips} accessibilityRole="radiogroup">
+              {TRANSPORT_MODES.map(({ mode, icon }) => {
+                const on = values.transport_mode === mode;
+                return (
+                  <PressableScale
+                    key={mode}
+                    haptic="selection"
+                    style={[styles.modeChip, on && styles.modeChipOn]}
+                    onPress={() => setValue('transport_mode', on ? null : mode)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                    testID={`mode-${mode}`}
+                  >
+                    <MaterialCommunityIcons name={icon} size={20} color={on ? colors.onAccent : colors.textSecondary} />
+                    <Text style={[styles.modeChipText, on && { color: colors.onAccent }]}>{t(`trips.modes.${mode}`)}</Text>
+                  </PressableScale>
+                );
+              })}
+            </View>
           </Step>
         )}
 
@@ -143,14 +223,14 @@ export default function NewTripScreen() {
         {step === 2 && (
           <Step title="Budget" hint="Total for the whole group, in BDT">
             {BUDGET_PRESETS.map((p) => (
-              <Pressable
+              <PressableScale
                 key={p.value}
                 style={[styles.option, Number(values.total_budget) === p.value && styles.optionActive]}
                 onPress={() => setValue('total_budget', p.value, { shouldValidate: true })}
               >
                 <Text style={styles.optionTitle}>{p.label}</Text>
                 <Text style={styles.optionDesc}>{p.desc}</Text>
-              </Pressable>
+              </PressableScale>
             ))}
             <TextField control={control} name="total_budget" label="Or enter your own total" numeric error={err('total_budget')} />
             <TextField
@@ -170,8 +250,9 @@ export default function NewTripScreen() {
               {INTERESTS.map((i) => {
                 const on = values.interests?.includes(i);
                 return (
-                  <Pressable
+                  <PressableScale
                     key={i}
+                    haptic="selection"
                     style={[styles.chip, on && styles.chipOn]}
                     onPress={() =>
                       setValue('interests', on ? values.interests!.filter((x) => x !== i) : [...(values.interests ?? []), i], {
@@ -180,7 +261,7 @@ export default function NewTripScreen() {
                     }
                   >
                     <Text style={[styles.chipText, on && styles.chipTextOn]}>{i}</Text>
-                  </Pressable>
+                  </PressableScale>
                 );
               })}
             </View>
@@ -207,19 +288,31 @@ export default function NewTripScreen() {
               <Controller
                 control={control}
                 name="avoid_crowded"
-                render={({ field }) => <Switch value={!!field.value} onValueChange={field.onChange} />}
+                render={({ field }) => (
+                  <Switch
+                    accessibilityLabel="Avoid crowded places"
+                    value={!!field.value}
+                    onValueChange={(v) => {
+                      haptics.selection();
+                      field.onChange(v);
+                    }}
+                    trackColor={{ true: colors.accent, false: colors.surfaceRaised }}
+                    thumbColor={colors.onAccent}
+                  />
+                )}
               />
             </View>
 
             <Text style={styles.label}>Places: tap once for must-visit ★, twice to exclude ✕, again to clear</Text>
-            {places.isLoading && <ActivityIndicator color={colors.primaryText} />}
+            {places.isLoading && <ActivityIndicator color={colors.link} />}
             {places.isError && <LoadError error={places.error} onRetry={() => places.refetch()} />}
             <View style={styles.chips}>
               {places.data?.map((p) => {
                 const state = mustVisit.includes(p.id) ? 'must' : excluded.includes(p.id) ? 'exclude' : 'none';
                 return (
-                  <Pressable
+                  <PressableScale
                     key={p.id}
+                    haptic="selection"
                     style={[styles.chip, state === 'must' && styles.chipMust, state === 'exclude' && styles.chipExclude]}
                     onPress={() => {
                       const r = cyclePlaceChoice(p.id, mustVisit, excluded);
@@ -231,7 +324,7 @@ export default function NewTripScreen() {
                     <Text style={[styles.chipText, state !== 'none' && styles.chipTextOn]}>
                       {state === 'must' ? '★ ' : state === 'exclude' ? '✕ ' : ''}{p.name}
                     </Text>
-                  </Pressable>
+                  </PressableScale>
                 );
               })}
             </View>
@@ -244,6 +337,8 @@ export default function NewTripScreen() {
         {step === 5 && (
           <Step title="Review" hint="Check everything before creating the trip">
             <Review label="Destination" value={values.destination} />
+            <Review label={t('trips.startingFrom')} value={values.origin?.label ?? '—'} />
+            <Review label={t('trips.gettingThere')} value={values.transport_mode ? t(`trips.modes.${values.transport_mode}`) : '—'} />
             <Review
               label="Dates"
               value={`${values.start_date} → ${values.end_date} (${plural(nightsBetween(values.start_date, values.end_date), 'night')})`}
@@ -269,16 +364,17 @@ export default function NewTripScreen() {
         {stepMsg && <Text style={styles.error}>⚠ {stepMsg}</Text>}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Pressable style={styles.backBtn} onPress={back}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+        <PressableScale style={styles.backBtn} onPress={back}>
           <Text style={styles.backText}>{step === 0 ? 'Cancel' : '← Back'}</Text>
-        </Pressable>
+        </PressableScale>
         {step < STEP_NAMES.length - 1 ? (
-          <Pressable style={styles.nextBtn} onPress={next}>
+          <PressableScale haptic="medium" style={styles.nextBtn} onPress={next}>
             <Text style={styles.nextText}>Next →</Text>
-          </Pressable>
+          </PressableScale>
         ) : (
-          <Pressable
+          <PressableScale
+            haptic="medium"
             style={[styles.nextBtn, create.isPending && { opacity: 0.6 }]}
             disabled={create.isPending}
             onPress={submit}
@@ -286,15 +382,16 @@ export default function NewTripScreen() {
             accessibilityLabel="Create trip"
             accessibilityState={{ disabled: create.isPending, busy: create.isPending }}
           >
-            {create.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.nextText}>Create trip ✓</Text>}
-          </Pressable>
+            {create.isPending ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.nextText}>Create trip ✓</Text>}
+          </PressableScale>
         )}
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 function Step({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={{ gap: 12 }}>
       <Text style={styles.title}>{title}</Text>
@@ -317,6 +414,8 @@ function TextField({
   numeric?: boolean;
   error?: string;
 }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
     <View style={{ gap: 6 }}>
       <Text style={styles.label}>{label}</Text>
@@ -331,7 +430,7 @@ function TextField({
             onBlur={field.onBlur}
             keyboardType={numeric ? 'numeric' : 'default'}
             autoCapitalize="none"
-            placeholderTextColor={colors.textDim}
+            placeholderTextColor={colors.textTertiary}
           />
         )}
       />
@@ -341,14 +440,22 @@ function TextField({
 }
 
 function Choice<T extends string>({ label, options, value, onChange }: { label: string; options: readonly T[]; value?: T; onChange: (v: T) => void }) {
+  const styles = useStyles();
   return (
     <View style={{ gap: 6 }}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.choiceRow}>
         {options.map((o) => (
-          <Pressable key={o} style={[styles.choice, value === o && styles.choiceOn]} onPress={() => onChange(o)}>
+          <PressableScale
+            key={o}
+            haptic="selection"
+            accessibilityRole="radio"
+            accessibilityState={{ selected: value === o }}
+            style={[styles.choice, value === o && styles.choiceOn]}
+            onPress={() => onChange(o)}
+          >
             <Text style={[styles.choiceText, value === o && styles.choiceTextOn]}>{o}</Text>
-          </Pressable>
+          </PressableScale>
         ))}
       </View>
     </View>
@@ -356,21 +463,24 @@ function Choice<T extends string>({ label, options, value, onChange }: { label: 
 }
 
 function LoadError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  const styles = useStyles();
   return (
     <View style={styles.loadError}>
       <Text style={styles.error}>⚠ {error instanceof Error ? error.message : 'Failed to load'}</Text>
-      <Pressable style={styles.retryBtn} onPress={onRetry} accessibilityRole="button">
+      <PressableScale style={styles.retryBtn} onPress={onRetry} accessibilityRole="button">
         <Text style={styles.retryText}>Retry</Text>
-      </Pressable>
+      </PressableScale>
     </View>
   );
 }
 
 function FieldError({ message }: { message?: string }) {
+  const styles = useStyles();
   return message ? <Text style={styles.error}>⚠ {message}</Text> : null;
 }
 
 function Review({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.reviewRow}>
       <Text style={styles.reviewLabel}>{label}</Text>
@@ -379,49 +489,58 @@ function Review({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  stepBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.card },
+const useStyles = makeStyles((t) => ({
+  container: { flex: 1, backgroundColor: t.colors.bg },
+  stepBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 12 },
   stepItem: { alignItems: 'center', gap: 4, flex: 1 },
-  dot: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-  dotActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  dotText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  stepName: { color: '#475569', fontSize: 10, fontWeight: '600' },
-  stepNameActive: { color: colors.primaryText },
+  dot: { width: 26, height: 26, borderRadius: 13, backgroundColor: t.colors.surface, borderWidth: 1, borderColor: t.colors.border, alignItems: 'center', justifyContent: 'center' },
+  dotActive: { backgroundColor: t.colors.accent, borderColor: t.colors.accent },
+  dotText: { color: t.colors.onAccent, fontSize: 12, fontWeight: '700' },
+  stepName: { color: t.colors.textTertiary, fontSize: 11, fontWeight: '600' },
+  stepNameActive: { color: t.colors.link },
   content: { padding: 20, paddingBottom: 40, gap: 12 },
-  title: { color: colors.text, fontSize: 24, fontWeight: '800' },
-  hint: { color: colors.textDim, fontSize: 13, lineHeight: 18 },
-  label: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
-  input: { backgroundColor: colors.card, color: colors.text, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: colors.border, fontSize: 15 },
-  inputError: { borderColor: colors.danger },
-  error: { color: colors.danger, fontSize: 13 },
+  title: { color: t.colors.textPrimary, fontSize: 24, fontWeight: '800' },
+  hint: { color: t.colors.textTertiary, fontSize: 13, lineHeight: 18 },
+  label: { color: t.colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  input: { backgroundColor: t.colors.surface, color: t.colors.textPrimary, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: t.colors.border, fontSize: 15 },
+  inputError: { borderColor: t.colors.danger },
+  error: { color: t.colors.danger, fontSize: 13 },
   loadError: { gap: 8, alignItems: 'flex-start' },
-  retryBtn: { paddingVertical: 8, paddingHorizontal: 18, borderRadius: 10, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.card },
-  retryText: { color: colors.primaryText, fontWeight: '600' },
-  option: { backgroundColor: colors.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: colors.border, gap: 2 },
-  optionActive: { borderColor: colors.primary, backgroundColor: '#0F3460' },
-  optionTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
-  optionDesc: { color: colors.textDim, fontSize: 12 },
+  retryBtn: { paddingVertical: 8, paddingHorizontal: 18, borderRadius: 999, borderWidth: 1, borderColor: t.colors.accent, backgroundColor: t.colors.surface },
+  retryText: { color: t.colors.link, fontWeight: '600' },
+  option: { backgroundColor: t.colors.surface, borderRadius: 20, padding: 16, gap: 2, borderWidth: 2, borderColor: 'transparent' },
+  optionActive: { borderColor: t.colors.accent, backgroundColor: t.colors.accentSoft },
+  optionTitle: { color: t.colors.textPrimary, fontWeight: '700', fontSize: 15 },
+  optionBody: { color: t.colors.textSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
+  browseLink: { alignSelf: 'flex-start', marginTop: 6, paddingVertical: 4 },
+  browseText: { color: t.colors.link, fontSize: 13, fontWeight: '600' },
+  optionDesc: { color: t.colors.textTertiary, fontSize: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
-  chipOn: { backgroundColor: '#0F3460', borderColor: '#1D4ED8' },
-  chipMust: { backgroundColor: colors.successBg, borderColor: colors.success },
-  chipExclude: { backgroundColor: colors.dangerBg, borderColor: colors.danger },
-  chipText: { color: colors.textMuted, fontSize: 13 },
-  chipTextOn: { color: colors.text, fontWeight: '600' },
+  subTitle: { color: t.colors.textPrimary, fontSize: 16, fontWeight: '700', marginTop: 16 },
+  originRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  flex: { flex: 1 },
+  modeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 48, paddingHorizontal: 14, borderRadius: t.radius.chip, backgroundColor: t.colors.surface },
+  modeChipOn: { backgroundColor: t.colors.accent },
+  modeChipText: { color: t.colors.textSecondary, fontSize: 14, fontWeight: '600' },
+  chip: { minHeight: 40, justifyContent: 'center', paddingVertical: 7, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: t.colors.border, backgroundColor: t.colors.surface },
+  chipOn: { backgroundColor: t.colors.accentSoft, borderColor: t.colors.accent },
+  chipMust: { backgroundColor: t.colors.successBg, borderColor: t.colors.success },
+  chipExclude: { backgroundColor: t.colors.dangerBg, borderColor: t.colors.danger },
+  chipText: { color: t.colors.textSecondary, fontSize: 13 },
+  chipTextOn: { color: t.colors.textPrimary, fontWeight: '600' },
   choiceRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  choice: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
-  choiceOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  choiceText: { color: colors.textMuted, fontWeight: '600' },
-  choiceTextOn: { color: '#fff' },
+  choice: { minHeight: 40, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: t.colors.border, backgroundColor: t.colors.surface },
+  choiceOn: { backgroundColor: t.colors.accent, borderColor: t.colors.accent },
+  choiceText: { color: t.colors.textSecondary, fontWeight: '600' },
+  choiceTextOn: { color: t.colors.onAccent },
   inlineFields: { flexDirection: 'row', gap: 12 },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  reviewRow: { flexDirection: 'row', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.card },
-  reviewLabel: { color: colors.textDim, width: 120, fontSize: 13 },
-  reviewValue: { color: colors.text, flex: 1, fontSize: 13, fontWeight: '600' },
-  footer: { flexDirection: 'row', gap: 12, padding: 16, borderTopWidth: 1, borderTopColor: colors.card },
-  backBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
-  backText: { color: colors.textMuted, fontWeight: '600' },
-  nextBtn: { flex: 2, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: colors.primary },
-  nextText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-});
+  reviewRow: { flexDirection: 'row', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.colors.divider },
+  reviewLabel: { color: t.colors.textTertiary, width: 120, fontSize: 13 },
+  reviewValue: { color: t.colors.textPrimary, flex: 1, fontSize: 13, fontWeight: '600' },
+  footer: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingTop: 12, backgroundColor: t.colors.bg },
+  backBtn: { flex: 1, paddingVertical: 14, borderRadius: 999, alignItems: 'center', backgroundColor: t.colors.surface },
+  backText: { color: t.colors.textSecondary, fontWeight: '600' },
+  nextBtn: { flex: 2, paddingVertical: 14, borderRadius: 999, alignItems: 'center', backgroundColor: t.colors.accent },
+  nextText: { color: t.colors.onAccent, fontWeight: '700', fontSize: 15 },
+}));

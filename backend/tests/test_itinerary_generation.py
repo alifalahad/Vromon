@@ -20,6 +20,7 @@ from app.services.itinerary.constraint_validator import (
     ConstraintValidator, ValidationReport,
 )
 from app.main import app
+from tests.conftest import TEST_USER_ID
 
 # ---------------------------------------------------------------------------
 # Shared test DB (StaticPool so TestClient and fixtures share the same data)
@@ -76,6 +77,7 @@ def client():
 def make_trip(db, days: int = 2) -> Trip:
     today = date.today()
     trip = Trip(
+        user_id=TEST_USER_ID,
         destination="Cox's Bazar",
         start_date=today,
         end_date=today + timedelta(days=days - 1),

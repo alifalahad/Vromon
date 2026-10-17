@@ -1,262 +1,202 @@
 /**
- * Vromon Mobile — Home / Explore screen.
+ * Vromon Mobile — Map tab (02-map-home-dark.jpg, 08-map-view-sheet.jpg).
  *
- * Shows destinations from the backend with a "Plan a Trip" CTA. Tapping a
- * destination opens its places (app/destination/[id].tsx).
+ * Full-bleed world map with the user's visits. Bottom-left pill: current view
+ * (Countries / Cities / Regions) → Map view sheet. Bottom-right +: Add place.
+ * Top-right: map theme button → Map Theme screen. Tap a feature for its sheet.
+ * Re-tapping the Map tab recentres the map.
  */
 
-import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import React from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { useNavigation, useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { destinationsApi } from '../../src/services/api';
-import type { Destination } from '../../src/types';
+import { useMe } from '../../src/features/account/useMe';
+import { MapViewSheet, type MapViewSheetHandle } from '../../src/features/map/MapViewSheet';
+import { PlaceSheet } from '../../src/features/map/PlaceSheet';
+import { usedStatuses } from '../../src/features/map/style';
+import { useVisitOutbox, useVisits } from '../../src/features/map/visits';
+import { WorldMap, type PressedPlace, type WorldMapHandle } from '../../src/features/map/WorldMap';
+import { StatusSwatch } from '../../src/features/mapThemes/StatusSwatch';
+import { useMapTheme } from '../../src/features/mapThemes/useMapTheme';
+import { usePreferences, type MapView } from '../../src/features/preferences/store';
+import { Fab } from '../../src/ui/Fab';
+import { haptics } from '../../src/ui/haptics';
+import { PressableScale } from '../../src/ui/PressableScale';
+import { makeStyles, useTheme } from '../../src/ui/theme';
 
-function DestinationCard({
-  item,
-  onPress,
-}: {
-  item: Destination;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${item.name}, ${item.place_count ?? 0} places. Browse places`}
-    >
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardEmoji}>📍</Text>
-        <View style={styles.cardInfo}>
-          <Text style={styles.cardName}>{item.name}</Text>
-          <Text style={styles.cardCountry}>{item.country}</Text>
-        </View>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{item.place_count ?? 0} places</Text>
-        </View>
-      </View>
-      {item.description ? (
-        <Text style={styles.cardDesc} numberOfLines={2}>
-          {item.description}
-        </Text>
-      ) : null}
-    </Pressable>
-  );
-}
+const VIEW_ICON: Record<MapView, React.ReactElement<{ color?: string }>> = {
+  countries: <MaterialCommunityIcons name="earth" size={22} />,
+  cities: <MaterialCommunityIcons name="office-building-outline" size={22} />,
+  regions: <MaterialIcons name="space-dashboard" size={22} />,
+};
 
-export default function ExploreScreen() {
+export default function MapScreen() {
+  const styles = useStyles();
+  const theme = useTheme();
+  const { t } = useTranslation();
   const router = useRouter();
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const map = useRef<WorldMapHandle>(null);
+  const mapTheme = useMapTheme();
 
-  const { data: destinations, isLoading, isError, error, refetch } =
-    useQuery({
-      queryKey: ['destinations'],
-      queryFn: destinationsApi.list,
+  const { data: me } = useMe();
+  const { data: visits = [] } = useVisits(me?.id);
+  const pending = useVisitOutbox((s) => (s.userId === me?.id ? s.ops.length : 0));
+  const view = usePreferences((s) => s.mapView);
+  const setView = usePreferences((s) => s.setMapView);
+  const viewSheet = useRef<MapViewSheetHandle>(null);
+  const [place, setPlace] = useState<PressedPlace | null>(null);
+
+  // Short crossfade when the view changes
+  const opacity = useSharedValue(1);
+  const fade = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  const changeView = (next: MapView) => {
+    if (next === view) return;
+    opacity.set(withSequence(withTiming(0.35, { duration: 120 }), withTiming(1, { duration: 220 })));
+    setView(next);
+  };
+
+  // Re-tapping the Map tab recentres the map
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('tabPress' as never, () => {
+      if (navigation.isFocused()) map.current?.recentre();
     });
+    return unsubscribe;
+  }, [navigation]);
+
+  const legend = usedStatuses(visits);
 
   return (
-    <View style={styles.container}>
-      {/* Hero header */}
-      <View style={styles.hero}>
-        <Text style={styles.heroTitle}>Vromon 🌿</Text>
-        <Text style={styles.heroSubtitle}>
-          AI-powered travel planning for Bangladesh
-        </Text>
-        <Pressable
-          style={({ pressed }) => [
-            styles.planBtn,
-            pressed && styles.planBtnPressed,
-          ]}
-          onPress={() => router.push('/trip/new')}
-          id="plan-trip-btn"
-        >
-          <Text style={styles.planBtnText}>✈️  Plan a Trip</Text>
-        </Pressable>
-      </View>
-
-      {/* Section title */}
-      <Text style={styles.sectionTitle}>Popular Destinations</Text>
-
-      {/* States */}
-      {isLoading && (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#60A5FA" />
-          <Text style={styles.loadingText}>Loading destinations…</Text>
-        </View>
-      )}
-
-      {isError && (
-        <View style={styles.center}>
-          <Text style={styles.errorEmoji}>⚠️</Text>
-          <Text style={styles.errorText}>
-            {error instanceof Error ? error.message : 'Failed to load'}
-          </Text>
-          <Pressable style={styles.retryBtn} onPress={() => refetch()}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {!isLoading && !isError && destinations?.length === 0 && (
-        <View style={styles.center}>
-          <Text style={styles.emptyText}>No destinations found.</Text>
-        </View>
-      )}
-
-      {destinations && destinations.length > 0 && (
-        <FlatList
-          data={destinations}
-          keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <DestinationCard
-              item={item}
-              onPress={() =>
-                router.push({ pathname: '/destination/[id]', params: { id: item.id } })
-              }
-            />
-          )}
+    <View style={styles.container} testID="map-screen">
+      <Animated.View style={[styles.map, fade]}>
+        <WorldMap
+          ref={map}
+          view={view}
+          visits={visits}
+          theme={mapTheme}
+          onPressPlace={(p) => {
+            haptics.light();
+            setPlace(p);
+          }}
         />
-      )}
+      </Animated.View>
+
+      {legend.length > 1 ? (
+        <View style={[styles.legend, { top: insets.top + 12 }]} accessibilityRole="summary">
+          {legend.map((s) => (
+            <View key={s} style={styles.legendChip}>
+              <StatusSwatch theme={mapTheme} status={s} />
+              <Text style={styles.legendText}>{t(`map.status.${s}`)}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      <PressableScale
+        style={[styles.themeButton, { top: insets.top + 12 }]}
+        onPress={() => {
+          setPlace(null);
+          router.push('/map/theme');
+        }}
+        accessibilityLabel={t('mapTheme.title')}
+        testID="map-theme-button"
+      >
+        <MaterialCommunityIcons name="palette-outline" size={30} color={theme.colors.textPrimary} />
+      </PressableScale>
+
+      {pending > 0 ? (
+        <View style={[styles.pending, { top: insets.top + (legend.length > 1 ? 56 : 12) }]} accessibilityLiveRegion="polite">
+          <MaterialCommunityIcons name="cloud-sync-outline" size={16} color={theme.colors.textSecondary} />
+          <Text style={styles.pendingText}>{t('map.pending', { count: pending })}</Text>
+        </View>
+      ) : null}
+
+      <PressableScale
+        style={[styles.viewPill, { bottom: 18 }]}
+        onPress={() => {
+          setPlace(null); // one sheet at a time
+          viewSheet.current?.present();
+        }}
+        accessibilityLabel={`${t('map.mapView')}: ${t(`map.views.${view}`)}`}
+        testID="map-view-pill"
+      >
+        {React.cloneElement(VIEW_ICON[view], { color: theme.colors.textPrimary })}
+        <Text style={styles.viewPillText}>{t(`map.views.${view}`)}</Text>
+      </PressableScale>
+
+      <Fab onPress={() => router.push({ pathname: '/map/add-place', params: { view } })} accessibilityLabel={t('map.addPlace')} testID="add-place-fab" />
+
+      <MapViewSheet ref={viewSheet} view={view} onSelect={changeView} />
+      {me ? <PlaceSheet place={place} userId={me.id} visits={visits} onClose={() => setPlace(null)} /> : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-  },
-  hero: {
-    backgroundColor: '#1E3A5F',
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 28,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    marginBottom: 8,
-  },
-  heroTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#F1F5F9',
-    marginBottom: 6,
-  },
-  heroSubtitle: {
-    fontSize: 14,
-    color: '#94A3B8',
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  planBtn: {
-    backgroundColor: '#3B82F6',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  planBtnPressed: {
-    backgroundColor: '#2563EB',
-    transform: [{ scale: 0.97 }],
-  },
-  planBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#F1F5F9',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingHorizontal: 32,
-  },
-  loadingText: {
-    color: '#94A3B8',
-    fontSize: 14,
-    marginTop: 8,
-  },
-  errorEmoji: { fontSize: 40 },
-  errorText: {
-    color: '#F87171',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  retryBtn: {
-    backgroundColor: '#1E293B',
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-    marginTop: 4,
-  },
-  retryText: { color: '#60A5FA', fontWeight: '600' },
-  emptyText: { color: '#64748B', fontSize: 14 },
-  list: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    gap: 12,
-  },
-  card: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  cardPressed: {
-    backgroundColor: '#243347',
-    transform: [{ scale: 0.98 }],
-  },
-  cardHeader: {
+const useStyles = makeStyles((t) => ({
+  container: { flex: 1, backgroundColor: t.colors.bg },
+  map: { flex: 1 },
+  // Clear of the theme button on the right
+  legend: { position: 'absolute', left: t.spacing.lg, right: t.spacing.lg + t.sizes.mapButton + t.spacing.sm, flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm },
+  legendChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
+    gap: 6,
+    paddingHorizontal: 12,
+    minHeight: 32,
+    borderRadius: t.radius.chip,
+    backgroundColor: t.colors.surface,
   },
-  cardEmoji: { fontSize: 28 },
-  cardInfo: { flex: 1 },
-  cardName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#F1F5F9',
-  },
-  cardCountry: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  badge: {
-    backgroundColor: '#0F3460',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
+  themeButton: {
+    position: 'absolute',
+    right: t.spacing.lg + 2,
+    width: t.sizes.mapButton,
+    height: t.sizes.mapButton,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+    shadowColor: t.colors.shadow,
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
-  badgeText: {
-    color: '#60A5FA',
-    fontSize: 11,
-    fontWeight: '600',
+  legendText: { ...t.type.footnote, fontWeight: '600', color: t.colors.textPrimary },
+  pending: {
+    position: 'absolute',
+    left: t.spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    minHeight: 32,
+    borderRadius: t.radius.chip,
+    backgroundColor: t.colors.surface,
   },
-  cardDesc: {
-    fontSize: 13,
-    color: '#94A3B8',
-    lineHeight: 18,
+  pendingText: { ...t.type.footnote, color: t.colors.textSecondary },
+  viewPill: {
+    position: 'absolute',
+    left: t.spacing.lg + 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.sm,
+    minHeight: 52,
+    paddingHorizontal: t.spacing.xl,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.colors.surfaceRaised,
+    elevation: 4,
+    shadowColor: t.colors.shadow,
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
-});
+  viewPillText: { ...t.type.headline, color: t.colors.textPrimary },
+}));

@@ -43,6 +43,15 @@ venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000    # reachable from a p
 | `APP_ENV` | `development` | `production` disables unauthenticated admin endpoints |
 | `CORS_ORIGINS` | localhost dev ports | Comma-separated browser origins allowed to call the API |
 | `ADMIN_TOKEN` | *(empty)* | Required as `X-Admin-Token` for `POST /api/v1/rag/ingest` outside development |
+| `SUPABASE_URL` | *(empty)* | Supabase project URL (`https://<ref>.supabase.co`). Access tokens are verified against its JWKS (asymmetric signing keys). Empty = sign-in disabled (account and trip routes return 503) |
+| `SUPABASE_JWT_AUDIENCE` | `authenticated` | Expected `aud` claim |
+| `SUPABASE_SERVICE_ROLE_KEY` | *(empty)* | **Server only.** Deletes the Supabase sign-in on account deletion, and reads and writes the private photo bucket; required in production |
+| `PHOTO_STORAGE` | *(empty)* | `supabase` (private bucket), `local` (files in `PHOTO_LOCAL_DIR`, development only), or empty: Supabase when the URL and service key are set, else local in development, else photos are off (503) |
+| `PHOTO_BUCKET` | `photos` | Supabase Storage bucket; created private on first upload, and refused if it is public |
+| `PHOTO_URL_TTL_SECONDS` | `600` | How long a signed photo URL works (30–900, the 15-minute ceiling is enforced) |
+| `PHOTO_MAX_UPLOAD_MB` | `15` | Largest accepted upload, before re-encoding |
+| `SECRET_KEY` | *(empty)* | Signs local-storage photo URLs; random per process when empty |
+| `DEV_AUTH_BYPASS` | `false` | Development only: requests without a token act as a local dev user. Refused unless `APP_ENV=development` |
 | `LLM_PROVIDER` / `LLM_API_KEY` / `LLM_MODEL` | – / – / `gemini-3.6-flash` | Grounded answers and explanations |
 | `EMBEDDING_PROVIDER` / `EMBEDDING_API_KEY` / `EMBEDDING_MODEL` | – / – / `gemini-embedding-001` | Semantic retrieval |
 | `RAG_MIN_SCORE`, `RAG_TOP_K` | `0.55`, `5` | Evidence threshold (calibrate with the RAG evaluation) |
@@ -90,3 +99,15 @@ tests/                pytest suite
 - The schema is created with `create_all` at startup. **There are no Alembic migrations yet**, so schema changes on an existing database need a manual migration or a fresh database.
 - Vectors are stored as JSON and compared in Python (numpy). This is fine for the seed data, but pgvector is not used yet.
 - There is no authentication. The API is meant for a single-user demo on a trusted network.
+
+## Database migrations
+
+The schema is managed by Alembic (`alembic/versions/`). The app applies pending migrations at startup (`app/db/migrations.py`); a database created before migrations existed is stamped at the baseline automatically.
+
+```bash
+venv/bin/alembic revision --autogenerate -m "describe the change"   # then review the generated file
+venv/bin/alembic upgrade head      # or just start the app
+venv/bin/alembic check             # fails if models and migrations disagree
+```
+
+Every schema change is a migration; `tests/test_migrations.py` checks that migrations rebuild exactly the models' schema on SQLite and, with `TEST_POSTGRES_URL` set, PostgreSQL.
