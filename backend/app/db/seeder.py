@@ -132,6 +132,9 @@ def seed_database(db: Session) -> None:
         db.add(hotel)
 
     db.commit()
+    # The imported destinations (step 10)
+    from app.db.destinations import load_destinations
+    load_destinations(db)
     logger.info(
         f"[OK] Database seeded with {destination_name} data: "
         f"{len(data.get('places', []))} places, "

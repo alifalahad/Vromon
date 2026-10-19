@@ -1,0 +1,155 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: 09 The whole journey - a trip from today, rearranged, its conditions, Today mode
+---
+# Trip planner step 11: the journey end to end on one trip that starts today
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
+- runScript: scripts/dates.js
+- tapOn:
+    id: tab-trips
+- tapOn:
+    id: plan-trip-fab
+
+# 1 Where & when: Cox's Bazar, today and tomorrow
+- extendedWaitUntil:
+    visible:
+      id: "destination-\\d+"
+    timeout: 20000
+- tapOn:
+    id: "destination-\\d+"
+    index: 0
+- scrollUntilVisible:
+    element:
+      id: "day-${output.today}"
+    direction: DOWN
+- tapOn:
+    id: "day-${output.today}"
+- tapOn:
+    id: "day-${output.tomorrow}"
+- tapOn:
+    id: new-next
+
+# 2 Style, 3 a must-see (Inani Beach, any time)
+- tapOn:
+    id: interest-Beach
+- tapOn:
+    id: new-next
+- tapOn:
+    id: add-must-see
+- tapOn:
+    id: place-search
+- inputText: "Inani"
+- tapOn:
+    id: "pick-place-\\d+"
+    index: 0
+- tapOn:
+    id: build-plan
+- extendedWaitUntil:
+    visible:
+      id: "see-plan|unplaced-\\d+"
+    timeout: 90000
+- runFlow:
+    when:
+      visible:
+        id: "unplaced-\\d+"
+    commands:
+      - tapOn:
+          id: fix-suggestion
+      - extendedWaitUntil:
+          visible:
+            id: see-plan
+          timeout: 30000
+- tapOn:
+    id: see-plan
+- extendedWaitUntil:
+    visible:
+      id: day-tab-1
+    timeout: 30000
+
+# Rearrange: stay longer at a stop, and the day's line changes
+- swipe:
+    start: "50%,56%"
+    end: "50%,12%"
+    duration: 600
+- copyTextFrom:
+    id: day-stats
+- tapOn:
+    id: "stop-\\d+"
+    index: 1
+- scrollUntilVisible:
+    element:
+      id: stay-more
+    direction: DOWN
+- tapOn:
+    id: stay-more
+- runFlow:
+    when:
+      visible:
+        id: stop-sheet
+    commands:
+      - back
+
+# Live conditions: the pill opens them
+- tapOn:
+    id: conditions-pill
+- extendedWaitUntil:
+    visible:
+      id: conditions-updated
+    timeout: 30000
+- back
+
+# Today mode: the trip is on today, so the Trips tab opens it there
+- back
+- tapOn:
+    id: tab-trips
+- tapOn:
+    id: next-trip
+- extendedWaitUntil:
+    visible:
+      id: today-now
+    timeout: 30000
+# "Running late?" while there is still something to go to today (not late at night)
+- runFlow:
+    when:
+      visible:
+        id: today-late
+    commands:
+      - tapOn:
+          id: today-late
+      - extendedWaitUntil:
+          visible:
+            id: today-late-apply
+          timeout: 15000
+      - extendedWaitUntil:
+          notVisible: "Checking what moves…"
+          timeout: 15000
+      - tapOn:
+          id: today-late-apply
+      - extendedWaitUntil:
+          visible:
+            id: today-snackbar
+          timeout: 15000
+      - tapOn:
+          id: today-snackbar-action
+
+# Leave nothing behind: delete the trip
+- tapOn:
+    id: today-full-plan
+- extendedWaitUntil:
+    visible:
+      id: trip-menu
+    timeout: 20000
+- tapOn:
+    id: trip-menu
+- tapOn:
+    id: action-delete
+- tapOn: "(?i)delete"
+- extendedWaitUntil:
+    visible:
+      id: tab-index|tab-trips
+    timeout: 20000

@@ -57,9 +57,10 @@ def client():
 
 
 def all_place_ids() -> list[int]:
+    """Every place of the test trips' destination (other destinations are imported too since step 10)."""
     s = _Session()
     try:
-        return [pid for (pid,) in s.query(Place.id).order_by(Place.id)]
+        return [pid for (pid,) in s.query(Place.id).filter(Place.destination_name == "Cox's Bazar").order_by(Place.id)]
     finally:
         s.close()
 
@@ -327,7 +328,11 @@ class TestMissingData:
         assert budget["placeholder_meals"] == len(meals)
         assert budget["categories"]["meals"] == 0
         assert budget["placeholder_total"] == sum(m["cost"] for m in meals) * 2  # 2 travellers
-        assert budget["estimated_total"] == pytest.approx(budget["known_total"] + budget["placeholder_total"])
+        # plus local travel since step 7; each part is rounded to ৳10
+        assert budget["estimated_total"] == pytest.approx(
+            budget["known_total"] + budget["placeholder_total"] + budget["categories"]["transport"], abs=30
+        )
+        assert next(p for p in budget["parts"] if p["key"] == "food")["estimate"] is True
         assert any("placeholder" in r for r in budget["incomplete_reasons"])
 
     def test_other_currency_is_not_added_to_totals(self, client):

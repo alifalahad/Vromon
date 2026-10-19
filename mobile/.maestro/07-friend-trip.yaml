@@ -1,0 +1,37 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: 07 A friend's trip opens read-only
+---
+# The friend's planned trip (made in flow 04, so the profile has already loaded it)
+- runScript:
+    file: scripts/friend-trip.js
+    env:
+      API_URL: ${API_URL}
+      FRIEND_TOKEN: ${FRIEND_TOKEN}
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
+- tapOn:
+    id: tab-friends
+- tapOn:
+    id: friend-${FRIEND_USERNAME}
+- scrollUntilVisible:
+    element:
+      id: friend-trip-${output.friendTripId}
+    direction: DOWN
+- tapOn:
+    id: friend-trip-${output.friendTripId}
+- extendedWaitUntil:
+    visible:
+      id: trip-title
+    timeout: 20000
+- assertVisible: ".*viewing a friend.*"
+- assertVisible:
+    id: day-tab-1
+- assertNotVisible:
+    id: trip-menu
+- assertNotVisible:
+    id: change-relax

@@ -1,0 +1,424 @@
+{
+  "destination": {
+    "name": "Khulna",
+    "country": "Bangladesh",
+    "latitude": 22.8456,
+    "longitude": 89.5403,
+    "description": "Khulna (খুলনা Khulnā) is the third largest city of Bangladesh. It is the administrative capital city of Khulna Division in Southern Bangladesh. On the bank of Rupsha and Bhoirob river. It is renowned as an industrial city and a river port city. It is also the third most populous city in the country. It is known in Bangladesh for its economic importance and for The Sunderbans. Khulna is the gateway city of the Sundarbans which is the largest mangrove forest in the world."
+  },
+  "attribution": "Text and listings from Wikivoyage (CC BY-SA 4.0); places from Wikidata (CC0). Prices and opening hours are as the sources state them and haven't been checked.",
+  "sources": [
+    {
+      "name": "Wikivoyage",
+      "license": "CC BY-SA 4.0",
+      "url": "https://en.wikivoyage.org/wiki/Khulna"
+    },
+    {
+      "name": "Wikivoyage",
+      "license": "CC BY-SA 4.0",
+      "url": "https://en.wikivoyage.org/wiki/Bagerhat"
+    },
+    {
+      "name": "Wikidata",
+      "license": "CC0 1.0",
+      "url": "https://www.wikidata.org/"
+    }
+  ],
+  "fetched_on": "2026-10-19",
+  "checked": false,
+  "places": [
+    {
+      "source": "wikivoyage",
+      "ref": "wv:khulna:see:gollamari-memorial",
+      "name": "Gollamari Memorial",
+      "latitude": 22.798517,
+      "longitude": 89.537027,
+      "description": "Memoir for the mass murder in Gollamari river during independence war of 1971. On the way to Khulna University.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": null,
+      "hours_text": null,
+      "price_text": null,
+      "wikidata": null,
+      "category": "History",
+      "tags": [
+        "History"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:khulna:see:divisional-museum-khulna",
+      "name": "Divisional Museum, Khulna",
+      "latitude": 22.8211285,
+      "longitude": 89.5518354,
+      "description": "Some little exhibits and things (e.g. archeology, coins, art) about Khulna, but they don't like it if you take photographs.",
+      "opening_time": "10:00",
+      "closing_time": "17:00",
+      "url": null,
+      "hours_text": "Sat-Thu 10AM-5PM",
+      "price_text": null,
+      "wikidata": "Q16345312",
+      "category": "Culture",
+      "tags": [
+        "Culture"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:khulna:see:birsrestho-ruhul-amin-complex",
+      "name": "Birsrestho Ruhul Amin Complex",
+      "latitude": 22.80064,
+      "longitude": 89.58469,
+      "description": "Tomb for much loved country freedom fighter.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": null,
+      "hours_text": null,
+      "price_text": null,
+      "wikidata": null,
+      "category": "History",
+      "tags": [
+        "History"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:khulna:see:shait-gumbad-mosque",
+      "name": "Shait Gumbad Mosque",
+      "latitude": 22.674604,
+      "longitude": 89.741993,
+      "description": "200px|thumb|right|The Shait Gumbad MosqueLiterally meaning the \"Mosque of 60 domes\", it's slightly misnamed as it actually has 77. It was built in 1549, and is one of the country's best mosques. While it's not un-interesting, if you've seen any mosque in India, Pakistan, Iran, or Afghanistan from this period you'll be pretty underwhelmed. Worse is that foreigners are charged to see the mosque…",
+      "opening_time": null,
+      "closing_time": null,
+      "url": null,
+      "hours_text": null,
+      "price_text": "Tk 50, including admission to the onsite museum (museum open 08:00-12:00 and 14:00-17:00)",
+      "wikidata": "Q2834259",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": 50.0,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:khulna:see:mazar-khan-jahan-ali",
+      "name": "Mazar Khan Jahan Ali",
+      "latitude": 22.661166,
+      "longitude": 89.75844,
+      "description": "The tomb of Khan Jahan Ali is a major pilgrimage site in the area, and hundreds of visitors stop here daily to pay their respects to one of the country's more famous holy men. It's south of the main road and about 4 km from the bus station. As with most dargahs the tomb is covered in colorful cloth, and women must pay their respects from the courtyard outside.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": null,
+      "hours_text": null,
+      "price_text": null,
+      "wikidata": "Q55232166",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low"
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q7038296",
+      "wikidata": "Q7038296",
+      "name": "Nine Dome Mosque",
+      "latitude": 22.6585,
+      "longitude": 89.75536111,
+      "description": "Mosque in Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q7038296",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q7522807",
+      "wikidata": "Q7522807",
+      "name": "Singar Mosque",
+      "latitude": 22.6728,
+      "longitude": 89.7425,
+      "description": "Mosque in Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q7522807",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q31724401",
+      "wikidata": "Q31724401",
+      "name": "Bibi Begni Mosque",
+      "latitude": 22.67642,
+      "longitude": 89.73498,
+      "description": "Mosque in Bagerhat, Bangladesh",
+      "category": "History",
+      "tags": [
+        "History",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q31724401",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q25586848",
+      "wikidata": "Q25586848",
+      "name": "Chuna Khola Mosque",
+      "latitude": 22.678598,
+      "longitude": 89.732139,
+      "description": "Mosque in Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q25586848",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q25714587",
+      "wikidata": "Q25714587",
+      "name": "St. Joseph's Cathedral, Khulna",
+      "latitude": 22.8091,
+      "longitude": 89.5672,
+      "description": "Church in Khulna, Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q25714587",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q25586849",
+      "wikidata": "Q25586849",
+      "name": "Zinda Pir’s Tomb Complex",
+      "latitude": 22.661798,
+      "longitude": 89.754017,
+      "description": "Mosque in Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q25586849",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q31724778",
+      "wikidata": "Q31724778",
+      "name": "Ten Dome Mosque",
+      "latitude": 22.664792527,
+      "longitude": 89.768253326,
+      "description": "Mosque in Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q31724778",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q20824023",
+      "wikidata": "Q20824023",
+      "name": "Kodla Math",
+      "latitude": 22.741979249,
+      "longitude": 89.772442114,
+      "description": "A xikhara type of temple in Bangladesh",
+      "category": "History",
+      "tags": [
+        "History",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q20824023",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q27215228",
+      "wikidata": "Q27215228",
+      "name": "Egaro Shiv Temple",
+      "latitude": 23.009747,
+      "longitude": 89.433234,
+      "description": "Archaeological site in Bangladesh",
+      "category": "History",
+      "tags": [
+        "History",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q27215228",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q31728104",
+      "wikidata": "Q31728104",
+      "name": "Arunima Eco-Park",
+      "latitude": 23.075244088,
+      "longitude": 89.713243342,
+      "description": "Park in Bangladesh",
+      "category": "Family",
+      "tags": [
+        "Family",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q31728104",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q61366267",
+      "wikidata": "Q61366267",
+      "name": "Bagerhat Museum",
+      "latitude": 22.6735363,
+      "longitude": 89.6728088,
+      "description": "Museum of Bagerhat district",
+      "category": "Culture",
+      "tags": [
+        "Culture"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q61366267",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q130354544",
+      "wikidata": "Q130354544",
+      "name": "Sultan Complex",
+      "latitude": 23.1581747,
+      "longitude": 89.5009485,
+      "description": null,
+      "category": "History",
+      "tags": [
+        "History"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q130354544",
+      "hours_text": null,
+      "price_text": null
+    }
+  ],
+  "restaurants": [],
+  "hotels": [
+    {
+      "source": "wikivoyage",
+      "ref": "wv:khulna:sleep:hotel-royal-international",
+      "name": "Hotel Royal International",
+      "latitude": 22.810427,
+      "longitude": 89.561858,
+      "description": "A nicer hotel. With complementary breakfast, the food is very good but the rooms are scruffy. Window air conditioning units in rooms. Wireless internet is unreliable.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": "http://www.hotelroyalintl.com",
+      "hours_text": null,
+      "price_text": "Tk.900-3000",
+      "price_per_night": 900.0,
+      "category": "Budget"
+    }
+  ],
+  "_report": {
+    "listings": 11,
+    "no_coordinates": 5,
+    "too_far": 0,
+    "merged": 5
+  }
+}

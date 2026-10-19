@@ -1,0 +1,190 @@
+{
+  "destination": {
+    "name": "Kuakata",
+    "country": "Bangladesh",
+    "latitude": 21.8167,
+    "longitude": 90.12,
+    "description": "Kuakata is at the southernmost tip of Bangladesh.\nLocally known as Sagar Kannya (Daughter of the Sea), Kuakata is a picturesque coastal strand about 30 km in length and 6 km in breadth. Derived from the Bengali word 'Kua' for \"well\" in association with a well that was dug by early Rakhine settlers on the seashore in their quest to find drinking water after being expelled from Arakan (Myanmar) by the Mughals in 1784, today it is home to Hindu and Buddhist communities. Kuakata holds a myriad of elements from sandy beach and forest to sea and sky, and is known for some outstanding sunrises and…"
+  },
+  "attribution": "Text and listings from Wikivoyage (CC BY-SA 4.0); places from Wikidata (CC0). Prices and opening hours are as the sources state them and haven't been checked.",
+  "sources": [
+    {
+      "name": "Wikivoyage",
+      "license": "CC BY-SA 4.0",
+      "url": "https://en.wikivoyage.org/wiki/Kuakata"
+    },
+    {
+      "name": "Wikidata",
+      "license": "CC0 1.0",
+      "url": "https://www.wikidata.org/"
+    }
+  ],
+  "fetched_on": "2026-10-19",
+  "checked": false,
+  "places": [
+    {
+      "source": "wikidata",
+      "ref": "wd:Q16345264",
+      "wikidata": "Q16345264",
+      "name": "Kuakata National Park",
+      "latitude": 21.85396,
+      "longitude": 90.090764,
+      "description": "National park of Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q16345264",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q31726672",
+      "wikidata": "Q31726672",
+      "name": "Kuakata Ecopark",
+      "latitude": 21.812326,
+      "longitude": 90.137519,
+      "description": "Ecopark in Kalapara Upazila, Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q31726672",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q107212290",
+      "wikidata": "Q107212290",
+      "name": "Kuakata Beach",
+      "latitude": 21.8032,
+      "longitude": 90.1837,
+      "description": "Beach in Bangladesh",
+      "category": "Beach",
+      "tags": [
+        "Beach",
+        "Photography",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.0,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q107212290",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q16345520",
+      "wikidata": "Q16345520",
+      "name": "Tengragiri Wildlife Sanctuary",
+      "latitude": 21.963479,
+      "longitude": 89.964268,
+      "description": "Wildlife sanctuary in Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Wildlife"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q16345520",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q55232265",
+      "wikidata": "Q55232265",
+      "name": "Laldia Beach",
+      "latitude": 21.962092,
+      "longitude": 89.982327,
+      "description": "Beach in Barisal Division, Bangladesh",
+      "category": "Beach",
+      "tags": [
+        "Beach",
+        "Photography",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.0,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q55232265",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q61360139",
+      "wikidata": "Q61360139",
+      "name": "Water Museum",
+      "latitude": 21.9485049,
+      "longitude": 90.1747526,
+      "description": "Museum in Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q61360139",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q124312107",
+      "wikidata": "Q124312107",
+      "name": "Jahajmara Sea Beach",
+      "latitude": 21.849427777,
+      "longitude": 90.340436111,
+      "description": "Sea beach of Bangladesh",
+      "category": "Beach",
+      "tags": [
+        "Beach",
+        "Photography",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.0,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q124312107",
+      "hours_text": null,
+      "price_text": null
+    }
+  ],
+  "restaurants": [],
+  "hotels": [],
+  "_report": {
+    "listings": 1,
+    "no_coordinates": 1,
+    "too_far": 0,
+    "merged": 0
+  }
+}

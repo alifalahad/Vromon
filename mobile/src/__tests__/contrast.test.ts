@@ -3,7 +3,8 @@
  * drawn on, in both appearances. 4.5:1 for normal text.
  */
 
-import { contrast } from '../features/mapThemes/color';
+import { contrast, mix } from '../features/mapThemes/color';
+import { ON_SUNSET, SUNSET_CARD } from '../ui/theme/cards';
 import { darkColors, lightColors, type ThemeColors } from '../ui/theme/tokens';
 
 const AA = 4.5;
@@ -25,6 +26,20 @@ describe.each([
 
   it.each(['textPrimary', 'textSecondary'] as const)('%s on surfaceRaised', (text) => {
     expect(contrast(colors[text], colors.surfaceRaised)).toBeGreaterThanOrEqual(AA);
+  });
+
+  it('text on the soft accent buttons and chips, over every surface (Apply, Mark visited, Refresh)', () => {
+    // accentSoft is translucent: what's seen is it painted over the surface
+    const m = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(colors.accentSoft)!;
+    const top = `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`;
+    for (const under of SURFACES) {
+      const seen = mix(colors[under], top.toUpperCase(), Number(m[4]));
+      expect(contrast(colors.onAccentSoft, seen)).toBeGreaterThanOrEqual(AA);
+    }
+  });
+
+  it('white on the sunset cards (next trip, Today\'s "Now")', () => {
+    expect(contrast(ON_SUNSET, SUNSET_CARD)).toBeGreaterThanOrEqual(AA);
   });
 
   it('text on the accent colour (buttons, FAB, badges)', () => {

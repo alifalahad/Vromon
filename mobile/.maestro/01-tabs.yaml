@@ -1,8 +1,14 @@
 appId: ${APP_ID}
 env:
   APP_ID: com.vromon.app.dev
-name: Four tabs in order, no Passport
+name: 01 Four tabs in order, no Passport
 ---
+# Every flow starts fresh on the Map tab, so one failure can't leave the next on another screen
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
 - assertVisible:
     id: tab-index
 - assertVisible:
@@ -14,8 +20,11 @@ name: Four tabs in order, no Passport
 - assertNotVisible: "Passport"
 - tapOn:
     id: tab-trips
-- assertVisible:
-    id: trip-stats-card
+# A debug build can take a few seconds to draw the tab the first time
+- extendedWaitUntil:
+    visible:
+      id: trip-stats-card
+    timeout: 15000
 - tapOn:
     id: tab-friends
 - assertVisible: "Friends"

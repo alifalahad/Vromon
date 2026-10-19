@@ -1,0 +1,210 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-18T13:50:00Z"
+  },
+  "title": "Vromon Trip Planner Mockups",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "Trips tab",
+      "is_interactive": true,
+      "radius": 28
+    },
+    "NewWhere.dc.html": {
+      "x": 470,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "New trip 1/3 · Where & when",
+      "is_interactive": true,
+      "radius": 28
+    },
+    "NewStyle.dc.html": {
+      "x": 940,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "New trip 2/3 · Your style",
+      "is_interactive": true,
+      "radius": 28
+    },
+    "Building.dc.html": {
+      "x": 1880,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "Building the plan (a transition, not a step)",
+      "is_interactive": true,
+      "radius": 28
+    },
+    "Trip.dc.html": {
+      "x": 0,
+      "y": 1244,
+      "w": 390,
+      "h": 844,
+      "title": "Trip screen · map + sheet",
+      "is_interactive": true,
+      "radius": 28
+    },
+    "TripPlan.dc.html": {
+      "x": 470,
+      "y": 1244,
+      "w": 390,
+      "h": 844,
+      "title": "Trip screen · sheet pulled up",
+      "is_interactive": true,
+      "radius": 28
+    },
+    "Drag.dc.html": {
+      "x": 940,
+      "y": 1244,
+      "w": 390,
+      "h": 844,
+      "title": "Drag and drop (try it)",
+      "is_interactive": true,
+      "radius": 28
+    },
+    "Place.dc.html": {
+      "x": 1410,
+      "y": 1244,
+      "w": 390,
+      "h": 844,
+      "title": "Stop details",
+      "is_interactive": true,
+      "radius": 28
+    },
+    "Leg.dc.html": {
+      "x": 1880,
+      "y": 1244,
+      "w": 390,
+      "h": 844,
+      "title": "Travel leg · choose how to go",
+      "is_interactive": true,
+      "radius": 28
+    },
+    "Conditions.dc.html": {
+      "x": 0,
+      "y": 2488,
+      "w": 390,
+      "h": 844,
+      "title": "Conditions and warnings",
+      "is_interactive": true,
+      "radius": 28
+    },
+    "Budget.dc.html": {
+      "x": 470,
+      "y": 2488,
+      "w": 390,
+      "h": 844,
+      "title": "Budget",
+      "is_interactive": true,
+      "radius": 28
+    },
+    "Today.dc.html": {
+      "x": 940,
+      "y": 2488,
+      "w": 390,
+      "h": 844,
+      "title": "Today mode (on the trip)",
+      "is_interactive": true,
+      "radius": 28
+    },
+    "TripLightBn.dc.html": {
+      "x": 1410,
+      "y": 2488,
+      "w": 390,
+      "h": 844,
+      "title": "Light theme · Bangla",
+      "radius": 28
+    },
+    "MustDos.dc.html": {
+      "x": 1410,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "New trip 3/3 · Your must-dos",
+      "is_interactive": true,
+      "radius": 28
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "NewWhere.dc.html",
+    "NewStyle.dc.html",
+    "MustDos.dc.html",
+    "Building.dc.html",
+    "Trip.dc.html",
+    "TripPlan.dc.html",
+    "Drag.dc.html",
+    "Place.dc.html",
+    "Leg.dc.html",
+    "Conditions.dc.html",
+    "Budget.dc.html",
+    "Today.dc.html",
+    "TripLightBn.dc.html"
+  ],
+  "notes": {
+    "row1": {
+      "x": 0,
+      "y": -300,
+      "text": "1 · Plan a trip",
+      "kind": "title1",
+      "maxW": 2270
+    },
+    "row2": {
+      "x": 0,
+      "y": 944,
+      "text": "2 · The trip screen",
+      "kind": "title1",
+      "maxW": 2270
+    },
+    "row3": {
+      "x": 0,
+      "y": 2188,
+      "text": "3 · Live conditions, money and the trip day",
+      "kind": "title1",
+      "maxW": 1800
+    },
+    "data": {
+      "x": 2350,
+      "y": 0,
+      "w": 360,
+      "size": "m",
+      "fill": "orange",
+      "text": "What's real and what's sample\n\nReal (from the Vromon database): Cox's Bazar places, restaurants, hotels, opening hours, visit lengths and prices.\n\nSample (to show the design): weather, sea state, sunset times, traffic, road travel times and the getting-there cost. Steps 4 and 5 fetch these for real."
+    },
+    "play": {
+      "x": 2350,
+      "y": 560,
+      "w": 360,
+      "size": "m",
+      "fill": "blue",
+      "text": "Press Play on a screen to click through.\n\nThe theme can be switched (dark/light) in each screen's Tweaks.\n\nOn \"Drag and drop\", tap a stop to lift it, then move it: the times and warnings update live."
+    },
+    "key": {
+      "x": 1880,
+      "y": 2488,
+      "w": 360,
+      "size": "m",
+      "fill": "green",
+      "text": "Day ribbon colours\n\nBlue: visits\nAmber: meals\nGrey hatching: travel\nEmpty: free time\n\nBlue is also the colour of everything you can tap. Sunset orange is used only for the trip's own identity (the next-trip card, the Today marker)."
+    },
+    "step4": {
+      "x": 2350,
+      "y": 1100,
+      "w": 360,
+      "size": "m",
+      "fill": "teal",
+      "text": "Step 4 changes (for your review)\n\n1 · Where & when: arrival time on the first day, leaving time on the last day, and where from / how (moved here).\n\n2 · Your style: 'Your day' (start around · finish by) replaces typed times and 'max per day'. 'Build my plan now' skips step 3.\n\n3 · Your must-dos (new): must-sees with a day and a time, busy times, places to skip, avoid crowds, and a summary.\n\nBuilding: if a must-see can't fit, you choose what happens. Nothing is dropped silently.\n\nIn the app (not shown here): rows glide when the order changes."
+    }
+  }
+}

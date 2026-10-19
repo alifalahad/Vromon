@@ -23,6 +23,7 @@ from app.db.base import engine, SessionLocal
 from app.db.migrations import upgrade_to_head
 from app.db.seeder import seed_database
 from app.db.geo_seed import seed_geo
+from app.db.destinations import load_destinations
 from app.api.v1.router import router as v1_router
 
 # Configure logging
@@ -49,6 +50,8 @@ async def lifespan(app: FastAPI):
     try:
         seed_database(db)
         seed_geo(db)
+        # The imported destinations (step 10): only files that changed since they were loaded
+        load_destinations(db)
     finally:
         db.close()
 

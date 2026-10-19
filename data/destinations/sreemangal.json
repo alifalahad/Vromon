@@ -1,0 +1,372 @@
+{
+  "destination": {
+    "name": "Sreemangal",
+    "country": "Bangladesh",
+    "latitude": 24.3065,
+    "longitude": 91.7296,
+    "description": "Sreemangal, or Srimangal,  is in Sylhet Division. Sreemangal has been nicknamed the tea capital of Bangladesh, due to the number of tea gardens in the area, and is the place of origin of the Seven Color Tea."
+  },
+  "attribution": "Text and listings from Wikivoyage (CC BY-SA 4.0); places from Wikidata (CC0). Prices and opening hours are as the sources state them and haven't been checked.",
+  "sources": [
+    {
+      "name": "Wikivoyage",
+      "license": "CC BY-SA 4.0",
+      "url": "https://en.wikivoyage.org/wiki/Srimangal"
+    },
+    {
+      "name": "Wikidata",
+      "license": "CC0 1.0",
+      "url": "https://www.wikidata.org/"
+    }
+  ],
+  "fetched_on": "2026-10-19",
+  "checked": false,
+  "places": [
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sreemangal:see:bangladesh-tea-research-institute-in-sreemangal",
+      "name": "Bangladesh Tea Research Institute in Sreemangal",
+      "latitude": 24.293872,
+      "longitude": 91.747956,
+      "description": "The Bangladesh Tea Research Institute has made a number of contributions in evolving and standardising the quality of tea, and it introduces its research findings to the tea industry of Bangladesh.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": "http://www.btri.gov.bd/",
+      "hours_text": null,
+      "price_text": null,
+      "wikidata": "Q18209882",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Photography"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sreemangal:see:madhobpur-lake",
+      "name": "Madhobpur Lake",
+      "latitude": 24.2808583,
+      "longitude": 91.8128137,
+      "description": "Madhobpur Lake is one of the main tourist attractions in the area, and is home to the Great White-Bellied Heron, the only confirmed site in Bangladesh.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": null,
+      "hours_text": null,
+      "price_text": null,
+      "wikidata": "Q1134088",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Photography",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sreemangal:see:baikka-beel",
+      "name": "Baikka Beel",
+      "latitude": 24.3590141,
+      "longitude": 91.6803362,
+      "description": "The Baikka Beel is another nearby body of water and home to the Large-billed reed warbler.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": null,
+      "hours_text": null,
+      "price_text": null,
+      "wikidata": null,
+      "category": "Culture",
+      "tags": [
+        "Culture"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sreemangal:see:hum-hum-waterfall-cheetah-falls",
+      "name": "Hum Hum Waterfall (Cheetah Falls)",
+      "latitude": 24.1673241,
+      "longitude": 91.8765842,
+      "description": "The Hum Hum Waterfall attracts visitors from all over Bangladesh to Razkandi forest.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": null,
+      "hours_text": null,
+      "price_text": null,
+      "wikidata": "Q15226749",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Photography"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sreemangal:see:srimangal-tea-garden",
+      "name": "Srimangal Tea Garden",
+      "latitude": 24.301456,
+      "longitude": 91.753431,
+      "description": "A beautiful place to visit.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": null,
+      "hours_text": null,
+      "price_text": null,
+      "wikidata": null,
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Photography",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High"
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q3350641",
+      "wikidata": "Q3350641",
+      "name": "Lawachara National Park",
+      "latitude": 24.31972222,
+      "longitude": 91.78361111,
+      "description": "Nature reserve in Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q3350641",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q13614508",
+      "wikidata": "Q13614508",
+      "name": "Rema-Kalenga Wildlife Sanctuary",
+      "latitude": 24.18138333,
+      "longitude": 91.63701944,
+      "description": "Wildlife Sanctuary located in Chunarughat of Habiganj district, Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Wildlife"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q13614508",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q25714597",
+      "wikidata": "Q25714597",
+      "name": "Pro-Cathedral of the Divine Mercy, Moulvibazar",
+      "latitude": 24.4875,
+      "longitude": 91.7663,
+      "description": "Church in Moulvibazar, Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q25714597",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q65085436",
+      "wikidata": "Q65085436",
+      "name": "Goyghor Mosque",
+      "latitude": 24.4611,
+      "longitude": 91.74422,
+      "description": "Mosque in Mostafapur, Moulvibazar, Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q65085436",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q31728095",
+      "wikidata": "Q31728095",
+      "name": "Borshijora Eco-Park",
+      "latitude": 24.469,
+      "longitude": 91.7847,
+      "description": "Eco-Park in Sylhet, Bangladesh",
+      "category": "Family",
+      "tags": [
+        "Family",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q31728095",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q21747575",
+      "wikidata": "Q21747575",
+      "name": "Balisira Hills",
+      "latitude": 24.30835,
+      "longitude": 91.78224,
+      "description": "Mountain in Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Photography"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q21747575",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q72314932",
+      "wikidata": "Q72314932",
+      "name": "Razkandi Reserve Forest",
+      "latitude": 24.2623507,
+      "longitude": 91.9163406,
+      "description": "Reserve Forest of Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q72314932",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q21745965",
+      "wikidata": "Q21745965",
+      "name": "Tarap Hill Reserved Forest",
+      "latitude": 24.16537,
+      "longitude": 91.62407,
+      "description": null,
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Photography"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q21745965",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q21747631",
+      "wikidata": "Q21747631",
+      "name": "West Bhanugach Reserved Forest",
+      "latitude": 24.34901,
+      "longitude": 91.7977,
+      "description": null,
+      "category": "Nature",
+      "tags": [
+        "Nature"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q21747631",
+      "hours_text": null,
+      "price_text": null
+    }
+  ],
+  "restaurants": [],
+  "hotels": [
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sreemangal:sleep:srimangal-tea-resort-and-museum",
+      "name": "Srimangal Tea Resort and Museum",
+      "latitude": 24.301893,
+      "longitude": 91.7579147,
+      "description": "The resort is secluded and surrounded by a tea garden.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": "http://tearesort.gov.bd/",
+      "hours_text": null,
+      "price_text": null,
+      "price_per_night": null,
+      "category": null
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sreemangal:sleep:dusai-resort-spa",
+      "name": "DuSai Resort & Spa",
+      "latitude": 24.4303408,
+      "longitude": 91.7595341,
+      "description": "Luxury hotel with a pool.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": "http://www.dusairesorts.com/",
+      "hours_text": null,
+      "price_text": null,
+      "price_per_night": null,
+      "category": null
+    }
+  ],
+  "_report": {
+    "listings": 7,
+    "no_coordinates": 0,
+    "too_far": 0,
+    "merged": 2
+  }
+}

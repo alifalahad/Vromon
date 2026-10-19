@@ -29,6 +29,7 @@ import { useMe } from '../src/features/account/useMe';
 import { signOut } from '../src/features/auth/actions';
 import { startAuthListener, useAuth } from '../src/features/auth/session';
 import { useFriendNotifications } from '../src/features/friends/useFriendNotifications';
+import { useReminderTaps } from '../src/features/trips/today/useReminderTaps';
 import { flushOutbox } from '../src/features/map/visits';
 import { useSettingsSync } from '../src/features/preferences/sync';
 import { initMonitoring, wrapRoot } from '../src/services/monitoring';
@@ -88,6 +89,7 @@ function useGate() {
 
   useSettingsSync(signedIn && me.data ? me.data.id : null);
   useFriendNotifications(signedIn && me.data && !me.data.needs_onboarding ? me.data.id : null);
+  useReminderTaps(!!(signedIn && me.data && !me.data.needs_onboarding));
 
   const ready = status !== 'loading' && (!signedIn || !me.isPending);
   useEffect(() => {
@@ -149,9 +151,13 @@ function ThemedStack() {
           <Stack.Protected guard={gate.inApp}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="destination/[id]" options={{ title: t('screens.destination') }} />
-            <Stack.Screen name="trip/new" options={{ title: t('screens.planTrip'), presentation: 'modal' }} />
-            <Stack.Screen name="trip/[id]" options={{ title: t('screens.tripDetails') }} />
-            <Stack.Screen name="itinerary/[id]" options={{ title: t('screens.itinerary') }} />
+            <Stack.Screen name="trip/new" options={{ headerShown: false, title: t('screens.planTrip'), presentation: 'modal' }} />
+            <Stack.Screen name="trip/must-dos/[id]" options={{ title: t('screens.mustDos') }} />
+            <Stack.Screen name="trip/conditions/[id]" options={{ title: t('conditions.title') }} />
+            <Stack.Screen name="trip/[id]" options={{ headerShown: false, title: t('screens.tripDetails') }} />
+            <Stack.Screen name="trip/budget/[id]" options={{ title: t('screens.tripBudget') }} />
+            <Stack.Screen name="trip/today/[id]" options={{ title: t('today.title') }} />
+            <Stack.Screen name="itinerary/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="stats/trips" options={{ title: t('screens.tripStats') }} />
             <Stack.Screen name="trip/route/[id]" options={{ title: t('screens.tripRoute') }} />
             <Stack.Screen name="settings/profile" options={{ title: t('profile.edit') }} />

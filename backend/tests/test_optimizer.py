@@ -331,16 +331,15 @@ class TestGenerateApi:
         assert client.post(f"/api/v1/trips/{trip.id}/generate").status_code == 200
         before = client.get(f"/api/v1/trips/{trip.id}/itinerary").json()
 
-        pid = place_id(db, "Laboni Beach")
-        trip.constraints.must_visit = [pid]
-        trip.constraints.excluded_places = [pid]
+        # A daily cap below the cost of the meals alone can't be met
+        trip.constraints.max_daily_budget = 50
         db.commit()
 
         resp = client.post(f"/api/v1/trips/{trip.id}/generate", params={"algorithm": "cpsat"})
         assert resp.status_code == 422
         detail = resp.json()["detail"]
         assert detail["solver"]["status"] == "INFEASIBLE"
-        assert any("both must-visit and excluded" in d for d in detail["solver"]["diagnostics"])
+        assert any("alone exceed the daily cap" in d for d in detail["solver"]["diagnostics"])
         after = client.get(f"/api/v1/trips/{trip.id}/itinerary").json()
         assert [i["id"] for d in after["days"] for i in d["items"]] == \
                [i["id"] for d in before["days"] for i in d["items"]]

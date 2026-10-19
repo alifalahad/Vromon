@@ -14,6 +14,12 @@ import tempfile
 # anything that falls back to the app's own engine (e.g. the startup lifespan) gets
 # a throwaway SQLite file. Must run before `app` is imported.
 os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp(prefix='vromon-tests-')}/app.db"
+# Tests never call the real road service (no network, no quota): straight-line estimates,
+# or the fake service in test_trip_planner_step5.py
+os.environ["ROUTING_PROVIDER"] = "none"
+os.environ["ORS_API_KEY"] = ""
+# Nor the weather service when planning (test_trip_planner_step7.py turns it on with a fake forecast)
+os.environ["WEATHER_PLANNING"] = "false"
 
 import pytest  # noqa: E402
 from sqlalchemy import create_engine

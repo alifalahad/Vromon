@@ -14,7 +14,7 @@ from typing import Optional, List
 
 from sqlalchemy import (
     Integer, String, Float, Boolean, DateTime, Date,
-    Text, ForeignKey, Index, Numeric, JSON, Uuid, UniqueConstraint, CheckConstraint, text, true as sa_true,
+    Text, ForeignKey, Index, Numeric, JSON, Uuid, UniqueConstraint, CheckConstraint, text, true as sa_true, false as sa_false,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -57,6 +57,15 @@ class Destination(Base):
     image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Imported destinations (step 10): where the data comes from, and whether a person has checked it
+    attribution: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sources_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    checked: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    data_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # hash of the loaded data file
+
+    @property
+    def sources(self) -> list:
+        return _json_get(self.sources_json)
 
     # Relationships
     places: Mapped[List["Place"]] = relationship("Place", back_populates="destination_rel", cascade="all, delete-orphan")
@@ -94,6 +103,15 @@ class Place(Base):
     image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Unknown stays unknown (step 10): when a source doesn't say, the field holds a planning default
+    # and is shown as unknown ("Price unknown", "Hours not checked"); a rating that's unknown isn't shown
+    cost_known: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    hours_known: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    rating_known: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    source: Mapped[str] = mapped_column(String(20), default="curated", server_default="curated")  # curated / wikivoyage / wikidata
+    source_ref: Mapped[Optional[str]] = mapped_column(String(160), nullable=True, index=True)
+    url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    checked: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
 
     # Relationships
     destination_rel: Mapped["Destination"] = relationship("Destination", back_populates="places")
@@ -136,6 +154,12 @@ class Restaurant(Base):
     tags_json: Mapped[str] = mapped_column(Text, default="[]")
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    cost_known: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    hours_known: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    rating_known: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    source: Mapped[str] = mapped_column(String(20), default="curated", server_default="curated")
+    source_ref: Mapped[Optional[str]] = mapped_column(String(160), nullable=True, index=True)
+    checked: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
 
     # Relationships
     destination_rel: Mapped["Destination"] = relationship("Destination", back_populates="restaurants")
@@ -171,6 +195,11 @@ class Hotel(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     amenities_json: Mapped[str] = mapped_column(Text, default="[]")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    price_known: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    rating_known: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    source: Mapped[str] = mapped_column(String(20), default="curated", server_default="curated")
+    source_ref: Mapped[Optional[str]] = mapped_column(String(160), nullable=True, index=True)
+    checked: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
 
     # Relationships
     destination_rel: Mapped["Destination"] = relationship("Destination", back_populates="hotels")
@@ -463,6 +492,11 @@ class TripPreference(Base):
     accommodation_preference: Mapped[str] = mapped_column(String(30), default="Standard")
     preferred_start_time: Mapped[str] = mapped_column(String(10), default="09:00")
     preferred_end_time: Mapped[str] = mapped_column(String(10), default="20:00")
+    # The first day starts when you arrive and the last day ends when you leave (None = the usual times)
+    arrive_time: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
+    leave_time: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
+    # The hotel the traveller chose (None = the best one at their accommodation level)
+    hotel_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("hotels.id", ondelete="SET NULL"), nullable=True)
 
     trip: Mapped["Trip"] = relationship("Trip", back_populates="preference")
 
@@ -487,7 +521,11 @@ class TripConstraint(Base):
     trip_id: Mapped[int] = mapped_column(Integer, ForeignKey("trips.id"), nullable=False)
     max_activities_per_day: Mapped[int] = mapped_column(Integer, default=4)
     max_daily_budget: Mapped[float] = mapped_column(Float, default=0.0)  # 0 = no cap
-    must_visit_json: Mapped[str] = mapped_column(Text, default="[]")
+    # Must-sees: [{"place_id", "day" (1-based or null), "when" (morning/afternoon/sunset/evening or null),
+    # "at" ("HH:MM" or null)}], in the order the traveller added them
+    must_sees_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    # Busy times: [{"day", "start", "end", "label"}]; nothing is planned then
+    busy_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
     excluded_places_json: Mapped[str] = mapped_column(Text, default="[]")
     avoid_crowded: Mapped[bool] = mapped_column(Boolean, default=False)
     avoid_high_activity: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -495,12 +533,37 @@ class TripConstraint(Base):
     trip: Mapped["Trip"] = relationship("Trip", back_populates="constraints")
 
     @property
+    def must_sees(self) -> list:
+        return _json_get(self.must_sees_json)
+
+    @must_sees.setter
+    def must_sees(self, value):
+        rows = [v.model_dump() if hasattr(v, "model_dump") else dict(v) for v in (value or [])]
+        self.must_sees_json = _json_set([
+            {"place_id": r["place_id"], "day": r.get("day"), "when": r.get("when"), "at": r.get("at")} for r in rows
+        ])
+
+    @property
     def must_visit(self) -> list:
-        return _json_get(self.must_visit_json)
+        """The must-see place ids (the plain list older clients use)."""
+        return [m["place_id"] for m in self.must_sees]
 
     @must_visit.setter
     def must_visit(self, value):
-        self.must_visit_json = _json_set(value)
+        """Set the must-sees by id; places already listed keep their day and time."""
+        current = {m["place_id"]: m for m in self.must_sees}
+        self.must_sees = [current.get(pid, {"place_id": pid}) for pid in dict.fromkeys(value or [])]
+
+    @property
+    def busy(self) -> list:
+        return _json_get(self.busy_json)
+
+    @busy.setter
+    def busy(self, value):
+        rows = [v.model_dump() if hasattr(v, "model_dump") else dict(v) for v in (value or [])]
+        self.busy_json = _json_set([
+            {"day": r["day"], "start": r["start"], "end": r["end"], "label": r.get("label")} for r in rows
+        ])
 
     @property
     def excluded_places(self) -> list:
@@ -558,6 +621,20 @@ class ItineraryItem(Base):
     recommendation_score: Mapped[float] = mapped_column(Float, default=0.0)
     recommendation_reasons_json: Mapped[str] = mapped_column(Text, default="[]")
     order_index: Mapped[int] = mapped_column(Integer, default=0)
+    # "Keep this time": refreshing the day or changing the whole plan leaves it where it is
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
+    # How the traveller goes from here to the next stop (walk / rickshaw / cng / car); None = chosen for them
+    travel_mode: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    # Condition warnings the traveller chose to keep the stop despite ("Keep"): JSON list of warning keys
+    kept_warnings_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+
+    @property
+    def kept_warnings(self) -> list:
+        return _json_get(self.kept_warnings_json)
+
+    @kept_warnings.setter
+    def kept_warnings(self, value):
+        self.kept_warnings_json = _json_set(list(dict.fromkeys(value or [])))
 
     itinerary: Mapped["Itinerary"] = relationship("Itinerary", back_populates="items")
     place: Mapped[Optional["Place"]] = relationship("Place")
@@ -640,3 +717,52 @@ class DocumentChunk(Base):
     __table_args__ = (
         Index("ix_chunks_source_index", "source_id", "chunk_index"),
     )
+
+
+# ---------------------------------------------------------------------------
+# Road distances and times (trip planner step 5)
+# ---------------------------------------------------------------------------
+
+class RouteCache(Base):
+    """
+    A road distance and driving time between two points, from the routing service,
+    kept so each is asked for once. `geometry` (a JSON list of [lon, lat]) is filled
+    when the road line itself was fetched. Points are rounded to 5 decimals (about 1 m).
+    """
+    __tablename__ = "route_cache"
+    __table_args__ = (
+        UniqueConstraint("profile", "from_lat", "from_lon", "to_lat", "to_lon", name="uq_route_cache_pair"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    profile: Mapped[str] = mapped_column(String(20), nullable=False)       # driving-car
+    from_lat: Mapped[float] = mapped_column(Float, nullable=False)
+    from_lon: Mapped[float] = mapped_column(Float, nullable=False)
+    to_lat: Mapped[float] = mapped_column(Float, nullable=False)
+    to_lon: Mapped[float] = mapped_column(Float, nullable=False)
+    distance_km: Mapped[Optional[float]] = mapped_column(Float, nullable=True)   # None: no road between them
+    duration_min: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    geometry_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Live conditions (trip planner step 6)
+# ---------------------------------------------------------------------------
+
+class ConditionsCache(Base):
+    """
+    The last weather or sea forecast fetched for a spot (`kind`: forecast / marine), kept so
+    it's asked for at most every 30 minutes and still shown (with its age) when a refresh fails.
+    Spots are rounded to 2 decimals (about 1 km).
+    """
+    __tablename__ = "conditions_cache"
+    __table_args__ = (UniqueConstraint("kind", "lat", "lon", name="uq_conditions_cache_spot"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    lat: Mapped[float] = mapped_column(Float, nullable=False)
+    lon: Mapped[float] = mapped_column(Float, nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

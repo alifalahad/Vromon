@@ -40,7 +40,13 @@ export function Button({
   const { colors } = useTheme();
   const inactive = disabled || loading;
   const textColor =
-    variant === 'primary' ? colors.onAccent : variant === 'danger' || variant === 'smallDanger' ? colors.danger : colors.link;
+    variant === 'primary'
+      ? colors.onAccent
+      : variant === 'danger' || variant === 'smallDanger'
+        ? colors.danger
+        : variant === 'small'
+          ? colors.onAccentSoft
+          : colors.link;
   return (
     <PressableScale
       haptic={haptic ?? (variant === 'primary' ? 'medium' : 'light')}

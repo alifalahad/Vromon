@@ -274,3 +274,14 @@ The developer chose to keep everything local for now: no deployment, cloud build
   - Privacy policy and terms (drafts with `[TO FILL]` items) in `docs/legal/`.
   - Play Data safety answers and the listing in `docs/play-store/`.
   - Store graphics: `scripts/store/render_assets.py` makes the 512 px icon, a 1024 × 500 feature graphic from the original illustration, and 2:1 screenshots.
+- **Large text (font scale 1.6, the phone's largest, checked on the device):**
+  - Settings titles wrap to two lines, and a row's value drops below the title when both don't fit.
+  - Wizard step names and the stats card labels shrink to fit (`adjustsFontSizeToFit`).
+  - The trip card's date range stays whole, and the duration moves to the next line.
+  - Tab labels scale up to 1.25×: four labels must share the bar, and the icons carry the meaning.
+- **Development variant may use plain HTTP**, in release builds too (`plugins/withDevCleartext.js`, dev variant only), so a release build can be measured against the backend on this Mac. Preview and production stay HTTPS-only; `android/` is gitignored, so EAS regenerates it per variant, and local builds of other variants must use `prebuild --clean`.
+- **Measured on the realme RMX2170 (60 Hz), release build of the dev variant:**
+  - First frame 1.35–1.49 s (5 cold starts).
+  - Screen with the tab bar visible 2.8–3.1 s by screenshot polling (includes up to ~0.4 s of capture delay). That is at or just above the 2.5 s target; the splash waits for the stored session and the account (`/me`).
+  - Panning the world map: 410 frames, 0.24% janky, 50th/90th/99th percentile frame time 21/24/25 ms.
+- **E2E on the device:** the Maestro suite passed 7/7 flows in one run (5 min) on the phone, with throwaway accounts `e2e.ana` and `e2e.bob`. The friend flow first resets their friendship (`scripts/reset-friendship.js`), so the suite is repeatable.

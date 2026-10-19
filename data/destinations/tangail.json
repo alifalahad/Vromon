@@ -1,0 +1,187 @@
+{
+  "destination": {
+    "name": "Tangail",
+    "country": "Bangladesh",
+    "latitude": 24.2513,
+    "longitude": 89.9167,
+    "description": "Tangail is a city in Dhaka Division in the central region of Bangladesh."
+  },
+  "attribution": "Text and listings from Wikivoyage (CC BY-SA 4.0); places from Wikidata (CC0). Prices and opening hours are as the sources state them and haven't been checked.",
+  "sources": [
+    {
+      "name": "Wikivoyage",
+      "license": "CC BY-SA 4.0",
+      "url": "https://en.wikivoyage.org/wiki/Tangail"
+    },
+    {
+      "name": "Wikidata",
+      "license": "CC0 1.0",
+      "url": "https://www.wikidata.org/"
+    }
+  ],
+  "fetched_on": "2026-10-19",
+  "checked": false,
+  "places": [
+    {
+      "source": "wikidata",
+      "ref": "wd:Q22910833",
+      "wikidata": "Q22910833",
+      "name": "Atia Mosque",
+      "latitude": 24.184021,
+      "longitude": 89.911415,
+      "description": "Mosque in Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q22910833",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q106604780",
+      "wikidata": "Q106604780",
+      "name": "Al-Aman Bahela Khatun Masjid",
+      "latitude": 24.287330555,
+      "longitude": 89.697494444,
+      "description": "Mosque in Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q106604780",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q13058948",
+      "wikidata": "Q13058948",
+      "name": "Baliati Palace",
+      "latitude": 23.99479,
+      "longitude": 90.04251,
+      "description": "Historical place in Saturia Upazila, Manikganj District",
+      "category": "History",
+      "tags": [
+        "History"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q13058948",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q24896853",
+      "wikidata": "Q24896853",
+      "name": "Shahzadpur Kachharibari",
+      "latitude": 24.1752,
+      "longitude": 89.5939,
+      "description": "Ancient archaeological sites",
+      "category": "History",
+      "tags": [
+        "History"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q24896853",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q57055967",
+      "wikidata": "Q57055967",
+      "name": "Tangail DC Lake",
+      "latitude": 24.265156,
+      "longitude": 89.923079,
+      "description": "Lake Park in Tangail, Bangladesh",
+      "category": "Family",
+      "tags": [
+        "Family",
+        "Photography",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q57055967",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q63213174",
+      "wikidata": "Q63213174",
+      "name": "Jamuna Bridge West Bank Eco-Park",
+      "latitude": 24.4000903,
+      "longitude": 89.7469394,
+      "description": "Eco park in Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q63213174",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q25588451",
+      "wikidata": "Q25588451",
+      "name": "Pakulla Mosque",
+      "latitude": 24.14016,
+      "longitude": 90.01803,
+      "description": "Mosque in Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q25588451",
+      "hours_text": null,
+      "price_text": null
+    }
+  ],
+  "restaurants": [],
+  "hotels": [],
+  "_report": {
+    "listings": 2,
+    "no_coordinates": 2,
+    "too_far": 0,
+    "merged": 0
+  }
+}

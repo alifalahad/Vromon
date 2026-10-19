@@ -24,6 +24,8 @@ export type ThemeColors = {
   onAccent: string;
   /** Accent-coloured text on bg/surface (AA) */
   link: string;
+  /** Accent-coloured text on an `accentSoft` fill (Apply, small buttons, chips): AA over any surface */
+  onAccentSoft: string;
   textPrimary: string;
   textSecondary: string;
   textTertiary: string;
@@ -50,6 +52,7 @@ export const darkColors: ThemeColors = {
   accentSoft: 'rgba(51, 121, 243, 0.20)',
   onAccent: '#FFFFFF',
   link: '#6EA0F6',
+  onAccentSoft: '#8AB4F8', // link is 3.9:1 on accentSoft over surface
   textPrimary: '#F2F2F2',
   textSecondary: '#B2B2B2',
   textTertiary: '#9C9C9C', // sampled #858585 is 3.4:1 on surface
@@ -75,6 +78,7 @@ export const lightColors: ThemeColors = {
   accentSoft: 'rgba(37, 99, 217, 0.12)',
   onAccent: '#FFFFFF',
   link: '#245FD0',
+  onAccentSoft: '#1F55C0', // link (#245FD0) is 4.1:1 on accentSoft over surfaceInset
   textPrimary: '#111111',
   textSecondary: '#5C5C5C',
   textTertiary: '#676767', // AA on surfaceInset too

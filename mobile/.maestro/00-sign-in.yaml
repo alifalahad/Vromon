@@ -1,7 +1,7 @@
 appId: ${APP_ID}
 env:
   APP_ID: com.vromon.app.dev
-name: Sign in with a test account
+name: 00 Sign in with a test account
 ---
 - runFlow: subflows/launch.yaml
 - extendedWaitUntil:

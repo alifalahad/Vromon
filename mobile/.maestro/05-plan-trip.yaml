@@ -1,24 +1,96 @@
 appId: ${APP_ID}
 env:
   APP_ID: com.vromon.app.dev
-name: Plan a trip from the + button, back on the Trips tab
+name: 05 Plan a trip with must-sees, fix one that can't fit, see the plan
 ---
+# Every flow starts fresh on the Map tab, so one failure can't leave the next on another screen
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
 - tapOn:
     id: tab-trips
 - tapOn:
     id: plan-trip-fab
-- tapOn: "Cox's Bazar"
-- tapOn:
-    id: mode-bus
-- tapOn: "Next →"
-- tapOn: "Next →"
-- tapOn: "Next →"
-- tapOn: "Beach"
-- tapOn: "Next →"
-- tapOn: "Next →"
-- assertVisible: "Bus"
-- tapOn: "Create trip ✓"
+
+# 1 Where & when: only the destination is needed (dates default to next week)
 - extendedWaitUntil:
     visible:
-      id: section-upcoming
+      id: "destination-\\d+"
     timeout: 20000
+- tapOn:
+    id: "destination-\\d+"
+    index: 0
+- scrollUntilVisible:
+    element:
+      id: mode-bus
+    direction: DOWN
+- tapOn:
+    id: mode-bus
+- tapOn:
+    id: new-next
+
+# 2 Your style
+- tapOn:
+    id: interest-Beach
+- tapOn:
+    id: new-next
+
+# 3 Your must-dos: Inani Beach on day 1 at sunset, and the hilltop viewpoint at sunset (it closes before)
+- tapOn:
+    id: add-must-see
+- tapOn:
+    id: place-search
+- inputText: "Inani"
+- tapOn:
+    id: "pick-place-\\d+"
+    index: 0
+- tapOn:
+    id: "ms-\\d+-day-1"
+    index: 0
+- tapOn:
+    id: "ms-\\d+-sunset"
+    index: 0
+- tapOn:
+    id: add-must-see
+- tapOn:
+    id: place-search
+- inputText: "Hilltop"
+- tapOn:
+    id: "pick-place-\\d+"
+    index: 0
+# The new place's card is the open one
+- tapOn:
+    id: "ms-\\d+-sunset"
+    index: 0
+- assertVisible: "2 must-sees"
+- tapOn:
+    id: build-plan
+
+# Building: the viewpoint doesn't fit, so its choices come before the plan
+- extendedWaitUntil:
+    visible:
+      id: "unplaced-\\d+"
+    timeout: 60000
+- assertVisible: ".*closes at 17:00, before sunset.*"
+- assertNotVisible:
+    id: see-plan
+- tapOn:
+    id: fix-suggestion
+- extendedWaitUntil:
+    visible:
+      id: see-plan
+    timeout: 30000
+- tapOn:
+    id: see-plan
+
+# The plan opens with both must-sees in it
+- extendedWaitUntil:
+    visible:
+      id: trip-title
+    timeout: 20000
+- assertVisible:
+    id: day-tab-1
+- assertNotVisible:
+    id: "unplaced-\\d+"

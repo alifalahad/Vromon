@@ -5,7 +5,7 @@ import React from 'react';
 import TripsScreen from '../../app/(tabs)/trips';
 import TripStatsScreen from '../../app/stats/trips';
 import { durationDays, formatRange, groupTrips, localToday, tripPhase, tripToMarkVisited } from '../features/trips/dates';
-import { defaultTripForm, toTripPayload, tripFormSchema } from '../features/tripForm';
+import { defaultNewTrip, toPayload } from '../features/trips/new/newTrip';
 import '../i18n';
 import { tripsApi } from '../services/api';
 import type { Trip, TripStats, TripStop } from '../types';
@@ -21,10 +21,15 @@ jest.mock('../ui/haptics', () => ({
   haptics: { success: jest.fn(), error: jest.fn(), light: jest.fn(), warning: jest.fn(), selection: jest.fn(), medium: jest.fn() },
 }));
 jest.mock('../features/account/useMe', () => ({ ME_QUERY_KEY: ['me'], useMe: () => ({ data: { id: 'me' } }) }));
-jest.mock('../services/api', () => ({ tripsApi: { list: jest.fn(), stats: jest.fn(), markVisited: jest.fn() } }));
-jest.mock('../features/map/visits', () => ({ visitsKey: (id: string) => ['visits', id], useVisits: () => ({ data: [] }) }));
+const mockPhotos = jest.fn();
+const mockVisits: { data: unknown[] } = { data: [] };
+jest.mock('../services/api', () => ({
+  tripsApi: { list: jest.fn(), stats: jest.fn(), markVisited: jest.fn(), getItinerary: jest.fn(), budget: jest.fn(), conditions: jest.fn() },
+  photosApi: { forUser: (...a: unknown[]) => mockPhotos(...a) },
+}));
+jest.mock('../features/map/visits', () => ({ visitsKey: (id: string) => ['visits', id], useVisits: () => mockVisits }));
 
-const api = tripsApi as unknown as Record<'list' | 'stats' | 'markVisited', jest.Mock>;
+const api = tripsApi as unknown as Record<'list' | 'stats' | 'markVisited' | 'getItinerary' | 'budget' | 'conditions', jest.Mock>;
 const { haptics } = jest.requireMock('../ui/haptics') as { haptics: Record<string, jest.Mock> };
 
 const clients: QueryClient[] = [];
@@ -34,7 +39,10 @@ function renderWithQuery(ui: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 afterEach(() => clients.splice(0).forEach((c) => c.clear()));
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockPhotos.mockResolvedValue([]);
+});
 
 const stop = (city: string, country: string, iso2: string, mode: TripStop['transport_mode'], position: number): TripStop => ({
   position,
@@ -116,17 +124,11 @@ describe('trip dates', () => {
   });
 });
 
-describe('the wizard', () => {
+describe('the new-trip flow', () => {
   it('sends the origin and how you get there', () => {
-    const values = tripFormSchema.parse({
-      ...defaultTripForm(new Date('2026-11-01T00:00:00Z'), "Cox's Bazar"),
-      interests: ['Beach'],
-      origin: { city_geonameid: 1185241, label: 'Dhaka, Bangladesh' },
-      transport_mode: 'bus',
-    });
-    expect(toTripPayload(values)).toMatchObject({ origin: { city_geonameid: 1185241 }, transport_mode: 'bus' });
-    const none = tripFormSchema.parse({ ...defaultTripForm(new Date('2026-11-01T00:00:00Z'), "Cox's Bazar"), interests: ['Beach'] });
-    expect(toTripPayload(none)).toMatchObject({ origin: null, transport_mode: null });
+    const t = { ...defaultNewTrip(new Date('2026-11-01T00:00:00'), "Cox's Bazar"), origin: { city_geonameid: 1185241, label: 'Dhaka, Bangladesh' }, mode: 'bus' as const };
+    expect(toPayload(t)).toMatchObject({ origin: { city_geonameid: 1185241 }, transport_mode: 'bus' });
+    expect(toPayload(defaultNewTrip(new Date('2026-11-01T00:00:00'), "Cox's Bazar"))).toMatchObject({ origin: null, transport_mode: null });
   });
 });
 
@@ -134,43 +136,86 @@ describe('Trips tab', () => {
   const today = localToday();
   const addDays = (n: number) => localToday(new Date(Date.now() + n * 86_400_000));
 
-  it('shows the stats card, sections, and stops with flags and transport', async () => {
+  it('puts the next trip on top with its countdown, and the others as compact cards', async () => {
     api.list.mockResolvedValue([
-      trip(1, addDays(5), addDays(24), { stops: [stop('Kolkata', 'India', 'IN', 'plane', 0), stop('Dhaka', 'Bangladesh', 'BD', 'plane', 1)] }),
+      trip(1, addDays(5), addDays(24), { stops: [stop('Dhaka', 'Bangladesh', 'BD', null, 0), stop('Kolkata', 'India', 'IN', 'plane', 1)] }),
+      trip(2, addDays(1), addDays(3), { status: 'draft' }),
     ]);
-    api.stats.mockResolvedValue(ZERO);
+    api.stats.mockResolvedValue({ ...ZERO, trips: 45, total_days: 135, countries: 1, cities: 1 });
     await renderWithQuery(<TripsScreen />);
-    expect(await screen.findByText('Kolkata, India')).toBeTruthy();
-    expect(screen.getByText('Dhaka, Bangladesh')).toBeTruthy();
-    expect(screen.getAllByText('Plane')).toHaveLength(2);
-    expect(screen.getByText('20 days')).toBeTruthy();
+    // The soonest trip (tomorrow) is the next one; it has no plan yet
+    expect(await screen.findByTestId('next-trip-when')).toHaveTextContent('NEXT TRIP · TOMORROW');
+    expect(screen.getByTestId('next-trip')).toHaveTextContent(/Plan not built yet/);
+    expect(api.getItinerary).not.toHaveBeenCalled();
+    // The other one below, with its route
     expect(screen.getByTestId('section-upcoming')).toHaveTextContent('Upcoming');
+    expect(screen.getByTestId('trip-1')).toHaveTextContent(/20 days/);
+    expect(screen.getByTestId('trip-1')).toHaveTextContent(/🇧🇩 Dhaka → 🇮🇳 Kolkata/);
     expect(screen.queryByTestId('section-past')).toBeNull();
-    expect(screen.getByTestId('stat-trips')).toHaveTextContent(/Trips0$/);
-    expect(screen.getByTestId('stat-duration')).toHaveTextContent(/Duration0d$/);
+    expect(screen.getByTestId('stat-trips')).toHaveTextContent('45Trips');
+    expect(screen.getByTestId('stat-duration')).toHaveTextContent('135Days');
     expect(api.stats).toHaveBeenCalledWith(today, undefined);
-    expect(screen.queryByTestId('mark-visited')).toBeNull();
     await fireEvent.press(screen.getByTestId('trip-1'));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/trip/[id]', params: { id: 1 } });
+    await fireEvent.press(screen.getByTestId('next-trip'));
+    expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/trip/[id]', params: { id: 2 } });
   });
 
-  it('offers to mark a finished trip visited, in one tap', async () => {
+  it("shows the next trip's weather, stops and budget", async () => {
+    api.list.mockResolvedValue([trip(3, addDays(2), addDays(4))]);
+    api.stats.mockResolvedValue(ZERO);
+    const day = { id: 30, trip_id: 3, day_number: 1, day_date: addDays(2), total_cost: 0, total_travel_time: 0,
+      items: [1, 2, 3].map((id) => ({ id, item_type: 'activity' })) };
+    api.getItinerary.mockResolvedValue({ days: [day] });
+    api.budget.mockResolvedValue({ estimated_total: 24060, total_budget: 25000 });
+    const cday = (n: number, warnings: unknown[] = []) => ({
+      day_id: 30 + n, day_number: n, date: addDays(1 + n), in_forecast: true, sunrise: '05:50', sunset: '17:20',
+      temp_max: 31, temp_min: 24, rain_max: 80, code: 95, hours: [], sea: null, items: {}, legs: {}, warnings, checks: [],
+    });
+    api.conditions.mockResolvedValue({ available: true, fetched_at: null, stale: false, forecast_until: null,
+      days: [cday(1), cday(2, [{ key: 's', code: 'storm', kept: false }])] });
+    await renderWithQuery(<TripsScreen />);
+    expect(await screen.findByTestId('next-trip-weather')).toHaveTextContent(/31° · storms likely \w+$/);
+    expect(await screen.findByText('3 stops on day 1')).toBeTruthy();
+    expect(await screen.findByText('৳24,060 of ৳25,000')).toBeTruthy();
+  });
+
+  it("past trips show their photos and 'Mark visited', in one tap", async () => {
     api.list.mockResolvedValue([trip(7, addDays(-6), addDays(-3), { stops: [stop("Cox's Bazar", 'Bangladesh', 'BD', 'bus', 0)] })]);
     api.stats.mockResolvedValue({ ...ZERO, trips: 1, total_days: 4, upcoming: 0 });
     api.markVisited.mockResolvedValue({ visited_prompt: 'marked', places_marked: 2 });
+    mockPhotos.mockResolvedValue([{ id: 'p1', thumb_url: 'https://x/1.jpg', url: 'https://x/1.jpg', expires_at: '2999-01-01T00:00:00Z', trip_id: 7 }]);
     await renderWithQuery(<TripsScreen />);
-    expect(await screen.findByTestId('mark-visited')).toBeTruthy();
+    expect(await screen.findByTestId('mark-visited-7')).toBeTruthy();
+    expect(screen.queryByTestId('next-trip')).toBeNull();
     expect(screen.getByTestId('section-past')).toBeTruthy();
-    await act(async () => fireEvent.press(screen.getByTestId('mark-visited-yes')));
+    expect(await screen.findByText('1 photo')).toBeTruthy();
+    await act(async () => fireEvent.press(screen.getByTestId('mark-visited-7')));
     expect(api.markVisited).toHaveBeenCalledWith(7, true);
     expect(haptics.success).toHaveBeenCalled();
   });
 
-  it('is empty with no trips', async () => {
+  it("a past trip already on the map says so", async () => {
+    mockVisits.data = [{ place_type: 'city', place_code: '1', status: 'visited' }];
+    try {
+      api.list.mockResolvedValue([trip(8, addDays(-6), addDays(-3), { stops: [stop('Dhaka', 'Bangladesh', 'BD', 'bus', 0)] })]);
+      api.stats.mockResolvedValue(ZERO);
+      await renderWithQuery(<TripsScreen />);
+      expect(await screen.findByTestId('on-map-8')).toHaveTextContent(/On your map/);
+      expect(screen.queryByTestId('mark-visited-8')).toBeNull();
+    } finally {
+      mockVisits.data = [];
+    }
+  });
+
+  it('with no trips, invites you to plan the first', async () => {
     api.list.mockResolvedValue([]);
     api.stats.mockResolvedValue(ZERO);
     await renderWithQuery(<TripsScreen />);
-    expect(await screen.findByTestId('trips-empty')).toBeTruthy();
+    expect(await screen.findByTestId('trips-empty')).toHaveTextContent(/Plan your first trip/);
+    expect(screen.queryByTestId('trip-stats-card')).toBeNull();
+    await fireEvent.press(screen.getByTestId('plan-first-trip'));
+    expect(mockPush).toHaveBeenCalledWith('/trip/new');
   });
 });
 

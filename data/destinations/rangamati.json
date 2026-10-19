@@ -1,0 +1,206 @@
+{
+  "destination": {
+    "name": "Rangamati",
+    "country": "Bangladesh",
+    "latitude": 22.6533,
+    "longitude": 92.1789,
+    "description": "Rangamati is a popular town in the Chittagong Hill Tracts in the Chittagong Division of Bangladesh."
+  },
+  "attribution": "Text and listings from Wikivoyage (CC BY-SA 4.0); places from Wikidata (CC0). Prices and opening hours are as the sources state them and haven't been checked.",
+  "sources": [
+    {
+      "name": "Wikivoyage",
+      "license": "CC BY-SA 4.0",
+      "url": "https://en.wikivoyage.org/wiki/Rangamati"
+    },
+    {
+      "name": "Wikidata",
+      "license": "CC0 1.0",
+      "url": "https://www.wikidata.org/"
+    }
+  ],
+  "fetched_on": "2026-10-19",
+  "checked": false,
+  "places": [
+    {
+      "source": "wikidata",
+      "ref": "wd:Q24952282",
+      "wikidata": "Q24952282",
+      "name": "Kaptai National Park",
+      "latitude": 22.502222222,
+      "longitude": 92.201111111,
+      "description": "National park in Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q24952282",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q59462708",
+      "wikidata": "Q59462708",
+      "name": "Love Point, Bangladesh",
+      "latitude": 22.641309,
+      "longitude": 92.198253,
+      "description": "Memorial in Kaptai, Rangamati, Bangladesh",
+      "category": "History",
+      "tags": [
+        "History"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q59462708",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q97256514",
+      "wikidata": "Q97256514",
+      "name": "Rajabhuban Rajbari",
+      "latitude": 22.5295268,
+      "longitude": 92.0543039,
+      "description": "Palace in Rangunia, Bangladesh",
+      "category": "History",
+      "tags": [
+        "History"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q97256514",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q21745823",
+      "wikidata": "Q21745823",
+      "name": "Phukmani Main",
+      "latitude": 22.6018,
+      "longitude": 92.3404,
+      "description": "Mountain in Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q21745823",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q97254464",
+      "wikidata": "Q97254464",
+      "name": "Chakma Rajbari",
+      "latitude": 22.6645641,
+      "longitude": 92.1739378,
+      "description": "Palace in Rangamati, Bangladesh",
+      "category": "History",
+      "tags": [
+        "History"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q97254464",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q109332628",
+      "wikidata": "Q109332628",
+      "name": "Hillview Park & Cafe",
+      "latitude": 22.708611111,
+      "longitude": 92.335,
+      "description": "Park at Bhatiary Union in Chittagong",
+      "category": "Family",
+      "tags": [
+        "Family",
+        "Photography",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q109332628",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q122360329",
+      "wikidata": "Q122360329",
+      "name": "Polwel Park",
+      "latitude": 22.641161,
+      "longitude": 92.19992,
+      "description": "Park in Rangamati",
+      "category": "Family",
+      "tags": [
+        "Family",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q122360329",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q122360787",
+      "wikidata": "Q122360787",
+      "name": "Jum Museum",
+      "latitude": 22.693433,
+      "longitude": 92.237214,
+      "description": "Museum in Rangamati",
+      "category": "Culture",
+      "tags": [
+        "Culture"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q122360787",
+      "hours_text": null,
+      "price_text": null
+    }
+  ],
+  "restaurants": [],
+  "hotels": [],
+  "_report": {
+    "listings": 6,
+    "no_coordinates": 6,
+    "too_far": 0,
+    "merged": 0
+  }
+}

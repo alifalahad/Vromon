@@ -337,12 +337,16 @@ class TestBudget:
         assert data["categories"]["meals"] == pytest.approx(meals * 3)
         assert data["nights"] == 2
         assert data["categories"]["accommodation"] == pytest.approx(data["hotel"]["price_per_night"] * 2 * 2)
-        assert data["categories"]["transport"] is None
+        # Local travel is counted since step 7 (an estimate); no starting city, so no getting there
+        assert data["categories"]["transport"] > 0
         cats = data["categories"]
-        assert data["estimated_total"] == pytest.approx(cats["activities"] + cats["meals"] + cats["accommodation"])
+        # each part is rounded to ৳10
+        assert data["estimated_total"] == pytest.approx(
+            cats["activities"] + cats["meals"] + cats["accommodation"] + cats["transport"], abs=30
+        )
         assert data["remaining"] == pytest.approx(50000 - data["estimated_total"])
         assert data["over_budget"] is (data["estimated_total"] > 50000)
-        assert any("transport" in x.lower() for x in data["not_included"])
+        assert not any(p["key"] == "getting_there" and p["known"] for p in data["parts"])
 
     def test_over_budget_flag(self, client):
         trip = create_trip(client, days=3, travelers=4, budget=1000)

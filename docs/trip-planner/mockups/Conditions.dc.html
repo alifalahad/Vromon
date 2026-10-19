@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conditions for day 1</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; position: relative; overflow: hidden; background: {{c.bg}}; color: {{c.t1}}; font-family: Roboto, system-ui, sans-serif; display: flex; flex-direction: column;">
+
+  <header style="display: flex; align-items: center; gap: 6px; padding: 12px 10px 0 6px;">
+    <a href="Trip.dc.html" aria-label="Back" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 999px;">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+    </a>
+    <div style="flex: 1; min-width: 0;">
+      <div style="font-size: 20px; font-weight: 700;">Conditions</div>
+      <div style="font-size: 13px; color: {{c.t2}};">Day 1 · Mon 19 Oct · updated 3 min ago</div>
+    </div>
+    <button aria-label="Refresh" style="width: 48px; height: 48px; border-radius: 999px; background: transparent; color: {{c.link}}; display: flex; align-items: center; justify-content: center;">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4"/></svg>
+    </button>
+  </header>
+
+  <div style="flex: 1; overflow-y: auto; padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 16px;">
+    <div style="padding: 12px 6px; border-radius: 20px; background: {{c.surface}}; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center;">
+      <sc-for list="{{hours}}" as="h" hint-placeholder-count="7">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0; border-radius: 12px; background: {{h.bg}};">
+          <span style="font-size: 12px; color: {{c.t2}};">{{h.t}}</span>
+          <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{h.color}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{h.icon}}"/></svg>
+          <span style="font-size: 15px; font-weight: 700;">{{h.temp}}</span>
+          <span style="font-size: 11px; color: {{c.link}};">{{h.rain}}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+      <div style="padding: 14px; border-radius: 18px; background: {{c.surface}}; display: flex; flex-direction: column; gap: 4px;">
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{c.sunsetText}}" stroke-width="2" stroke-linecap="round"><path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 4v4M5 9l1.5 1.5M19 9l-1.5 1.5"/></svg>
+        <span style="font-size: 13px; color: {{c.t2}};">Sun</span>
+        <span style="font-size: 15px; font-weight: 600;">Rise 05:58<br>Set 17:30</span>
+      </div>
+      <div style="padding: 14px; border-radius: 18px; background: {{c.surface}}; display: flex; flex-direction: column; gap: 4px;">
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{c.link}}" stroke-width="2" stroke-linecap="round"><path d="M2 10c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2M2 16c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/></svg>
+        <span style="font-size: 13px; color: {{c.t2}};">Sea at Laboni</span>
+        <span style="font-size: 15px; font-weight: 600;">Waves 1.8 m<br>Rough</span>
+      </div>
+    </div>
+
+    <h2 style="margin: 4px 0 0; font-size: 18px; font-weight: 700;">2 warnings</h2>
+
+    <article style="padding: 14px; border-radius: 18px; background: {{c.surface}}; box-shadow: inset 0 0 0 1.5px {{c.danger}}; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; gap: 10px;">
+        <span style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 12px; background: {{c.dangerBg}}; color: {{c.danger}}; display: flex; align-items: center; justify-content: center;">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16a5 5 0 1 1 1-9.9A6 6 0 0 1 19 9a4 4 0 0 1-1 7.9"/><path d="M13 12l-3 5h4l-3 5"/></svg>
+        </span>
+        <div style="flex: 1;">
+          <h3 style="margin: 0; font-size: 16px; font-weight: 700;">Storms likely 15:00–17:00</h3>
+          <p style="margin: 4px 0 0; font-size: 14px; line-height: 20px; color: {{c.t2}};">Affects stop 5, Sunset Boat Ride. Boats may not run in a storm.</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button style="height: 40px; padding: 0 14px; border-radius: 999px; background: {{c.accent}}; color: #FFFFFF; font-size: 14px; font-weight: 600;">Move to Tuesday</button>
+        <button style="height: 40px; padding: 0 14px; border-radius: 999px; background: transparent; color: {{c.t1}}; box-shadow: inset 0 0 0 1px {{c.border}}; font-size: 14px;">Keep</button>
+      </div>
+      <div style="font-size: 12px; color: {{c.t3}};">Source: weather forecast (Open-Meteo) · 3 min ago</div>
+    </article>
+
+    <article style="padding: 14px; border-radius: 18px; background: {{c.surface}}; box-shadow: inset 0 0 0 1.5px {{c.warning}}; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; gap: 10px;">
+        <span style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 12px; background: {{c.warningBg}}; color: {{c.warning}}; display: flex; align-items: center; justify-content: center;">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 10c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2M2 16c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/></svg>
+        </span>
+        <div style="flex: 1;">
+          <h3 style="margin: 0; font-size: 16px; font-weight: 700;">Rough sea at the beaches</h3>
+          <p style="margin: 4px 0 0; font-size: 14px; line-height: 20px; color: {{c.t2}};">Waves around 1.8 m. Don't swim past the lifeguard flags.</p>
+        </div>
+      </div>
+      <div style="font-size: 12px; color: {{c.t3}};">Source: sea forecast (Open-Meteo Marine) · 3 min ago</div>
+    </article>
+
+    <h2 style="margin: 4px 0 0; font-size: 18px; font-weight: 700;">Also checked</h2>
+    <div style="border-radius: 18px; background: {{c.surface}}; padding: 4px 14px;">
+      <sc-for list="{{checks}}" as="k" hint-placeholder-count="3">
+        <div style="display: flex; gap: 12px; padding: 12px 0; border-bottom: {{k.line}};">
+          <span style="width: 24px; height: 24px; flex-shrink: 0; border-radius: 999px; background: {{c.successBg}}; color: {{c.success}}; display: flex; align-items: center; justify-content: center;">
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+          </span>
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+            <span style="font-size: 15px; font-weight: 600;">{{k.title}}</span>
+            <span style="font-size: 13px; line-height: 18px; color: {{c.t2}};">{{k.text}}</span>
+          </span>
+        </div>
+      </sc-for>
+    </div>
+
+    <p style="margin: 0; font-size: 13px; line-height: 19px; color: {{c.t3}};">Vromon warns you using the data above. It can't promise that a place or a road is safe.</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const P = {
+      dark: { bg: '#262626', surface: '#333333', border: '#5A5A5A', accent: '#3379F3', link: '#6EA0F6', t1: '#F2F2F2', t2: '#B2B2B2', t3: '#9C9C9C', success: '#4CAF50', successBg: 'rgba(76,175,80,0.16)', warning: '#F2B13C', warningBg: 'rgba(242,177,60,0.16)', danger: '#F07A72', dangerBg: 'rgba(240,122,114,0.16)', sunsetText: '#F08A4B', sun: '#F2B13C', cloud: '#B2B2B2' },
+      light: { bg: '#F5F5F5', surface: '#FFFFFF', border: '#C8C8CC', accent: '#2563D9', link: '#245FD0', t1: '#111111', t2: '#5C5C5C', t3: '#676767', success: '#2B742E', successBg: 'rgba(43,116,46,0.10)', warning: '#A74D08', warningBg: 'rgba(167,77,8,0.10)', danger: '#C62828', dangerBg: 'rgba(198,40,40,0.10)', sunsetText: '#B5501A', sun: '#C26A12', cloud: '#5C5C5C' }
+    };
+    const c = P[this.props.theme === 'light' ? 'light' : 'dark'];
+    const SUN = 'M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4';
+    const CLOUD = 'M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 19 11a4 4 0 0 1-1 7z';
+    const STORM = 'M7 16a5 5 0 1 1 1-9.9A6 6 0 0 1 19 9a4 4 0 0 1-1 7.9M13 12l-3 5h4l-3 5';
+    const hour = (t, icon, temp, rain, kind) => ({ t, icon, temp, rain, color: kind === 'storm' ? c.danger : kind === 'sun' ? c.sun : c.cloud, bg: kind === 'storm' ? c.dangerBg : 'transparent' });
+    const hours = [
+      hour('07', SUN, '27°', '0%', 'sun'), hour('09', SUN, '29°', '0%', 'sun'), hour('11', SUN, '31°', '5%', 'sun'),
+      hour('13', CLOUD, '31°', '20%', 'cloud'), hour('15', STORM, '28°', '70%', 'storm'), hour('17', STORM, '27°', '60%', 'storm'), hour('19', CLOUD, '26°', '20%', 'cloud')
+    ];
+    const checks = [
+      { title: 'Opening hours', text: 'All 6 stops are open when you arrive.' },
+      { title: 'After dark', text: 'Sunset is 17:30. After that you are only in town, back by 19:55.' },
+      { title: 'Traffic', text: 'Kolatoli Road is usually slow 17:00–19:00. This is usual traffic, not live.' }
+    ].map((k, i, a) => ({ ...k, line: i < a.length - 1 ? '1px solid ' + c.border : 'none' }));
+    return { c, hours, checks };
+  }
+}
+</script>
+</body>
+</html>

@@ -30,7 +30,7 @@ if (Platform.OS !== 'web') {
  * Queries saved to the device so the map, trips, profile and friends open offline.
  * Friends' data is removed from the cache when they unfriend or are blocked.
  */
-const PERSISTED = new Set(['me', 'visits', 'trips', 'trip', 'tripStats', 'itinerary', 'destinations', 'friends', 'friendProfile', 'userStats', 'userTrips']);
+const PERSISTED = new Set(['me', 'visits', 'trips', 'trip', 'tripStats', 'itinerary', 'conditions', 'dayRoute', 'destinations', 'friends', 'friendProfile', 'userStats', 'userTrips']);
 
 export const queryPersister = createAsyncStoragePersister({ storage: AsyncStorage, key: 'vromon.query-cache' });
 

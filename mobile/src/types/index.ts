@@ -12,6 +12,20 @@ export interface Destination {
   longitude?: number;
   image_url?: string;
   place_count?: number;
+  /** Imported destinations (step 10): credit for the sources, and whether a person has checked the data */
+  attribution?: string | null;
+  sources?: { name: string; license?: string; url?: string }[];
+  checked?: boolean;
+}
+
+/** A hotel of a destination (GET /destinations/{id}/hotels) */
+export interface Hotel {
+  id: number;
+  name: string;
+  category: 'Budget' | 'Standard' | 'Luxury' | string;
+  price_per_night: number;
+  currency?: string;
+  rating?: number;
 }
 
 export interface Place {
@@ -34,6 +48,15 @@ export interface Place {
   activity_level?: string;
   tags?: string[];
   image_url?: string;
+  /** Unknown stays unknown (step 10): false = no source gave it ("Price unknown", "Hours not checked", no rating) */
+  cost_known?: boolean;
+  hours_known?: boolean;
+  rating_known?: boolean;
+  /** curated / wikivoyage / wikidata */
+  source?: string;
+  url?: string | null;
+  /** false: imported and not checked by a person yet */
+  checked?: boolean;
 }
 
 export interface TripPreferenceInput {
@@ -43,14 +66,182 @@ export interface TripPreferenceInput {
   accommodation_preference?: string;
   preferred_start_time?: string;
   preferred_end_time?: string;
+  /** The first day starts when you arrive, the last day ends when you leave (null = the usual times) */
+  arrive_time?: string | null;
+  leave_time?: string | null;
+}
+
+/** How to get from one stop to the next */
+export type TravelMode = 'walk' | 'rickshaw' | 'cng' | 'car';
+
+/** GET /trips/{id}/items/{item_id}/leg */
+export interface LegOptions {
+  item_id: number;
+  from: string;
+  to: string;
+  to_item_id: number;
+  km: number;
+  source: 'road' | 'estimate';
+  /** When you leave for the next stop */
+  leave: string;
+  mode: TravelMode | null;
+  chosen: boolean;
+  options: {
+    mode: TravelMode;
+    minutes: number;
+    fare: number;
+    arrive: string;
+    recommended: boolean;
+    /** Stops that would start later */
+    moves: { item_id: number; item_type: string; title: string; minutes_later: number }[];
+  }[];
+}
+
+/** GET /trips/{id}/days/{day_id}/route: road lines ([lon, lat]) between consecutive stops */
+export interface DayRoute {
+  day_id: number;
+  provider: string | null;
+  legs: { from_item_id: number; to_item_id: number; line: number[][] | null }[];
+}
+
+/** From the trip's starting city to the destination (rough estimates) */
+export interface GettingThere {
+  from: string;
+  to: string;
+  mode: TransportMode;
+  km: number;
+  minutes: number;
+  fare: number;
+  fare_per: 'person' | 'vehicle';
+  source: 'road' | 'estimate';
+}
+
+/** A warning about a stop (or a day) from the weather, the sea, the sun or usual traffic */
+export interface ConditionWarning {
+  key: string;
+  code: 'rain' | 'storm' | 'wind' | 'rough_sea' | 'after_dark' | 'traffic_closing';
+  item_id: number | null;
+  place: string | null;
+  stop_number: number | null;
+  /** The traveller chose "Keep" */
+  kept: boolean;
+  source: 'weather' | 'sea' | 'sun' | 'traffic';
+  from?: string;
+  to?: string;
+  chance?: number;
+  gust?: number;
+  wave?: number;
+  sunset?: string;
+  end?: string;
+  extra?: number;
+  closes?: string;
+  peak?: 'morning' | 'evening';
+  boat?: boolean;
+  /** A drier day of the trip at the same time */
+  move_to?: { day_id: number; day_number: number; date: string | null } | null;
+}
+
+export interface ConditionsDay {
+  day_id: number;
+  day_number: number;
+  date: string | null;
+  in_forecast: boolean;
+  sunrise: string;
+  sunset: string;
+  temp_max: number | null;
+  temp_min: number | null;
+  rain_max: number | null;
+  code: number | null;
+  hours: { time: string; temp: number | null; rain: number | null; code: number | null }[];
+  sea: { place: string; wave: number; level: 'calm' | 'moderate' | 'rough' } | null;
+  /** The weather in the hour each stop starts, by item id */
+  items: Record<string, { temp: number | null; rain: number | null; code: number | null }>;
+  /** Usual (not live) slow traffic on legs, by the id of the stop the leg leaves from */
+  legs: Record<string, { extra: number; from: string; to: string; peak: 'morning' | 'evening' }>;
+  warnings: ConditionWarning[];
+  checks: { code: 'opening_hours' | 'after_dark' | 'traffic'; ok: boolean; count?: number; sunset?: string; back_by?: string | null; peaks?: string[] }[];
+}
+
+/** GET /trips/{id}/conditions */
+export interface TripConditions {
+  /** False when no forecast could be fetched yet */
+  available: boolean;
+  /** When the weather was fetched (UTC) */
+  fetched_at: string | null;
+  sea_fetched_at?: string | null;
+  /** A refresh failed: this is the last copy */
+  stale: boolean;
+  forecast_until: string | null;
+  days: ConditionsDay[];
+}
+
+export type MustSeeWhen = 'morning' | 'afternoon' | 'sunset' | 'evening';
+
+/** A place the traveller must see, optionally on a day and at a time of day or an exact time */
+export interface MustSee {
+  place_id: number;
+  day: number | null;
+  when: MustSeeWhen | null;
+  at: string | null;
+}
+
+/** A time the traveller is busy: nothing is planned then */
+export interface BusyTime {
+  day: number;
+  start: string;
+  end: string;
+  label: string | null;
 }
 
 export interface TripConstraintInput {
+  /** Omitted: follows the pace (Relaxed 3, Balanced 4, Packed 6) */
   max_activities_per_day?: number;
   max_daily_budget?: number;
   avoid_crowded?: boolean;
-  must_visit?: number[];
+  must_sees?: MustSee[];
+  busy?: BusyTime[];
   excluded_places?: number[];
+}
+
+/** Why a must-see can't fit, with what explains it */
+export interface UnplacedReason {
+  code: 'closes_before' | 'opens_after' | 'day_ends' | 'day_starts' | 'arrive' | 'leave' | 'busy' | 'clash' | 'budget' | 'full';
+  closes?: string;
+  opens?: string;
+  wanted?: MustSeeWhen | 'at' | 'any';
+  sunset?: string;
+  at?: string;
+  end?: string;
+  start?: string;
+  arrive?: string;
+  leave?: string;
+  label?: string;
+  other?: string;
+  day?: number;
+}
+
+/** A must-see that isn't in the plan: why, and the nearest time that would fit */
+export interface Unplaced extends MustSee {
+  name: string;
+  reason: UnplacedReason;
+  message: string;
+  suggestion: { day: number; at: string } | null;
+}
+
+export interface MustDosChange {
+  must_sees?: MustSee[];
+  busy?: BusyTime[];
+  excluded_places?: number[];
+  arrive_time?: string | null;
+  leave_time?: string | null;
+}
+
+export interface MustDosResult {
+  message: string;
+  replanned_days: number[];
+  trip: Trip;
+  unplaced: Unplaced[];
+  validation: ValidationReport | null;
 }
 
 export type TransportMode = 'plane' | 'bus' | 'train' | 'car' | 'boat' | 'walk';
@@ -114,11 +305,15 @@ export interface Trip {
     accommodation_preference: string;
     preferred_start_time: string;
     preferred_end_time: string;
+    arrive_time?: string | null;
+    leave_time?: string | null;
   };
   constraints?: {
     id: number;
     max_activities_per_day: number;
     max_daily_budget: number;
+    must_sees?: MustSee[];
+    busy?: BusyTime[];
     must_visit: number[];
     excluded_places: number[];
     avoid_crowded: boolean;
@@ -143,11 +338,45 @@ export interface ItineraryItem {
   recommendation_score: number;
   recommendation_reasons: string[];
   order_index: number;
+  /** "Keep this time": refreshing the day or changing the plan leaves it where it is */
+  pinned?: boolean;
   category?: string | null;     // place category, or "Meal"
   currency: string;
   /** "placeholder" = no restaurant/place record; the cost is an estimate, not real data */
   cost_source: 'data' | 'placeholder';
+  /** The leg to the next activity (trip planner step 5); absent on meals and the last activity */
+  travel_mode?: TravelMode | null;
+  /** The traveller chose the mode (otherwise the app picked it) */
+  travel_mode_chosen?: boolean;
+  /** "road": distance and time from road data; "estimate": straight line */
+  travel_source?: 'road' | 'estimate' | null;
+  /** Fare per vehicle, an estimate (0 walking) */
+  travel_fare?: number | null;
   place?: Place;
+  /** The meal's restaurant (null for activities) */
+  restaurant?: Restaurant | null;
+}
+
+// Matches _restaurant_out in trips.py
+export interface Restaurant {
+  id: number;
+  name: string;
+  destination_name: string;
+  cuisine?: string | null;
+  price_level?: string | null;
+  rating?: number | null;
+  review_count?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  average_meal_cost?: number | null;
+  currency?: string | null;
+  opening_time?: string | null;
+  closing_time?: string | null;
+  tags?: string[];
+  description?: string | null;
+  cost_known?: boolean;
+  hours_known?: boolean;
+  rating_known?: boolean;
 }
 
 // Matches _day_out in trips.py
@@ -157,10 +386,16 @@ export interface ItineraryDay {
   day_number: number;
   day_date?: string;
   theme?: string;
+  /** The day in a line, as parts put into words by the app (step 7) */
+  summary?: DayPart[];
   total_cost: number;
   total_travel_time: number;
   items: ItineraryItem[];
 }
+
+export type DayPart =
+  | { part: 'morning' | 'afternoon' | 'evening'; what: string }
+  | { part: 'sunset'; place: string };
 
 // Matches GenerationStatus in schemas.py
 export type GenerationStatus = 'valid' | 'valid_with_warnings' | 'invalid';
@@ -190,6 +425,9 @@ export interface Itinerary {
   };
   days: ItineraryDay[];
   validation: ValidationReport | null;
+  /** Must-sees that aren't in the plan */
+  unplaced?: Unplaced[];
+  getting_there?: GettingThere | null;
 }
 
 export type Algorithm = 'heuristic' | 'cpsat';
@@ -243,6 +481,7 @@ export interface GenerateResult {
   };
   validation: ValidationReport;
   itinerary: ItineraryDay[];
+  unplaced?: Unplaced[];
 }
 
 // Response of remove / replace / regenerate-day
@@ -251,6 +490,22 @@ export interface EditResult {
   message: string;
   day: ItineraryDay;
   validation: ValidationReport;
+}
+
+// Response of moving a stop to another day (both days come back)
+export interface MoveResult {
+  success: boolean;
+  message: string;
+  days: ItineraryDay[];
+  validation: ValidationReport;
+}
+
+// GET /trips/{id}/days/{day_id}/suggestions
+export interface Suggestion {
+  place: Place;
+  recommendation_score: number;
+  recommendation_reasons: string[];
+  distance_km: number | null;
 }
 
 export interface Alternative {
@@ -325,6 +580,76 @@ export interface BudgetBreakdown {
   not_included: string[];
   incomplete_reasons: string[];
   free_activities: number;
+  // The full budget (step 7)
+  total: number;
+  low: number;
+  high: number;
+  left: number;
+  /** close: within 10% of the budget, or the estimates' high end goes over */
+  status: 'ok' | 'close' | 'over';
+  parts: BudgetPart[];
+  by_day: { day_number: number; date: string | null; amount: number; food: number; tickets: number; local: number; estimate: boolean }[];
+  saves: BudgetSave[];
+}
+
+export type BudgetPartKey = 'getting_there' | 'stay' | 'food' | 'tickets' | 'local';
+
+export interface BudgetPart {
+  key: BudgetPartKey;
+  /** false: no data (not counted, never guessed) */
+  known: boolean;
+  amount: number | null;
+  low: number | null;
+  high: number | null;
+  estimate: boolean;
+  detail: {
+    reason?: 'no_origin' | 'no_hotel' | 'currency' | 'no_price';
+    currency?: string;
+    // getting_there
+    mode?: TransportMode;
+    from?: string;
+    to?: string;
+    fare_per?: 'person' | 'vehicle';
+    count?: number;
+    // stay
+    hotel?: string;
+    rating?: number;
+    nights?: number;
+    rooms?: number;
+    per_night?: number;
+    // food
+    days?: number;
+    travellers?: number;
+    placeholder_meals?: number;
+    // tickets
+    paid?: number;
+    free?: number;
+    /** stops whose entry price nobody has given (not counted) */
+    unknown?: number;
+    // local
+    legs?: number;
+    modes?: TravelMode[];
+  };
+}
+
+/** A change the budget screen can apply; the server's `undo` is one too */
+export type SaveAction =
+  | { kind: 'hotel'; hotel_id: number | null }
+  | { kind: 'skip'; item_id: number }
+  | { kind: 'restore'; day_id: number; place_id: number; position: number }
+  | { kind: 'modes'; modes: Record<string, TravelMode | null>; times?: Record<string, [string, string]> };
+
+export type BudgetSave =
+  | { key: 'hotel'; saving: number; estimate: boolean; action: SaveAction; detail: { from: string; from_rating: number; to: string; to_rating: number; per_night: number } }
+  | { key: 'skip'; saving: number; estimate: boolean; action: SaveAction; detail: { title: string; day_number: number; item_id: number } }
+  | { key: 'rickshaw'; saving: number; estimate: boolean; action: SaveAction; detail: { legs: number; extra_min: number } };
+
+export interface SaveResult {
+  message: string;
+  undo: SaveAction | null;
+  budget: BudgetBreakdown;
+  days: ItineraryDay[];
+  validation: ValidationReport;
 }
 
 export interface Feedback {
@@ -567,4 +892,30 @@ export interface TripStats {
   transport_modes: { mode: TransportMode; count: number }[];
   upcoming: number;
   ongoing: number;
+}
+
+// ---------------------------------------------------------------------------
+// Today mode: running late (trip planner step 9)
+// ---------------------------------------------------------------------------
+
+export type LateReason =
+  | { code: 'day_ends'; end: string }
+  | { code: 'closes'; closes: string }
+  | { code: 'before'; place: string; at: string };
+
+export interface LatePlan {
+  moved: { item_id: number; title: string; from: string; to: string }[];
+  dropped: { item_id: number; title: string; reason: LateReason }[];
+  /** Must-sees and pinned stops: they keep their time */
+  kept: { item_id: number; title: string; at: string }[];
+}
+
+export type LateUndo = { times: Record<string, [string, string]>; restore: Record<string, unknown>[] };
+
+export interface LateResult extends LatePlan {
+  success: boolean;
+  message: string;
+  day: ItineraryDay;
+  validation: ValidationReport;
+  undo: LateUndo;
 }

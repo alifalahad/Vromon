@@ -13,6 +13,7 @@ import {
 } from '@gorhom/bottom-sheet';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import React, { useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -21,7 +22,7 @@ import type { ItineraryItem } from '../types';
 import { haptics } from '../ui/haptics';
 import { PressableScale } from '../ui/PressableScale';
 import { makeStyles, useTheme } from '../ui/theme';
-import { formatBDT, percent } from '../utils/format';
+import { formatBDT } from '../utils/format';
 
 const SNAP_POINTS = ['60%', '90%'];
 
@@ -79,23 +80,21 @@ export function ExplanationSheet({ tripId, item, onClose }: { tripId: number; it
     staleTime: Infinity,
   });
   const notConfigured = error instanceof ApiError && error.status === 503;
+  const { t } = useTranslation();
 
   return (
-    <Sheet title={`Why ${item.title}?`} onClose={onClose}>
-      <Text style={styles.section}>From the planner</Text>
-      <Text style={styles.text}>Match score {percent(item.recommendation_score)}</Text>
-      {item.recommendation_reasons.map((r, i) => (
+    <Sheet title={t('plan.whyTitle', { name: item.title })} onClose={onClose}>
+      <Text style={styles.section}>{t('plan.fromPlanner')}</Text>
+      {item.recommendation_reasons.filter((r) => !r.includes('CP-SAT') && !r.includes('(penalised)')).map((r, i) => (
         <Text key={i} style={styles.text}>• {r}</Text>
       ))}
 
-      <Text style={styles.section}>AI explanation (sourced)</Text>
+      <Text style={styles.section}>{t('plan.fromSources')}</Text>
       {isLoading && <ActivityIndicator color={colors.link} />}
-      {notConfigured && (
-        <Text style={styles.muted}>AI explanations are not enabled on the server (no LLM key configured). The ranking reasons above still apply.</Text>
-      )}
+      {notConfigured && <Text style={styles.muted}>{t('plan.explainOff')}</Text>}
       {error && !notConfigured && <Text style={styles.error}>{(error as Error).message}</Text>}
       {data?.status === 'insufficient_evidence' && (
-        <Text style={styles.muted}>Not enough source information to explain this place. {data.warnings[0] ?? ''}</Text>
+        <Text style={styles.muted}>{t('plan.explainNone')} {data.warnings[0] ?? ''}</Text>
       )}
       {data?.status === 'answered' && (
         <>
@@ -104,7 +103,7 @@ export function ExplanationSheet({ tripId, item, onClose }: { tripId: number; it
               {c.text} <Text style={styles.cite}>[{c.source_labels.join(', ')}]</Text>
             </Text>
           ))}
-          <Text style={styles.section}>Sources</Text>
+          <Text style={styles.section}>{t('plan.sources')}</Text>
           {data.sources.map((s) => (
             <View key={s.label} style={styles.source}>
               <Text style={styles.sourceTitle}>[{s.label}] {s.title} · {s.source_type}</Text>
@@ -141,33 +140,32 @@ export function AlternativesSheet({
     onSuccess: (res) => onReplaced(res.message),
     onError: () => haptics.error(),
   });
+  const { t } = useTranslation();
 
   return (
-    <Sheet title={`Replace ${item.title}`} onClose={onClose}>
-      <Text style={styles.muted}>
-        Places that fit the {item.start_time}–{item.end_time} slot: open at that time, short enough for the gap, not excluded and not already in your trip.
-      </Text>
+    <Sheet title={t('plan.swapTitle', { name: item.title })} onClose={onClose}>
+      <Text style={styles.muted}>{t('plan.swapHint', { from: item.start_time, to: item.end_time })}</Text>
       {isLoading && <ActivityIndicator color={colors.link} />}
       {error && <Text style={styles.error}>{(error as Error).message}</Text>}
-      {data?.is_must_visit && <Text style={styles.error}>This is a must-visit place and cannot be replaced.</Text>}
-      {data && !data.is_must_visit && data.alternatives.length === 0 && (
-        <Text style={styles.muted}>No other place fits this time slot.</Text>
-      )}
+      {data?.is_must_visit && <Text style={styles.error}>{t('plan.swapMustVisit')}</Text>}
+      {data && !data.is_must_visit && data.alternatives.length === 0 && <Text style={styles.muted}>{t('plan.swapNone')}</Text>}
       {data?.alternatives.map((alt) => (
         <PressableScale
           key={alt.place.id}
           style={styles.alt}
+          testID={`swap-${alt.place.id}`}
           disabled={replace.isPending || data.is_must_visit}
           onPress={() => replace.mutate(alt.place.id)}
         >
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={styles.altTitle}>{alt.place.name}</Text>
             <Text style={styles.altMeta}>
-              {alt.start_time}–{alt.end_time} · {alt.place.category} · {alt.place.estimated_cost ? formatBDT(alt.place.estimated_cost) : 'Free'} · match {percent(alt.recommendation_score)}
+              {alt.start_time}–{alt.end_time} · {alt.place.category} ·{' '}
+              {alt.place.estimated_cost ? t('plan.perPerson', { amount: formatBDT(alt.place.estimated_cost) }) : t('plan.priceFree')}
             </Text>
             {alt.recommendation_reasons[0] ? <Text style={styles.altReason}>{alt.recommendation_reasons[0]}</Text> : null}
           </View>
-          <Text style={styles.use}>Use</Text>
+          <Text style={styles.use}>{t('plan.swapUse')}</Text>
         </PressableScale>
       ))}
       {replace.isPending && <ActivityIndicator color={colors.link} />}

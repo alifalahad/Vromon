@@ -24,9 +24,12 @@ Answers for Play Console → App content → Data safety, matching the app as bu
 | App info and performance → **Crash logs**, **Diagnostics** | Only when Sentry is on | No | Required when on | Analytics (crash diagnosis) |
 | Device or other IDs → **Device or other IDs** (Expo push token) | Only when notifications are allowed | No | Optional | App functionality (notifications) |
 
-**Not collected:** location (approximate or precise: the app has no location permission; places are chosen by the user), contacts, calendar, messages, audio, health, financial info, web history, installed apps, advertising ID.
+**Not collected:** location (approximate or precise), contacts, calendar, messages, audio, health, financial info, web history, installed apps, advertising ID.
+
+- **Location:** the app asks for location while in use (approximate or precise, the user's choice), only when the user turns on "Use my location" in Today mode. It's processed on the device only, to work out "leave by", and is never transmitted or stored, so under Play's definitions it isn't "collected". There's no background location permission (it's removed from the manifest).
 
 **Processed ephemerally / not stored:** camera frames for QR scanning (on the device only).
+**On the device only:** location for Today mode's "leave by"; trip reminders (local notifications).
 
 ## Security practices
 

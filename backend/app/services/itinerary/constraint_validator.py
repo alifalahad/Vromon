@@ -8,9 +8,11 @@ Independent validator that checks itineraries for:
 - Must-visit place satisfaction
 - Daily activity count limit violations
 - Missing must-visit places
-- Activities outside the place's opening hours
+- Activities outside the place's opening hours, and meals outside the restaurant's
 - The same place scheduled more than once
 - Daily budget cap exceeded (when a cap is set)
+- The traveller's must-dos: nothing before they arrive or after they leave, nothing
+  during a busy time, and each must-see on its day and at its time
 
 This validator is intentionally separate from the scheduler so it can
 catch problems introduced by any generator, including future OR-Tools.
@@ -28,7 +30,10 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from app.models.models import Trip, TripPreference, TripConstraint, Itinerary, ItineraryItem
+from sqlalchemy.orm import object_session
+
+from app.models.models import Destination, Place, Trip, TripPreference, TripConstraint, Itinerary, ItineraryItem
+from app.services.itinerary.trip_rules import TripRules, in_window, m2t, rules_for
 
 logger = logging.getLogger("vromon.validator")
 
@@ -110,8 +115,7 @@ class ConstraintValidator:
         pref: Optional[TripPreference] = trip.preference
         cons: Optional[TripConstraint] = trip.constraints
 
-        start_min = _t2m(pref.preferred_start_time if pref else "09:00")
-        end_min = _t2m(pref.preferred_end_time if pref else "20:00")
+        rules = self._rules(trip)
         max_activities = cons.max_activities_per_day if cons else 4
         excluded_ids: List[int] = list(cons.excluded_places) if cons else []
         must_visit_ids: List[int] = list(cons.must_visit) if cons else []
@@ -122,6 +126,8 @@ class ConstraintValidator:
         for day in days:
             day_num = day.day_number
             activity_items = [i for i in day.items if i.item_type == "activity"]
+            start_min, end_min = rules.window(day_num)
+            self._must_dos(rules, day, report)
 
             # 0a. Opening hours (uses the place record, not the generator's claims)
             for item in activity_items:
@@ -135,6 +141,23 @@ class ConstraintValidator:
                         message=(
                             f"Day {day_num}: '{item.title}' is scheduled {item.start_time}-{item.end_time} "
                             f"but is open {place.opening_time}-{place.closing_time}."
+                        ),
+                        day_number=day_num,
+                        item_id=item.id,
+                    ))
+
+            # 0a'. Meals: the restaurant must be open for the whole meal
+            for item in day.items:
+                rest = item.restaurant if item.item_type == "meal" else None
+                if rest is None or not item.start_time or not item.end_time:
+                    continue
+                if _t2m(item.start_time) < _t2m(rest.opening_time) or _t2m(item.end_time) > _t2m(rest.closing_time):
+                    report.violations.append(Violation(
+                        severity="hard",
+                        code="OUTSIDE_OPENING_HOURS",
+                        message=(
+                            f"Day {day_num}: '{item.title}' is at {item.start_time}-{item.end_time} "
+                            f"but the restaurant is open {rest.opening_time}-{rest.closing_time}."
                         ),
                         day_number=day_num,
                         item_id=item.id,
@@ -215,13 +238,17 @@ class ConstraintValidator:
                     continue
                 item_start = _t2m(item.start_time)
                 item_end = _t2m(item.end_time)
+                if day_num == 1 and rules.arrive is not None and item_start < start_min and start_min == rules.arrive:
+                    continue  # reported as BEFORE_ARRIVAL
+                if day_num == rules.num_days and rules.leave is not None and item_end > end_min and end_min == rules.leave:
+                    continue  # reported as AFTER_LEAVING
                 if item_start < start_min:
                     report.violations.append(Violation(
                         severity="soft",
                         code="BEFORE_PREFERRED_START",
                         message=(
                             f"Day {day_num}: '{item.title}' starts at {item.start_time}, "
-                            f"before preferred start {pref.preferred_start_time if pref else '09:00'}."
+                            f"before preferred start {m2t(start_min)}."
                         ),
                         day_number=day_num,
                         item_id=item.id,
@@ -234,7 +261,7 @@ class ConstraintValidator:
                         code="AFTER_PREFERRED_END",
                         message=(
                             f"Day {day_num}: '{item.title}' ends at {item.end_time}, "
-                            f"after your preferred end {pref.preferred_end_time if pref else '20:00'}."
+                            f"after your preferred end {m2t(end_min)}."
                         ),
                         day_number=day_num,
                         item_id=item.id,
@@ -250,12 +277,17 @@ class ConstraintValidator:
                 ))
 
         # 6. Must-visit satisfaction (global, not per-day)
+        session = object_session(trip)
         for pid in must_visit_ids:
             if pid not in visited_place_ids:
+                place = session.get(Place, pid) if session else None
                 report.violations.append(Violation(
                     severity="hard",
                     code="MUST_VISIT_MISSING",
-                    message=f"Must-visit place ID {pid} was not scheduled in any day.",
+                    message=(
+                        f"Your must-see '{place.name}' isn't in the plan." if place
+                        else f"Must-visit place ID {pid} was not scheduled in any day."
+                    ),
                 ))
 
         self._data_notes(trip, days, report)
@@ -271,6 +303,55 @@ class ConstraintValidator:
             )
 
         return report
+
+    @staticmethod
+    def _rules(trip: Trip) -> TripRules:
+        """The trip's rules; sunset needs the destination's coordinates, read when the trip is in a session."""
+        session = object_session(trip)
+        dest = session.query(Destination).filter(Destination.name == trip.destination).first() if session else None
+        return rules_for(trip, dest)
+
+    @staticmethod
+    def _must_dos(rules: TripRules, day: Itinerary, report: ValidationReport) -> None:
+        """Arrival and leaving times, busy times and must-sees with a day or a time (all hard)."""
+        n = day.day_number
+        timed = [i for i in day.items if i.start_time and i.end_time]
+        for item in timed:
+            s, e = _t2m(item.start_time), _t2m(item.end_time)
+            if n == 1 and rules.arrive is not None and s < rules.window(1)[0] == rules.arrive:
+                report.violations.append(Violation(
+                    "hard", "BEFORE_ARRIVAL",
+                    f"Day 1: '{item.title}' starts at {item.start_time}, before you arrive ({m2t(rules.arrive)}).",
+                    n, item.id,
+                ))
+            if n == rules.num_days and rules.leave is not None and e > rules.window(n)[1] == rules.leave:
+                report.violations.append(Violation(
+                    "hard", "AFTER_LEAVING",
+                    f"Day {n}: '{item.title}' ends at {item.end_time}, after you leave ({m2t(rules.leave)}).",
+                    n, item.id,
+                ))
+            for b in rules.busy_on(n):
+                if s < b.end and b.start < e:
+                    what = f" ({b.label})" if b.label else ""
+                    report.violations.append(Violation(
+                        "hard", "DURING_BUSY_TIME",
+                        f"Day {n}: '{item.title}' ({item.start_time}-{item.end_time}) is during your busy time "
+                        f"{m2t(b.start)}-{m2t(b.end)}{what}.",
+                        n, item.id,
+                    ))
+        for item in day.items:
+            m = rules.must_for(item.place_id) if item.item_type == "activity" and item.place_id else None
+            if m is None or (not m.day and not m.timed) or in_window(rules, m, item, n):
+                continue
+            wanted = f"day {m.day}" if m.day and m.day != n else (
+                f"at sunset (about {m2t(rules.sunset(n))})" if m.when == "sunset"
+                else f"at {m2t(m.at)}" if m.at is not None else f"in the {m.when}"
+            )
+            report.violations.append(Violation(
+                "hard", "MUST_SEE_TIME",
+                f"Day {n}: your must-see '{item.title}' is at {item.start_time}, not {wanted}.",
+                n, item.id,
+            ))
 
     @staticmethod
     def _data_notes(trip: Trip, days: List[Itinerary], report: ValidationReport) -> None:
@@ -307,8 +388,22 @@ class ConstraintValidator:
                         item_id=item.id,
                     ))
         if has_travel:
-            report.violations.append(Violation(
-                severity="info",
-                code="ESTIMATED_TRAVEL_TIME",
-                message="Travel times are straight-line distance estimates, not road routes or traffic.",
-            ))
+            from app.services.routing import ROADS, point_of
+            estimated = False
+            for day in days:
+                acts = [i for i in sorted(day.items, key=lambda x: x.order_index) if i.item_type == "activity" and i.place]
+                for a, b in zip(acts, acts[1:]):
+                    if ROADS.pair(point_of(a.place), point_of(b.place)).source == "estimate":
+                        estimated = True
+            if estimated:
+                report.violations.append(Violation(
+                    severity="info",
+                    code="ESTIMATED_TRAVEL_TIME",
+                    message="Travel times are straight-line distance estimates, not road routes or traffic.",
+                ))
+            else:
+                report.violations.append(Violation(
+                    severity="info",
+                    code="ROAD_TRAVEL_TIME",
+                    message="Travel times use road distances; rickshaw and CNG times and all fares are estimates, without traffic.",
+                ))

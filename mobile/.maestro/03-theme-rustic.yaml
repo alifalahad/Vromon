@@ -1,19 +1,31 @@
 appId: ${APP_ID}
 env:
   APP_ID: com.vromon.app.dev
-name: Apply the Rustic theme
+name: 03 Apply the Rustic theme
 ---
+# Every flow starts fresh on the Map tab, so one failure can't leave the next on another screen
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
 - tapOn:
     id: map-theme-button
 - assertVisible:
     id: map-theme-screen
 - tapOn:
     id: map-theme-catalog-themes
-- scrollUntilVisible:
-    element:
-      id: map-theme-card-themes-rustic
-    direction: RIGHT
-    centerElement: true
+# Swipe the card row itself (scrollUntilVisible swipes mid-screen, which pans the preview map)
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: map-theme-card-themes-rustic
+    commands:
+      - swipe:
+          start: 85%, 75%
+          end: 20%, 75%
+          duration: 600
 - tapOn:
     id: map-theme-card-themes-rustic
 - assertVisible: "Apply: Rustic"

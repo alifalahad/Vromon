@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     # Wall-clock safety cap; if this stops the search the result may not be reproducible.
     optimizer_time_limit_seconds: float = 15.0
     optimizer_workers: int = 8
+    # Plan outdoor stops around rainy hours, from the Open-Meteo forecast (free, no key)
+    weather_planning: bool = True
 
     # --- Auth (Supabase, decision D1) ---
     # Project URL, e.g. https://abcd1234.supabase.co. Access tokens are verified locally
@@ -102,6 +104,14 @@ class Settings(BaseSettings):
 
     # --- Maps ---
     maps_provider: str = ""
+
+    # --- Roads (trip planner step 5) ---
+    # Road distances and times: "ors" (OpenRouteService; needs ORS_API_KEY), or "none" for
+    # straight-line estimates. Empty: OpenRouteService when a key is set.
+    routing_provider: str = ""
+    ors_api_key: str = ""
+    ors_base_url: str = "https://api.heigit.org/openrouteservice"   # was api.openrouteservice.org (deprecated)
+    routing_timeout_seconds: float = 10.0
 
     # --- Server ---
     host: str = "0.0.0.0"

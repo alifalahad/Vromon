@@ -147,9 +147,9 @@ function PlaceCard({ place }: { place: Place }) {
         </Text>
       ) : null}
       <View style={styles.metaRow}>
-        {place.rating != null && <Text style={styles.meta}>⭐ {place.rating.toFixed(1)}</Text>}
+        {place.rating != null && place.rating_known !== false && <Text style={styles.meta}>⭐ {place.rating.toFixed(1)}</Text>}
         <Text style={styles.meta}>💰 {formatEntryCost(place)}</Text>
-        {place.opening_time && place.closing_time && (
+        {place.hours_known !== false && place.opening_time && place.closing_time && (
           <Text style={styles.meta}>
             🕘 {place.opening_time}–{place.closing_time}
           </Text>
@@ -181,7 +181,7 @@ const useStyles = makeStyles((t) => ({
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardName: { color: t.colors.textPrimary, fontSize: 16, fontWeight: '700', flex: 1 },
   badge: { backgroundColor: t.colors.accentSoft, paddingVertical: 3, paddingHorizontal: 10, borderRadius: 20 },
-  badgeText: { color: t.colors.link, fontSize: 11, fontWeight: '600' },
+  badgeText: { color: t.colors.onAccentSoft, fontSize: 11, fontWeight: '600' },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   meta: { color: t.colors.textSecondary, fontSize: 12 },
   errorEmoji: { fontSize: 40 },

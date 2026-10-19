@@ -55,6 +55,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       monochromeImage: './assets/android-icon-monochrome.png',
     },
     predictiveBackGestureEnabled: false,
+    // "Leave in 10 minutes" must come on time: exact alarms (granted at install up to Android 13;
+    // from Android 14 the person allows "Alarms & reminders"). Not USE_EXACT_ALARM (alarm-clock apps only).
+    permissions: ['android.permission.SCHEDULE_EXACT_ALARM'],
     // Photos come from the Android photo picker, which needs no storage access.
     // The image-picker module would otherwise request these.
     blockedPermissions: [
@@ -64,10 +67,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'android.permission.READ_MEDIA_VIDEO',
       'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
       'android.permission.RECORD_AUDIO',
-      // MapLibre declares location for its user-location layer, which Vromon doesn't use:
-      // the app never reads the device's location (privacy policy, Play Data safety).
-      'android.permission.ACCESS_FINE_LOCATION',
-      'android.permission.ACCESS_COARSE_LOCATION',
+      // Location only while the app is open, and only if you turn on "Use my location" in Today
+      // mode (trip planner step 9): never in the background (privacy policy, Play Data safety)
+      'android.permission.ACCESS_BACKGROUND_LOCATION',
       // Pulled in by libraries; no biometric unlock and no drawing over other apps
       'android.permission.USE_BIOMETRIC',
       'android.permission.USE_FINGERPRINT',
@@ -91,6 +93,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Scanning friend QR codes only: no microphone
     ['expo-camera', { cameraPermission: 'Vromon uses the camera to scan friend QR codes.', recordAudioAndroid: false }],
     ['expo-notifications', { defaultChannel: 'friends', color: '#3379F3' }],
+    // "Leave by" from where you are, only while the app is open (opt-in, never stored or sent)
+    [
+      'expo-location',
+      {
+        locationWhenInUsePermission: 'Vromon uses your location while the app is open to work out when to leave for your next stop. It stays on your phone.',
+        isAndroidBackgroundLocationEnabled: false,
+        isAndroidForegroundServiceEnabled: false,
+      },
+    ],
     ...(SENTRY_ORG && SENTRY_PROJECT
       ? [['@sentry/react-native/expo', { url: 'https://sentry.io/', organization: SENTRY_ORG, project: SENTRY_PROJECT }] as [string, object]]
       : []),

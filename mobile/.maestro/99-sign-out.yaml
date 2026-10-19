@@ -1,6 +1,12 @@
 appId: ${APP_ID}
 env:
   APP_ID: com.vromon.app.dev
-name: Sign the test account out again
+name: 99 Sign the test account out again
 ---
+# Every flow starts fresh on the Map tab, so one failure can't leave the next on another screen
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
 - runFlow: subflows/sign-out.yaml

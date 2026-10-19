@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Trip plan, day 1</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; position: relative; overflow: hidden; background: {{c.surface}}; color: {{c.t1}}; font-family: Roboto, system-ui, sans-serif; display: flex; flex-direction: column;">
+
+  <a href="Trip.dc.html" aria-label="Pull down to the map" style="display: flex; justify-content: center; padding: 10px 0 2px;">
+    <span style="width: 40px; height: 5px; border-radius: 5px; background: {{c.handle}};"></span>
+  </a>
+  <header style="display: flex; align-items: center; gap: 6px; padding: 0 10px 0 6px;">
+    <a href="Main.dc.html" aria-label="Back" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 999px;">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+    </a>
+    <div style="flex: 1; min-width: 0;">
+      <div style="font-size: 20px; font-weight: 700;">Cox's Bazar</div>
+      <div style="font-size: 13px; color: {{c.t2}};">Mon 19 – Wed 21 Oct · 2 travellers</div>
+    </div>
+    <a href="Trip.dc.html" style="height: 40px; padding: 0 14px; border-radius: 999px; background: {{c.inset}}; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: {{c.link}};">
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14"/></svg>Map</a>
+  </header>
+
+  <div role="tablist" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px 16px 0;">
+    <a href="#" role="tab" aria-selected="true" style="height: 50px; border-radius: 14px; background: {{c.accent}}; color: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+      <span style="font-size: 15px; font-weight: 700;">Day 1</span><span style="font-size: 12px;">Mon 19</span></a>
+    <a href="#" role="tab" aria-selected="false" style="height: 50px; border-radius: 14px; background: {{c.inset}}; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+      <span style="font-size: 15px; font-weight: 700;">Day 2</span><span style="font-size: 12px; color: {{c.t2}};">Tue 20</span></a>
+    <a href="#" role="tab" aria-selected="false" style="height: 50px; border-radius: 14px; background: {{c.inset}}; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+      <span style="font-size: 15px; font-weight: 700;">Day 3</span><span style="font-size: 12px; color: {{c.t2}};">Wed 21</span></a>
+  </div>
+
+  <div style="flex: 1; overflow-y: auto; padding: 14px 16px 24px; display: flex; flex-direction: column;">
+    <p style="margin: 0; font-size: 16px; line-height: 23px;">A cool morning up at Himchari, a seafood lunch in Kolatoli, then out on the water before sunset.</p>
+    <div style="display: flex; gap: 14px; margin-top: 8px; font-size: 13px; color: {{c.t2}};">
+      <span>6 stops</span><span>৳2,030 each</span><span>1 h 17 min travel</span>
+    </div>
+
+    <div aria-hidden="true" style="margin-top: 12px;">
+      <div style="position: relative; height: 14px;">
+        <span style="position: absolute; left: {{storm.left}}; width: {{storm.width}}; top: 0; height: 14px; border-radius: 4px; background: {{c.dangerBg}};"></span>
+      </div>
+      <div style="position: relative; height: 14px; margin-top: 4px; border-radius: 7px; background: {{c.inset}}; overflow: hidden;">
+        <sc-for list="{{ribbon}}" as="r" hint-placeholder-count="12">
+          <span style="position: absolute; top: 0; bottom: 0; left: {{r.left}}; width: {{r.width}}; background: {{r.bg}};"></span>
+        </sc-for>
+      </div>
+      <div style="position: relative; height: 16px; margin-top: 4px; font-size: 11px; color: {{c.t3}};">
+        <sc-for list="{{ticks}}" as="t" hint-placeholder-count="5">
+          <span style="position: absolute; left: {{t.left}}; transform: translateX(-50%);">{{t.label}}</span>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="height: 10px;"></div>
+    <sc-for list="{{items}}" as="s" hint-placeholder-count="6">
+      <sc-if value="{{s.isStop}}" hint-placeholder-val="{{true}}">
+        <div style="display: flex; gap: 10px;">
+          <div style="width: 46px; flex-shrink: 0; padding-top: 12px; text-align: right;">
+            <div style="font-size: 15px; font-weight: 700;">{{s.time}}</div>
+            <div style="font-size: 12px; color: {{c.t3}};">{{s.dur}}</div>
+          </div>
+          <div style="flex: 1; min-width: 0; border-radius: 18px; background: {{c.card}}; box-shadow: {{s.ring}};">
+            <a href="Place.dc.html" style="padding: 12px; display: flex; gap: 12px; align-items: flex-start;">
+              <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 999px; background: {{s.badge}}; color: {{s.badgeText}}; font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center;">{{s.n}}</span>
+              <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-size: 16px; font-weight: 600;">{{s.title}}</span>
+                <span style="font-size: 14px; color: {{c.t2}};">{{s.sub}}</span>
+                <sc-if value="{{s.hasTag}}" hint-placeholder-val="{{false}}"><span style="font-size: 13px; color: {{c.link}};">{{s.tag}}</span></sc-if>
+              </span>
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{c.t3}}" stroke-width="3" stroke-linecap="round" style="flex-shrink: 0; margin-top: 4px;"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg>
+            </a>
+            <sc-if value="{{s.hasWarning}}" hint-placeholder-val="{{false}}">
+              <div style="margin: 0 10px 10px; padding: 10px 12px; border-radius: 12px; background: {{c.dangerBg}}; display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; gap: 8px; font-size: 14px; line-height: 19px; color: {{c.t1}};">
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{c.danger}}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px;"><path d="M12 3l10 18H2zM12 10v5M12 18h.01"/></svg>
+                  <span>{{s.warning}}</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <button style="height: 36px; padding: 0 14px; border-radius: 999px; background: {{c.accent}}; color: #FFFFFF; font-size: 14px; font-weight: 600;">Move to Tuesday</button>
+                  <button style="height: 36px; padding: 0 14px; border-radius: 999px; background: transparent; color: {{c.t1}}; box-shadow: inset 0 0 0 1px {{c.border}}; font-size: 14px;">Keep</button>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{s.isLeg}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; gap: 10px; align-items: center; min-height: 44px;">
+          <div style="width: 46px; flex-shrink: 0;"></div>
+          <a href="Leg.dc.html" style="display: flex; align-items: center; gap: 8px; margin-left: 14px; padding-left: 14px; border-left: 2px dashed {{c.border}}; min-height: 44px; font-size: 13px; color: {{c.t2}};">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{c.t1}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{s.icon}}"/></svg>
+            <span style="color: {{c.t1}}; font-weight: 600;">{{s.leg}}</span>
+            <sc-if value="{{s.hasTraffic}}" hint-placeholder-val="{{false}}">
+              <span style="width: 8px; height: 8px; border-radius: 999px; background: {{s.trafficColor}};"></span>
+              <span>{{s.traffic}}</span>
+            </sc-if>
+          </a>
+        </div>
+      </sc-if>
+      <sc-if value="{{s.isFree}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; gap: 10px; margin: 6px 0;">
+          <div style="width: 46px; flex-shrink: 0; padding-top: 12px; text-align: right;">
+            <div style="font-size: 15px; font-weight: 700; color: {{c.t2}};">{{s.time}}</div>
+            <div style="font-size: 12px; color: {{c.t3}};">{{s.dur}}</div>
+          </div>
+          <div style="flex: 1; border-radius: 18px; border: 1.5px dashed {{c.border}}; padding: 12px; display: flex; align-items: center; gap: 10px;">
+            <span style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 15px; font-weight: 600;">Free time</span>
+              <span style="font-size: 13px; color: {{c.t2}};">Rest at Sea Crown Hotel, or add a stop</span>
+            </span>
+            <button aria-label="Add a stop here" style="width: 44px; height: 44px; border-radius: 999px; background: {{c.accentSoft}}; color: {{c.link}}; display: flex; align-items: center; justify-content: center;">
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </div>
+        </div>
+      </sc-if>
+    </sc-for>
+
+    <h2 style="margin: 22px 0 10px; font-size: 16px; font-weight: 700;">Make this day…</h2>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+      <button style="height: 40px; padding: 0 14px; border-radius: 999px; background: {{c.inset}}; color: {{c.t1}}; font-size: 14px;">More relaxed</button>
+      <button style="height: 40px; padding: 0 14px; border-radius: 999px; background: {{c.inset}}; color: {{c.t1}}; font-size: 14px;">Cheaper</button>
+      <button style="height: 40px; padding: 0 14px; border-radius: 999px; background: {{c.inset}}; color: {{c.t1}}; font-size: 14px;">Quieter</button>
+      <button style="height: 40px; padding: 0 14px; border-radius: 999px; background: {{c.inset}}; color: {{c.t1}}; font-size: 14px;">Fuller</button>
+      <button style="height: 40px; padding: 0 14px; border-radius: 999px; background: {{c.inset}}; color: {{c.t1}}; font-size: 14px;">New ideas</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const P = {
+      dark: { surface: '#262626', card: '#333333', inset: '#1F1F1F', border: '#5A5A5A', handle: '#6A6A6A', accent: '#3379F3', accentSoft: 'rgba(51,121,243,0.20)', link: '#6EA0F6', t1: '#F2F2F2', t2: '#B2B2B2', t3: '#9C9C9C', success: '#4CAF50', warning: '#F2B13C', danger: '#F07A72', dangerBg: 'rgba(240,122,114,0.16)', meal: '#F2B13C', visit: '#6EA0F6' },
+      light: { surface: '#FFFFFF', card: '#F3F3F5', inset: '#EDEDEF', border: '#C8C8CC', handle: '#C8C8CC', accent: '#2563D9', accentSoft: 'rgba(37,99,217,0.12)', link: '#245FD0', t1: '#111111', t2: '#5C5C5C', t3: '#676767', success: '#2B742E', warning: '#A74D08', danger: '#C62828', dangerBg: 'rgba(198,40,40,0.10)', meal: '#E39A2D', visit: '#2563D9' }
+    };
+    const c = P[this.props.theme === 'light' ? 'light' : 'dark'];
+    const START = 7 * 60, SPAN = 14 * 60, W = 358;
+    const m = (h) => { const [a, b] = h.split(':').map(Number); return a * 60 + b; };
+    const px = (min) => (min / SPAN) * W;
+    const segs = [
+      ['07:30', '08:15', 'meal'], ['08:15', '08:40', 'travel'], ['08:40', '09:40', 'visit'], ['09:40', '09:50', 'travel'],
+      ['09:50', '11:50', 'visit'], ['11:50', '12:10', 'travel'], ['12:10', '13:10', 'meal'], ['15:33', '15:45', 'travel'],
+      ['15:45', '17:45', 'visit'], ['17:45', '17:55', 'travel'], ['18:15', '19:45', 'meal']
+    ];
+    const hatch = 'repeating-linear-gradient(135deg, ' + c.t3 + ' 0 2px, transparent 2px 5px)';
+    const ribbon = segs.map(([a, b, kind]) => ({ left: px(m(a) - START) + 'px', width: Math.max(2, px(m(b) - m(a)) - 1) + 'px', bg: kind === 'meal' ? c.meal : kind === 'visit' ? c.visit : hatch }));
+    const ticks = [7, 10, 13, 16, 19].map((h) => ({ label: String(h).padStart(2, '0') + ':00', left: Math.min(W - 16, Math.max(16, px(h * 60 - START))) + 'px' }));
+    const storm = { left: px(15 * 60 - START) + 'px', width: px(120) + 'px' };
+    const I = {
+      cng: 'M4 16V9a5 5 0 0 1 5-5h6l4 5v7zM4 12h15M9 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM19 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0z',
+      walk: 'M14.8 4.5a1.8 1.8 0 1 1-3.6 0 1.8 1.8 0 0 1 3.6 0zM10 21l2-6 3 3v3M8.5 12.5l1.5-4.5 4 1.5 2 3.5M12 15l-1.5-6',
+      rickshaw: 'M9 17a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 17a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM6 17h6l3-7h-5M14 6h3l3 5M9 10V7a4 4 0 0 1 4-3'
+    };
+    const base = { isStop: false, isLeg: false, isFree: false, hasTag: false, hasWarning: false, hasTraffic: false, ring: 'none' };
+    const stop = (n, kind, time, dur, title, sub, extra) => ({ ...base, isStop: true, n, time, dur, title, sub, badge: kind === 'meal' ? c.meal : c.accent, badgeText: kind === 'meal' ? '#1F1F1F' : '#FFFFFF', ...extra });
+    const leg = (icon, text, traffic, color) => ({ ...base, isLeg: true, icon: I[icon], leg: text, hasTraffic: !!traffic, traffic: traffic || '', trafficColor: color || 'transparent' });
+    const items = [
+      stop(1, 'meal', '07:30', '45 min', 'Breakfast · Jhaubon Restaurant', 'Bangladeshi seafood · ৳280 each'),
+      leg('cng', 'CNG · 25 min · 12 km', 'Clear roads', c.success),
+      stop(2, 'visit', '08:40', '1 h', 'Himchari Hilltop Viewpoint', 'Viewpoint · ৳100 each', { hasTag: true, tag: 'For you: nature, photography' }),
+      leg('walk', 'Walk · 10 min · 0.6 km'),
+      stop(3, 'visit', '09:50', '2 h', 'Himchari Waterfall', 'Nature · ৳150 each', { hasTag: true, tag: 'Best just after the monsoon: now' }),
+      leg('cng', 'CNG · 20 min · 9 km', 'Slow near Kolatoli', c.warning),
+      stop(4, 'meal', '12:10', '1 h', 'Lunch · Mermaid Café', 'Seafood and BBQ · ৳600 each'),
+      { ...base, isFree: true, time: '13:10', dur: '2 h 23' },
+      leg('rickshaw', 'Rickshaw · 12 min · 2.1 km', 'Clear roads', c.success),
+      stop(5, 'visit', '15:45', '2 h', 'Sunset Boat Ride', 'Adventure · ৳500 each', { hasTag: true, tag: 'For you: sea, sunset at 17:30', hasWarning: true, warning: 'Storms are likely from 15:00 to 17:00. Boats may not run.', ring: 'inset 0 0 0 1.5px ' + c.danger }),
+      leg('rickshaw', 'Rickshaw · 10 min · 1.9 km', 'Usually slow 17:00–19:00', c.warning),
+      stop(6, 'meal', '18:15', '1 h 30', "Dinner · Cox's Bazar Night Market", 'Street food · about ৳400 each'),
+      leg('rickshaw', 'Back to Sea Crown Hotel · 8 min')
+    ];
+    return { c, ribbon, ticks, storm, items };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,8 +1,14 @@
 appId: ${APP_ID}
 env:
   APP_ID: com.vromon.app.dev
-name: Mark Bangladesh visited (Countries view)
+name: 02 Mark Bangladesh visited (Countries view)
 ---
+# Every flow starts fresh on the Map tab, so one failure can't leave the next on another screen
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
 - tapOn:
     id: map-view-pill
 - tapOn:

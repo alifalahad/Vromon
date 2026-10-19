@@ -7,11 +7,16 @@ flows:
   - "*.yaml"
 executionOrder:
   continueOnFailure: false
+  # Flow names (not file names)
   flowsOrder:
-    - 00-sign-in
-    - 01-tabs
-    - 02-mark-bangladesh
-    - 03-theme-rustic
-    - 04-friend-by-code
-    - 05-plan-trip
-    - 99-sign-out
+    - 00 Sign in with a test account
+    - 01 Four tabs in order, no Passport
+    - 02 Mark Bangladesh visited (Countries view)
+    - 03 Apply the Rustic theme
+    - 04 Add a friend by code, the friend accepts, compare maps
+    - 05 Plan a trip with must-sees, fix one that can't fit, see the plan
+    - 06 Open a trip, build its plan, look at a stop and the menu
+    - 07 A friend's trip opens read-only
+    - 08 Rearrange a plan from a stop's details and add a stop
+    - 09 The whole journey - a trip from today, rearranged, its conditions, Today mode
+    - 99 Sign the test account out again

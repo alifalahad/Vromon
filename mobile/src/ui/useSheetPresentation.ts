@@ -1,5 +1,6 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
+import { BackHandler } from 'react-native';
 
 /**
  * Opens and closes a BottomSheetModal from a boolean (a `visible` flag or a
@@ -8,6 +9,8 @@ import { useCallback, useEffect, useRef, type RefObject } from 'react';
  * @gorhom/bottom-sheet 5.2 must never be asked to dismiss a sheet that isn't
  * open: dismissing one that never opened (on mount) or that the user already
  * swiped away leaves it "dismissing", and every later present() is ignored.
+ *
+ * While the sheet is open, Android's Back closes it (not the screen behind it).
  */
 export function useSheetPresentation(ref: RefObject<BottomSheetModal | null>, open: boolean, onClosed: () => void) {
   const presented = useRef(false);
@@ -20,6 +23,16 @@ export function useSheetPresentation(ref: RefObject<BottomSheetModal | null>, op
       ref.current?.dismiss();
       presented.current = false;
     }
+  }, [open, ref]);
+
+  useEffect(() => {
+    if (!open) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (!presented.current) return false;
+      ref.current?.dismiss();
+      return true;
+    });
+    return () => sub.remove();
   }, [open, ref]);
 
   return useCallback(() => {

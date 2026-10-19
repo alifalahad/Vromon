@@ -1,546 +1,795 @@
 /**
- * Vromon Mobile — Plan-a-trip wizard (6 steps, as in the demo).
+ * Vromon Mobile — plan a new trip (trip planner step 4).
  *
- * 1 Where · 2 When & who · 3 Budget (presets) · 4 Interests & pace ·
- * 5 Daily schedule, must-visit / excluded places · 6 Review
- *
- * React Hook Form + Zod (src/features/tripForm.ts). Destinations and places come
- * from the backend; nothing is hard-coded except option lists the backend accepts.
+ * 1 Where & when (required) · 2 Your style · 3 Your must-dos, then building the
+ * plan (a transition, not a step). "Build my plan" works from step 2 or 3, so
+ * someone in a hurry answers only step 1. Every answer can be changed later on
+ * the trip screen.
  */
 
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { Controller, useForm, useWatch } from 'react-hook-form';
-import { ActivityIndicator, KeyboardAvoidingView, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, ScrollView, Text, View } from 'react-native';
+import Animated, { FadeInLeft, FadeInRight } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Circle, Path } from 'react-native-svg';
 
-import { ACCOMMODATION, ACTIVITY_LEVELS, BUDGET_PRESETS, INTERESTS, TRAVEL_STYLES } from '../../src/constants/trip';
-import {
-  cyclePlaceChoice,
-  defaultTripForm,
-  firstStepWithError,
-  STEP_FIELDS,
-  STEP_NAMES,
-  stepError,
-  toTripPayload,
-  tripFormSchema,
-  type TripFormInput,
-  type TripFormValues,
-} from '../../src/features/tripForm';
+import { INTERESTS } from '../../src/constants/trip';
 import { CitySearch } from '../../src/features/trips/CitySearch';
+import { formatRange } from '../../src/features/trips/dates';
+import { Building, type BuildPhase } from '../../src/features/trips/new/Building';
+import { topicIcon } from '../../src/features/trips/new/icons';
+import { MustDosEditor } from '../../src/features/trips/new/MustDosEditor';
+import {
+  ARRIVE_TIMES,
+  defaultNewTrip,
+  END_TIMES,
+  hotelLevel,
+  LEAVE_TIMES,
+  MAX_TRAVELLERS,
+  PACES,
+  START_TIMES,
+  TIERS,
+  toPayload,
+  tripLength,
+  update,
+  whereWhenError,
+  type NewTrip,
+} from '../../src/features/trips/new/newTrip';
+import { RangeCalendar } from '../../src/features/trips/new/RangeCalendar';
+import { useMustDoText } from '../../src/features/trips/new/useMustDoText';
+import { buildPlan } from '../../src/features/trips/plan/build';
+import { usePlanFormat } from '../../src/features/trips/plan/usePlanFormat';
 import { refreshTrips } from '../../src/features/trips/queries';
-import { TRANSPORT_MODES } from '../../src/features/trips/transport';
 import { destinationsApi, placesApi, tripsApi } from '../../src/services/api';
+import type { Hotel, ItineraryDay, MustSee, TransportMode, Trip, Unplaced } from '../../src/types';
+import { Button } from '../../src/ui/Button';
 import { haptics } from '../../src/ui/haptics';
 import { PressableScale } from '../../src/ui/PressableScale';
 import { makeStyles, useTheme } from '../../src/ui/theme';
-import { formatBDT, nightsBetween, plural } from '../../src/utils/format';
+import { TimeSheet } from '../../src/ui/TimeSheet';
+import { useReduceMotion } from '../../src/ui/useReduceMotion';
+
+const MODES: { mode: TransportMode; icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }[] = [
+  { mode: 'bus', icon: 'bus' },
+  { mode: 'train', icon: 'train' },
+  { mode: 'plane', icon: 'airplane' },
+  { mode: 'car', icon: 'car' },
+];
+
+type TimeField = 'arrive' | 'leave' | 'dayStart' | 'dayEnd';
+type Build = { phase: BuildPhase; tripId: number | null; unplaced: Unplaced[]; applying: number | null; resolved: string[]; error: string | null };
+
+const DEST_CARD = 156;
+const DEST_GAP = 12; // spacing.md
 
 export default function NewTripScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const f = usePlanFormat();
+  const text = useMustDoText();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const reduce = useReduceMotion();
+  const queryClient = useQueryClient();
   // Set when arriving from a destination screen ("Plan a trip here")
   const params = useLocalSearchParams<{ destination?: string }>();
-  const queryClient = useQueryClient();
-  const insets = useSafeAreaInsets();
+  const [trip, setTrip] = useState<NewTrip>(() => defaultNewTrip(new Date(), params.destination ?? ''));
   const [step, setStep] = useState(0);
-  const [stepMsg, setStepMsg] = useState<string | null>(null);
+  const [forward, setForward] = useState(true);
+  const [showError, setShowError] = useState(false);
+  const [timeField, setTimeField] = useState<TimeField | null>(null);
+  const [build, setBuild] = useState<Build | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const innerRef = useRef<View>(null);
   const reveal = useMemo(() => ({ scrollRef, innerRef }), []);
 
-  const { control, handleSubmit, trigger, setValue, getValues, getFieldState, formState } = useForm<
-    TripFormInput,
-    unknown,
-    TripFormValues
-  >({
-    resolver: zodResolver(tripFormSchema),
-    defaultValues: defaultTripForm(new Date(), params.destination ?? ''),
-    mode: 'onTouched',
-  });
-  // useWatch (not watch()) is compatible with the React Compiler
-  const values = useWatch({ control }) as TripFormInput;
-
   const destinations = useQuery({ queryKey: ['destinations'], queryFn: destinationsApi.list });
+  const destination = destinations.data?.find((d) => d.name === trip.destination);
+  // The chosen destination stays in view (also when it comes from a destination's page)
+  const destScroll = useRef<ScrollView>(null);
+  const chosenIndex = destinations.data?.findIndex((d) => d.name === trip.destination) ?? -1;
+  useEffect(() => {
+    if (chosenIndex > 0) destScroll.current?.scrollTo({ x: Math.max(0, chosenIndex * (DEST_CARD + DEST_GAP) - DEST_GAP), animated: true });
+  }, [chosenIndex]);
   const places = useQuery({
-    queryKey: ['places', values.destination],
-    queryFn: () => placesApi.list({ destination: values.destination }),
-    enabled: !!values.destination,
+    queryKey: ['places', trip.destination],
+    queryFn: () => placesApi.list({ destination: trip.destination }),
+    enabled: !!trip.destination,
+  });
+  const hotels = useQuery({
+    queryKey: ['hotels', destination?.id],
+    queryFn: () => destinationsApi.hotels(destination!.id),
+    enabled: !!destination,
   });
 
-  const create = useMutation({
-    mutationFn: (v: TripFormValues) => tripsApi.create(toTripPayload(v)),
-    onSuccess: (trip) => {
-      haptics.success();
-      refreshTrips(queryClient, trip.id);
-      // Back to the Trips tab, where the new trip appears under Upcoming
-      router.dismissTo('/trips');
-    },
-    onError: () => haptics.error(),
-  });
+  const days = tripLength(trip);
+  const nights = days - 1;
+  const set = (change: Partial<NewTrip>) => setTrip((cur) => update(cur, change));
+  const problem = whereWhenError(trip);
 
-  const next = async () => {
-    const ok = await trigger(STEP_FIELDS[step] as (keyof TripFormInput)[]);
-    const cross = stepError(step, getValues());
-    // Zod may already show the same cross-field message under a field; don't repeat it
-    const shown = STEP_FIELDS[step].map((f) => getFieldState(f as keyof TripFormInput).error?.message);
-    setStepMsg(cross && !shown.includes(cross) ? cross : null);
-    if (ok && !cross) setStep((s) => Math.min(s + 1, STEP_NAMES.length - 1));
-    else haptics.error();
+  const go = (to: number) => {
+    setForward(to > step);
+    setStep(to);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
   };
-  const back = () => {
-    setStepMsg(null);
-    if (step === 0) router.back();
-    else setStep((s) => s - 1);
-  };
-  const submit = handleSubmit(
-    (v) => create.mutate(v),
-    (errors) => {
+  const next = () => {
+    if (step === 0 && problem) {
+      setShowError(true);
       haptics.error();
-      setStep(firstStepWithError(Object.keys(errors)));
-      setStepMsg('Please fix the highlighted field.');
-    },
-  );
+      return;
+    }
+    go(step + 1);
+  };
+  const back = () => (step === 0 ? router.back() : go(step - 1));
 
-  const err = (name: keyof TripFormInput) => formState.errors[name]?.message as string | undefined;
-  const mustVisit = values.must_visit ?? [];
-  const excluded = values.excluded_places ?? [];
-  const placeName = (id: number) => places.data?.find((p) => p.id === id)?.name ?? `#${id}`;
+  // -------------------------------------------------------------------------
+  // Building
+  // -------------------------------------------------------------------------
+  const startBuild = async () => {
+    if (problem) {
+      go(0);
+      setShowError(true);
+      haptics.error();
+      return;
+    }
+    setBuild((b) => ({ phase: 'building', tripId: b?.tripId ?? null, unplaced: [], applying: null, resolved: [], error: null }));
+    let tripId = build?.tripId ?? null;
+    try {
+      if (tripId === null) {
+        const id = (await tripsApi.create(toPayload(trip))).id;
+        tripId = id;
+        refreshTrips(queryClient, id);
+        setBuild((b) => b && { ...b, tripId: id });
+      }
+      const result = await buildPlan(tripId);
+      haptics.success();
+      setBuild({ phase: 'done', tripId, unplaced: result.unplaced ?? [], applying: null, resolved: [], error: null });
+    } catch (e) {
+      haptics.error();
+      setBuild({ phase: 'failed', tripId, unplaced: [], applying: null, resolved: [], error: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  const choose = async (u: Unplaced, rule: MustSee | null) => {
+    if (!build?.tripId) return;
+    const mustSees = rule
+      ? trip.mustSees.map((m) => (m.place_id === u.place_id ? rule : m))
+      : trip.mustSees.filter((m) => m.place_id !== u.place_id);
+    setBuild((b) => b && { ...b, applying: u.place_id });
+    try {
+      const res = await tripsApi.updateMustDos(build.tripId, { must_sees: mustSees });
+      setTrip((cur) => ({ ...cur, mustSees }));
+      const still = res.unplaced.find((x) => x.place_id === u.place_id);
+      const placed = rule && !still ? findPlaced(res.trip, u.place_id) : null;
+      const line = !rule
+        ? t('mustDos.leftOut', { name: u.name })
+        : still
+          ? t('mustDos.stillNoFit', { name: u.name })
+          : placed
+            ? t('mustDos.placedAt', { name: u.name, n: f.n(placed.day), time: f.time(placed.time) })
+            : t('mustDos.placed', { name: u.name });
+      haptics.success();
+      setBuild((b) => b && { ...b, unplaced: res.unplaced, applying: null, resolved: [...b.resolved, line] });
+    } catch (e) {
+      haptics.error();
+      setBuild((b) => b && { ...b, applying: null, resolved: [...b.resolved, e instanceof Error ? e.message : String(e)] });
+    }
+  };
+
+  const seePlan = () => {
+    if (!build?.tripId) return;
+    refreshTrips(queryClient, build.tripId);
+    queryClient.invalidateQueries({ queryKey: ['itinerary', build.tripId] });
+    router.replace({ pathname: '/trip/[id]', params: { id: build.tripId } });
+  };
+
+  const buildSteps = () => {
+    const out = [t('newTrip.stepSaved')];
+    if (trip.mustSees.length) out.push(t('newTrip.stepMust', { count: trip.mustSees.length }));
+    if (trip.busy.length === 1) {
+      out.push(t('newTrip.stepBusy', { when: text.busyWhen(trip.busy[0], trip.start) }));
+    } else if (trip.busy.length > 1) out.push(t('newTrip.stepBusyMany', { count: trip.busy.length }));
+    if (trip.arrive) out.push(t('newTrip.stepArrive', { time: f.time(trip.arrive) }));
+    if (trip.leave) out.push(t('newTrip.stepLeave', { time: f.time(trip.leave) }));
+    out.push(
+      trip.interests.length
+        ? t('newTrip.stepFill', { what: trip.interests.slice(0, 3).map((i) => t(`interests.${i}`)).join(', ') })
+        : t('newTrip.stepFillAny'),
+    );
+    out.push(t('newTrip.stepBudget', { amount: f.money(trip.budget) }));
+    return out;
+  };
+
+  if (build) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <Building
+          phase={build.phase}
+          subtitle={`${trip.destination} · ${f.time(formatRange(trip.start, trip.end, i18n.language))}`}
+          steps={buildSteps()}
+          saved={build.tripId !== null}
+          unplaced={build.unplaced}
+          places={places.data ?? []}
+          days={days}
+          applying={build.applying}
+          resolved={build.resolved}
+          error={build.error}
+          onChoose={choose}
+          onSeePlan={seePlan}
+          onRetry={startBuild}
+        />
+      </View>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // The three steps
+  // -------------------------------------------------------------------------
+  const entering = reduce ? undefined : (forward ? FadeInRight : FadeInLeft).duration(200);
+  const timeSheet = timeSheetFor(timeField, trip, t);
 
   return (
-    // Edge-to-edge Android doesn't resize the window for the keyboard: pad instead
-    <KeyboardAvoidingView style={styles.container} behavior="padding">
-      <View style={styles.stepBar}>
-        {STEP_NAMES.map((name, i) => (
-          <View key={name} style={styles.stepItem}>
-            <View style={[styles.dot, i <= step && styles.dotActive]}>
-              <Text style={styles.dotText}>{i + 1}</Text>
-            </View>
-            <Text style={[styles.stepName, i === step && styles.stepNameActive]}>{name}</Text>
-          </View>
+    <KeyboardAvoidingView style={[styles.container, { paddingTop: insets.top }]} behavior="padding">
+      <View style={styles.header}>
+        <PressableScale
+          pressEffect="opacity"
+          haptic="selection"
+          onPress={back}
+          style={styles.headerButton}
+          accessibilityRole="button"
+          accessibilityLabel={step === 0 ? t('newTrip.cancel') : t('newTrip.back')}
+          testID="new-back"
+        >
+          <MaterialCommunityIcons name={step === 0 ? 'close' : 'arrow-left'} size={26} color={colors.textPrimary} />
+        </PressableScale>
+        <Text style={styles.headerTitle} accessibilityRole="header">
+          {t('newTrip.title')}
+        </Text>
+        <Text style={styles.stepOf} accessibilityLabel={t('newTrip.stepOfA11y', { n: step + 1, total: 3 })}>
+          {t('newTrip.stepOf', { n: f.n(step + 1), total: f.n(3) })}
+        </Text>
+      </View>
+      <View style={styles.bar} importantForAccessibility="no-hide-descendants">
+        {[0, 1, 2].map((i) => (
+          <View key={i} style={[styles.barPart, i <= step && styles.barPartOn]} />
         ))}
       </View>
 
-      <ScrollView ref={scrollRef} innerViewRef={innerRef as React.RefObject<View>} style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {step === 0 && (
-          <Step title="Where to?" hint="Destinations come from the Vromon database. Tap one to choose it.">
-            {destinations.isLoading && <ActivityIndicator color={colors.link} />}
-            {destinations.isError && <LoadError error={destinations.error} onRetry={() => destinations.refetch()} />}
-            {destinations.data?.length === 0 && <Text style={styles.hint}>No destinations are available yet.</Text>}
-            {destinations.data?.map((d) => (
-              <PressableScale
-                key={d.id}
-                haptic="selection"
-                style={[styles.option, values.destination === d.name && styles.optionActive]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: values.destination === d.name }}
-                onPress={() => {
-                  setValue('destination', d.name, { shouldValidate: true });
-                  setValue('must_visit', []);
-                  setValue('excluded_places', []);
-                }}
-              >
-                <Text style={styles.optionTitle}>📍 {d.name}</Text>
-                <Text style={styles.optionDesc}>{d.place_count ?? 0} places · {d.country}</Text>
-                {d.description ? (
-                  <Text style={styles.optionBody} numberOfLines={2}>
-                    {d.description}
-                  </Text>
-                ) : null}
-                <PressableScale
-                  pressEffect="opacity"
-                  hitSlop={12}
-                  style={styles.browseLink}
-                  accessibilityLabel={`Browse places in ${d.name}`}
-                  onPress={() => router.push({ pathname: '/destination/[id]', params: { id: d.id, from: 'wizard' } })}
-                >
-                  <Text style={styles.browseText}>Browse places ›</Text>
-                </PressableScale>
-              </PressableScale>
-            ))}
-            <FieldError message={err('destination')} />
-
-            <Text style={styles.subTitle}>{t('trips.startingFrom')}</Text>
-            {values.origin ? (
-              <View style={[styles.option, styles.optionActive, styles.originRow]}>
-                <Text style={[styles.optionTitle, styles.flex]}>{values.origin.label}</Text>
-                <PressableScale
-                  pressEffect="opacity"
-                  hitSlop={8}
-                  onPress={() => setValue('origin', null)}
-                  accessibilityLabel={t('trips.removeStop')}
-                  testID="origin-clear"
-                >
-                  <Text style={styles.browseText}>✕</Text>
-                </PressableScale>
-              </View>
-            ) : (
-              <CitySearch
-                label={t('trips.stopSearch')}
-                reveal={reveal}
-                testID="origin-search"
-                onPick={(city, country) => setValue('origin', { city_geonameid: city.geonameid, label: `${city.name}, ${country}` })}
-              />
-            )}
-
-            <Text style={styles.subTitle}>{t('trips.gettingThere')}</Text>
-            <View style={styles.chips} accessibilityRole="radiogroup">
-              {TRANSPORT_MODES.map(({ mode, icon }) => {
-                const on = values.transport_mode === mode;
-                return (
-                  <PressableScale
-                    key={mode}
-                    haptic="selection"
-                    style={[styles.modeChip, on && styles.modeChipOn]}
-                    onPress={() => setValue('transport_mode', on ? null : mode)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: on }}
-                    testID={`mode-${mode}`}
-                  >
-                    <MaterialCommunityIcons name={icon} size={20} color={on ? colors.onAccent : colors.textSecondary} />
-                    <Text style={[styles.modeChipText, on && { color: colors.onAccent }]}>{t(`trips.modes.${mode}`)}</Text>
-                  </PressableScale>
-                );
-              })}
-            </View>
-          </Step>
-        )}
-
-        {step === 1 && (
-          <Step title="When & who?" hint="Dates as YYYY-MM-DD">
-            <TextField control={control} name="start_date" label="Start date" error={err('start_date')} />
-            <TextField control={control} name="end_date" label="End date" error={err('end_date')} />
-            <TextField control={control} name="num_travelers" label="Travellers" numeric error={err('num_travelers')} />
-          </Step>
-        )}
-
-        {step === 2 && (
-          <Step title="Budget" hint="Total for the whole group, in BDT">
-            {BUDGET_PRESETS.map((p) => (
-              <PressableScale
-                key={p.value}
-                style={[styles.option, Number(values.total_budget) === p.value && styles.optionActive]}
-                onPress={() => setValue('total_budget', p.value, { shouldValidate: true })}
-              >
-                <Text style={styles.optionTitle}>{p.label}</Text>
-                <Text style={styles.optionDesc}>{p.desc}</Text>
-              </PressableScale>
-            ))}
-            <TextField control={control} name="total_budget" label="Or enter your own total" numeric error={err('total_budget')} />
-            <TextField
-              control={control}
-              name="max_daily_budget"
-              label="Daily spending cap per person (0 = no cap)"
-              numeric
-              error={err('max_daily_budget')}
-            />
-            <Text style={styles.hint}>The cap covers activities and meals per person per day and is enforced as a hard limit.</Text>
-          </Step>
-        )}
-
-        {step === 3 && (
-          <Step title="Interests & pace" hint="Pick what you enjoy; the ranking uses these">
-            <View style={styles.chips}>
-              {INTERESTS.map((i) => {
-                const on = values.interests?.includes(i);
-                return (
-                  <PressableScale
-                    key={i}
-                    haptic="selection"
-                    style={[styles.chip, on && styles.chipOn]}
-                    onPress={() =>
-                      setValue('interests', on ? values.interests!.filter((x) => x !== i) : [...(values.interests ?? []), i], {
-                        shouldValidate: true,
-                      })
-                    }
-                  >
-                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{i}</Text>
-                  </PressableScale>
-                );
-              })}
-            </View>
-            <FieldError message={err('interests')} />
-            <Choice label="Travel pace" options={TRAVEL_STYLES} value={values.travel_style} onChange={(v) => setValue('travel_style', v)} />
-            <Choice label="Activity level" options={ACTIVITY_LEVELS} value={values.activity_level} onChange={(v) => setValue('activity_level', v)} />
-            <Choice label="Accommodation" options={ACCOMMODATION} value={values.accommodation_preference} onChange={(v) => setValue('accommodation_preference', v)} />
-          </Step>
-        )}
-
-        {step === 4 && (
-          <Step title="Daily schedule" hint="Times in 24-hour HH:MM">
-            <View style={styles.inlineFields}>
-              <View style={{ flex: 1 }}>
-                <TextField control={control} name="preferred_start_time" label="Day starts" error={err('preferred_start_time')} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <TextField control={control} name="preferred_end_time" label="Day ends" error={err('preferred_end_time')} />
-              </View>
-            </View>
-            <TextField control={control} name="max_activities_per_day" label="Max activities per day (1–10)" numeric error={err('max_activities_per_day')} />
-            <View style={styles.switchRow}>
-              <Text style={styles.label}>Avoid crowded places</Text>
-              <Controller
-                control={control}
-                name="avoid_crowded"
-                render={({ field }) => (
-                  <Switch
-                    accessibilityLabel="Avoid crowded places"
-                    value={!!field.value}
-                    onValueChange={(v) => {
-                      haptics.selection();
-                      field.onChange(v);
-                    }}
-                    trackColor={{ true: colors.accent, false: colors.surfaceRaised }}
-                    thumbColor={colors.onAccent}
-                  />
-                )}
-              />
-            </View>
-
-            <Text style={styles.label}>Places: tap once for must-visit ★, twice to exclude ✕, again to clear</Text>
-            {places.isLoading && <ActivityIndicator color={colors.link} />}
-            {places.isError && <LoadError error={places.error} onRetry={() => places.refetch()} />}
-            <View style={styles.chips}>
-              {places.data?.map((p) => {
-                const state = mustVisit.includes(p.id) ? 'must' : excluded.includes(p.id) ? 'exclude' : 'none';
-                return (
-                  <PressableScale
-                    key={p.id}
-                    haptic="selection"
-                    style={[styles.chip, state === 'must' && styles.chipMust, state === 'exclude' && styles.chipExclude]}
-                    onPress={() => {
-                      const r = cyclePlaceChoice(p.id, mustVisit, excluded);
-                      setValue('must_visit', r.must_visit);
-                      setValue('excluded_places', r.excluded_places);
-                    }}
-                    accessibilityLabel={`${p.name}: ${state}`}
-                  >
-                    <Text style={[styles.chipText, state !== 'none' && styles.chipTextOn]}>
-                      {state === 'must' ? '★ ' : state === 'exclude' ? '✕ ' : ''}{p.name}
-                    </Text>
-                  </PressableScale>
-                );
-              })}
-            </View>
-            <Text style={styles.hint}>
-              Must-visit places are guaranteed by the optimizer when they fit opening hours and your day; otherwise it tells you why.
-            </Text>
-          </Step>
-        )}
-
-        {step === 5 && (
-          <Step title="Review" hint="Check everything before creating the trip">
-            <Review label="Destination" value={values.destination} />
-            <Review label={t('trips.startingFrom')} value={values.origin?.label ?? '—'} />
-            <Review label={t('trips.gettingThere')} value={values.transport_mode ? t(`trips.modes.${values.transport_mode}`) : '—'} />
-            <Review
-              label="Dates"
-              value={`${values.start_date} → ${values.end_date} (${plural(nightsBetween(values.start_date, values.end_date), 'night')})`}
-            />
-            <Review label="Travellers" value={String(values.num_travelers)} />
-            <Review label="Budget" value={formatBDT(Number(values.total_budget) || 0)} />
-            <Review label="Daily cap / person" value={Number(values.max_daily_budget) ? formatBDT(Number(values.max_daily_budget)) : 'None'} />
-            <Review label="Interests" value={(values.interests ?? []).join(', ') || '—'} />
-            <Review label="Pace" value={`${values.travel_style} · ${values.activity_level} activity · ${values.accommodation_preference} stay`} />
-            <Review label="Day" value={`${values.preferred_start_time}–${values.preferred_end_time}, up to ${values.max_activities_per_day} activities`} />
-            <Review label="Avoid crowds" value={values.avoid_crowded ? 'Yes' : 'No'} />
-            <Review label="Must-visit" value={mustVisit.map(placeName).join(', ') || 'None'} />
-            <Review label="Excluded" value={excluded.map(placeName).join(', ') || 'None'} />
-            {create.isError && (
-              <Text style={styles.error} accessibilityLiveRegion="polite">
-                ⚠ The trip was not saved. Your answers are kept, so you can fix them and try again.{'\n'}
-                {(create.error as Error).message}
+      <ScrollView ref={scrollRef} innerViewRef={innerRef as React.RefObject<View>} style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Animated.View key={step} entering={entering} style={styles.stepBody}>
+          {step === 0 && (
+            <>
+              <Text style={styles.h2} accessibilityRole="header">
+                {t('newTrip.whereTo')}
               </Text>
-            )}
-          </Step>
-        )}
+              {destinations.isLoading && <ActivityIndicator color={colors.link} />}
+              {destinations.isError && (
+                <View style={styles.loadError}>
+                  <Text style={styles.error}>{(destinations.error as Error).message}</Text>
+                  <Button label={t('common.retry')} variant="small" onPress={() => destinations.refetch()} />
+                </View>
+              )}
+              {/* A row to scroll sideways (11 destinations since step 10): the next one peeks in */}
+              <ScrollView
+                ref={destScroll}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.destScroll}
+                contentContainerStyle={styles.destRow}
+                testID="destinations"
+              >
+                {destinations.data?.map((d) => {
+                  const on = trip.destination === d.name;
+                  return (
+                    <PressableScale
+                      key={d.id}
+                      haptic="selection"
+                      onPress={() => set({ destination: d.name, mustSees: [], skip: [] })}
+                      style={[styles.destCard, on && styles.destCardOn]}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={[d.name, t('newTrip.placesCount', { count: d.place_count ?? 0, n: d.place_count ?? 0 }), d.checked === false ? t('newTrip.notChecked') : null].filter(Boolean).join('. ')}
+                      testID={`destination-${d.id}`}
+                    >
+                      <View style={styles.destArt}>
+                        <CoastArt />
+                        {on && (
+                          <View style={styles.destCheck}>
+                            <MaterialCommunityIcons name="check" size={16} color={colors.onAccent} />
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.destText}>
+                        <Text style={styles.destName}>{d.name}</Text>
+                        <Text style={styles.muted}>{t('newTrip.placesCount', { count: d.place_count ?? 0, n: f.n(d.place_count ?? 0) })}</Text>
+                        {d.checked === false ? <Text style={styles.unchecked}>{t('newTrip.notChecked')}</Text> : null}
+                      </View>
+                    </PressableScale>
+                  );
+                })}
+              </ScrollView>
+              {destinations.data?.some((d) => d.checked === false) ? <Text style={styles.sourcesNote}>{t('newTrip.sourcesNote')}</Text> : null}
+              {showError && problem === 'destination' && <Text style={styles.error}>{t('newTrip.errDestination')}</Text>}
 
-        {stepMsg && <Text style={styles.error}>⚠ {stepMsg}</Text>}
+              <View style={styles.h2Row}>
+                <Text style={styles.h2} accessibilityRole="header">
+                  {t('newTrip.when')}
+                </Text>
+                <Text style={styles.muted}>
+                  {t('newTrip.daysNights', {
+                    days: t('newTrip.days', { count: days, n: f.n(days) }),
+                    nights: t('newTrip.nights', { count: nights, n: f.n(nights) }),
+                  })}
+                </Text>
+              </View>
+              <RangeCalendar start={trip.start} end={trip.end} onChange={(r) => set(r)} />
+              {showError && problem === 'tooLong' && <Text style={styles.error}>{t('newTrip.errTooLong')}</Text>}
+
+              <View style={styles.rowCard}>
+                <MaterialCommunityIcons name="account-multiple-outline" size={24} color={colors.textSecondary} />
+                <Text style={[styles.rowLabel, styles.flex]}>{t('newTrip.travellers')}</Text>
+                <Stepper
+                  value={trip.travellers}
+                  onLess={() => set({ travellers: Math.max(1, trip.travellers - 1) })}
+                  onMore={() => set({ travellers: Math.min(MAX_TRAVELLERS, trip.travellers + 1) })}
+                  lessLabel={t('newTrip.fewer')}
+                  moreLabel={t('newTrip.more')}
+                  testID="travellers"
+                />
+              </View>
+
+              <View style={styles.h2Row}>
+                <Text style={styles.h2} accessibilityRole="header">
+                  {t('newTrip.firstLast')}
+                </Text>
+                <Text style={styles.muted}>{t('newTrip.optional')}</Text>
+              </View>
+              <View style={styles.group}>
+                <TimeRow
+                  icon="airplane-landing"
+                  label={t('newTrip.arriving', { date: text.shortDate(trip.start) })}
+                  value={trip.arrive ? f.time(trip.arrive) : t('newTrip.morning')}
+                  onPress={() => setTimeField('arrive')}
+                  testID="arrive-time"
+                />
+                <View style={styles.divider} />
+                <TimeRow
+                  icon="airplane-takeoff"
+                  label={t('newTrip.leaving', { date: text.shortDate(trip.end) })}
+                  value={trip.leave ? f.time(trip.leave) : t('newTrip.evening')}
+                  onPress={() => setTimeField('leave')}
+                  testID="leave-time"
+                />
+              </View>
+
+              <Text style={styles.h2} accessibilityRole="header">
+                {t('newTrip.gettingThere')}
+              </Text>
+              <View style={styles.group}>
+                {trip.origin ? (
+                  <View style={styles.originRow}>
+                    <MaterialCommunityIcons name="map-marker-outline" size={24} color={colors.textSecondary} />
+                    <Text style={[styles.rowLabel, styles.flex]}>{t('newTrip.from', { place: trip.origin.label })}</Text>
+                    <PressableScale pressEffect="opacity" haptic="selection" onPress={() => set({ origin: null })} hitSlop={8} accessibilityRole="button" testID="origin-clear">
+                      <Text style={styles.link}>{t('newTrip.change')}</Text>
+                    </PressableScale>
+                  </View>
+                ) : (
+                  <View style={styles.originSearch}>
+                    <CitySearch
+                      label={t('newTrip.fromWhere')}
+                      reveal={reveal}
+                      testID="origin-search"
+                      onPick={(city, country) => set({ origin: { city_geonameid: city.geonameid, label: `${city.name}, ${country}` } })}
+                    />
+                  </View>
+                )}
+                <View style={styles.modes} accessibilityRole="radiogroup">
+                  {MODES.map(({ mode, icon }) => {
+                    const on = trip.mode === mode;
+                    return (
+                      <PressableScale
+                        key={mode}
+                        haptic="selection"
+                        onPress={() => set({ mode: on ? null : mode })}
+                        style={[styles.mode, on && styles.modeOn]}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: on }}
+                        accessibilityLabel={t(`trips.modes.${mode}`)}
+                        testID={`mode-${mode}`}
+                      >
+                        <MaterialCommunityIcons name={icon} size={20} color={on ? colors.onAccent : colors.textSecondary} />
+                        <Text style={[styles.modeText, on && styles.onAccent]} numberOfLines={1}>
+                          {t(`trips.modes.${mode}`)}
+                        </Text>
+                      </PressableScale>
+                    );
+                  })}
+                </View>
+              </View>
+            </>
+          )}
+
+          {step === 1 && (
+            <>
+              <Text style={styles.h2} accessibilityRole="header">
+                {t('newTrip.enjoy')}
+              </Text>
+              <View style={styles.chips}>
+                {INTERESTS.map((i) => {
+                  const on = trip.interests.includes(i);
+                  return (
+                    <PressableScale
+                      key={i}
+                      haptic="selection"
+                      onPress={() => set({ interests: on ? trip.interests.filter((x) => x !== i) : [...trip.interests, i] })}
+                      style={[styles.interest, on && styles.interestOn]}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: on }}
+                      testID={`interest-${i}`}
+                    >
+                      <MaterialCommunityIcons name={topicIcon(i)} size={18} color={on ? colors.onAccent : colors.textSecondary} />
+                      <Text style={[styles.interestText, on && styles.onAccent]}>{t(`interests.${i}`)}</Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
+
+              <Text style={styles.h2} accessibilityRole="header">
+                {t('newTrip.pace')}
+              </Text>
+              <View style={styles.paces} accessibilityRole="radiogroup">
+                {PACES.map((p) => {
+                  const on = trip.pace === p;
+                  return (
+                    <PressableScale
+                      key={p}
+                      haptic="selection"
+                      onPress={() => set({ pace: p })}
+                      style={[styles.pace, on && styles.paceOn]}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      testID={`pace-${p}`}
+                    >
+                      <Text style={styles.paceLabel}>{t(`newTrip.paces.${p}`)}</Text>
+                      <Text style={styles.paceDesc}>{t(`newTrip.paceDesc.${p}`)}</Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
+
+              <View style={styles.h2Row}>
+                <Text style={styles.h2} accessibilityRole="header">
+                  {t('newTrip.budget')}
+                </Text>
+                <Text style={styles.muted}>
+                  {t('newTrip.budgetFor', {
+                    travellers: t('plan.travellers', { count: trip.travellers, n: f.n(trip.travellers) }),
+                    nights: t('newTrip.nights', { count: nights, n: f.n(nights) }),
+                  })}
+                </Text>
+              </View>
+              <View style={styles.budgetCard}>
+                <View style={styles.budgetRow}>
+                  <Text style={styles.budgetTotal} testID="budget-total">
+                    {f.money(trip.budget)}
+                  </Text>
+                  <Stepper
+                    value={null}
+                    onLess={() => set({ budget: Math.max(1000, trip.budget - 1000), budgetByHand: true })}
+                    onMore={() => set({ budget: trip.budget + 1000, budgetByHand: true })}
+                    lessLabel={t('newTrip.lessBudget')}
+                    moreLabel={t('newTrip.moreBudget')}
+                    testID="budget"
+                  />
+                </View>
+                <View style={styles.segment} accessibilityRole="radiogroup">
+                  {TIERS.map((tier) => {
+                    const on = !trip.budgetByHand && trip.tier === tier;
+                    return (
+                      <PressableScale
+                        key={tier}
+                        haptic="selection"
+                        onPress={() => set({ tier, budgetByHand: false })}
+                        style={[styles.segmentPart, on && styles.segmentOn]}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: on }}
+                        testID={`tier-${tier}`}
+                      >
+                        <Text style={[styles.segmentText, on && styles.segmentTextOn]}>{t(`newTrip.tiers.${tier}`)}</Text>
+                      </PressableScale>
+                    );
+                  })}
+                </View>
+                <Text style={styles.muted}>
+                  {[
+                    t('newTrip.each', { amount: f.money(Math.round(trip.budget / trip.travellers / 50) * 50) }),
+                    hotelLine(hotels.data, hotelLevel(trip), t, f),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </Text>
+              </View>
+
+              <View style={styles.h2Row}>
+                <Text style={styles.h2} accessibilityRole="header">
+                  {t('newTrip.yourDay')}
+                </Text>
+                <Text style={styles.muted}>{t('newTrip.everyDay')}</Text>
+              </View>
+              <View style={styles.dayRow}>
+                <Text style={styles.rowLabel}>{t('newTrip.startAround')}</Text>
+                <TimeChip value={f.time(trip.dayStart)} onPress={() => setTimeField('dayStart')} label={t('newTrip.startTime')} testID="day-start" />
+                <Text style={styles.rowLabel}>{t('newTrip.finishBy')}</Text>
+                <TimeChip value={f.time(trip.dayEnd)} onPress={() => setTimeField('dayEnd')} label={t('newTrip.finishTime')} testID="day-end" />
+              </View>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <View>
+                <Text style={styles.h2} accessibilityRole="header">
+                  {t('newTrip.mustDos')}
+                </Text>
+                <Text style={styles.hint}>{t('newTrip.mustDosHint')}</Text>
+              </View>
+              {places.isLoading && <ActivityIndicator color={colors.link} />}
+              <MustDosEditor
+                value={{ mustSees: trip.mustSees, busy: trip.busy, skip: trip.skip, avoidCrowds: trip.avoidCrowds }}
+                onChange={(v) => set(v)}
+                places={places.data ?? []}
+                startDate={trip.start}
+                days={days}
+              />
+            </>
+          )}
+        </Animated.View>
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-        <PressableScale style={styles.backBtn} onPress={back}>
-          <Text style={styles.backText}>{step === 0 ? 'Cancel' : '← Back'}</Text>
-        </PressableScale>
-        {step < STEP_NAMES.length - 1 ? (
-          <PressableScale haptic="medium" style={styles.nextBtn} onPress={next}>
-            <Text style={styles.nextText}>Next →</Text>
-          </PressableScale>
+        {step === 2 && (
+          <View style={styles.summary} accessibilityRole="summary">
+            <SummaryPart first text={t('newTrip.days', { count: days, n: f.n(days) })} onPress={() => go(0)} />
+            <SummaryPart text={t('plan.travellers', { count: trip.travellers, n: f.n(trip.travellers) })} onPress={() => go(0)} />
+            <SummaryPart text={f.money(trip.budget)} onPress={() => go(1)} />
+            {trip.mustSees.length > 0 && <SummaryPart text={t('newTrip.mustSees', { count: trip.mustSees.length, n: f.n(trip.mustSees.length) })} />}
+            {trip.busy.length > 0 && <SummaryPart text={t('newTrip.busyCount', { count: trip.busy.length, n: f.n(trip.busy.length) })} />}
+          </View>
+        )}
+        {step < 2 ? (
+          <Button label={t('newTrip.next')} onPress={next} haptic="medium" testID="new-next" />
         ) : (
-          <PressableScale
-            haptic="medium"
-            style={[styles.nextBtn, create.isPending && { opacity: 0.6 }]}
-            disabled={create.isPending}
-            onPress={submit}
-            accessibilityRole="button"
-            accessibilityLabel="Create trip"
-            accessibilityState={{ disabled: create.isPending, busy: create.isPending }}
-          >
-            {create.isPending ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.nextText}>Create trip ✓</Text>}
+          <Button label={t('newTrip.build')} icon="map-marker-path" onPress={startBuild} haptic="medium" testID="build-plan" />
+        )}
+        {step === 1 && (
+          <PressableScale pressEffect="opacity" haptic="selection" onPress={startBuild} style={styles.buildNow} accessibilityRole="button" testID="build-now">
+            <Text style={styles.link}>{t('newTrip.buildNow')}</Text>
           </PressableScale>
         )}
       </View>
+
+      <TimeSheet
+        visible={timeField !== null}
+        title={timeSheet.title}
+        times={timeSheet.times}
+        selected={timeField ? trip[timeField] : null}
+        none={timeSheet.none}
+        onClose={() => setTimeField(null)}
+        onSelect={(value) => {
+          if (!timeField) return;
+          if (timeField === 'dayStart' || timeField === 'dayEnd') {
+            if (value) set({ [timeField]: value });
+          } else set({ [timeField]: value });
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
 
-function Step({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
-  const styles = useStyles();
-  return (
-    <View style={{ gap: 12 }}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.hint}>{hint}</Text>
-      {children}
-    </View>
-  );
+/** Where a must-see ended up in the trip's plan (the trip includes its days). */
+function findPlaced(trip: Trip, placeId: number) {
+  const days = (trip as Trip & { itinerary_days?: ItineraryDay[] }).itinerary_days ?? [];
+  for (const d of days) {
+    const item = d.items.find((i) => i.place_id === placeId);
+    if (item) return { day: d.day_number, time: item.start_time };
+  }
+  return null;
 }
 
-function TextField({
-  control,
-  name,
-  label,
-  numeric,
-  error,
+function timeSheetFor(field: TimeField | null, trip: NewTrip, t: TFunction) {
+  switch (field) {
+    case 'arrive':
+      return { title: t('newTrip.arriveTitle'), times: ARRIVE_TIMES, none: t('newTrip.arriveNone', { time: trip.dayStart }) };
+    case 'leave':
+      return { title: t('newTrip.leaveTitle'), times: LEAVE_TIMES, none: t('newTrip.leaveNone', { time: trip.dayEnd }) };
+    case 'dayStart':
+      return { title: t('newTrip.startTime'), times: START_TIMES.filter((x) => x < trip.dayEnd), none: undefined };
+    case 'dayEnd':
+      return { title: t('newTrip.finishTime'), times: END_TIMES.filter((x) => x > trip.dayStart), none: undefined };
+    default:
+      return { title: '', times: [], none: undefined };
+  }
+}
+
+/** "hotels around ৳2,800–4,200 a night", from the destination's hotels at that level. */
+function hotelLine(hotels: Hotel[] | undefined, level: string, t: TFunction, f: ReturnType<typeof usePlanFormat>) {
+  const prices = (hotels ?? []).filter((h) => h.category === level).map((h) => h.price_per_night);
+  if (!prices.length) return null;
+  const lo = Math.min(...prices);
+  const hi = Math.max(...prices);
+  const range = lo === hi ? f.money(lo) : `${f.money(lo)}–${f.money(hi)}`;
+  return t(`newTrip.hotel.${level}`, { range });
+}
+
+function Stepper({
+  value,
+  onLess,
+  onMore,
+  lessLabel,
+  moreLabel,
+  testID,
 }: {
-  control: ReturnType<typeof useForm<TripFormInput, unknown, TripFormValues>>['control'];
-  name: keyof TripFormInput;
-  label: string;
-  numeric?: boolean;
-  error?: string;
+  value: number | null;
+  onLess: () => void;
+  onMore: () => void;
+  lessLabel: string;
+  moreLabel: string;
+  testID: string;
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
+  const f = usePlanFormat();
   return (
-    <View style={{ gap: 6 }}>
-      <Text style={styles.label}>{label}</Text>
-      <Controller
-        control={control}
-        name={name}
-        render={({ field }) => (
-          <TextInput
-            style={[styles.input, error && styles.inputError]}
-            value={String(field.value ?? '')}
-            onChangeText={field.onChange}
-            onBlur={field.onBlur}
-            keyboardType={numeric ? 'numeric' : 'default'}
-            autoCapitalize="none"
-            placeholderTextColor={colors.textTertiary}
-          />
-        )}
-      />
-      <FieldError message={error} />
-    </View>
-  );
-}
-
-function Choice<T extends string>({ label, options, value, onChange }: { label: string; options: readonly T[]; value?: T; onChange: (v: T) => void }) {
-  const styles = useStyles();
-  return (
-    <View style={{ gap: 6 }}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.choiceRow}>
-        {options.map((o) => (
-          <PressableScale
-            key={o}
-            haptic="selection"
-            accessibilityRole="radio"
-            accessibilityState={{ selected: value === o }}
-            style={[styles.choice, value === o && styles.choiceOn]}
-            onPress={() => onChange(o)}
-          >
-            <Text style={[styles.choiceText, value === o && styles.choiceTextOn]}>{o}</Text>
-          </PressableScale>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function LoadError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
-  const styles = useStyles();
-  return (
-    <View style={styles.loadError}>
-      <Text style={styles.error}>⚠ {error instanceof Error ? error.message : 'Failed to load'}</Text>
-      <PressableScale style={styles.retryBtn} onPress={onRetry} accessibilityRole="button">
-        <Text style={styles.retryText}>Retry</Text>
+    <View style={styles.stepper}>
+      <PressableScale haptic="selection" onPress={onLess} style={styles.stepperButton} accessibilityRole="button" accessibilityLabel={lessLabel} testID={`${testID}-less`}>
+        <MaterialCommunityIcons name="minus" size={22} color={colors.textPrimary} />
+      </PressableScale>
+      {value !== null && (
+        <Text style={styles.stepperValue} accessibilityLiveRegion="polite" testID={`${testID}-value`}>
+          {f.n(value)}
+        </Text>
+      )}
+      <PressableScale haptic="selection" onPress={onMore} style={styles.stepperButton} accessibilityRole="button" accessibilityLabel={moreLabel} testID={`${testID}-more`}>
+        <MaterialCommunityIcons name="plus" size={22} color={colors.textPrimary} />
       </PressableScale>
     </View>
   );
 }
 
-function FieldError({ message }: { message?: string }) {
+function TimeRow({ icon, label, value, onPress, testID }: { icon: React.ComponentProps<typeof MaterialCommunityIcons>['name']; label: string; value: string; onPress: () => void; testID: string }) {
   const styles = useStyles();
-  return message ? <Text style={styles.error}>⚠ {message}</Text> : null;
+  const { colors } = useTheme();
+  return (
+    <PressableScale pressEffect="opacity" haptic="selection" onPress={onPress} style={styles.timeRow} accessibilityRole="button" accessibilityLabel={`${label} ${value}`} testID={testID}>
+      <MaterialCommunityIcons name={icon} size={22} color={colors.textSecondary} />
+      <Text style={[styles.rowLabel, styles.flex]}>{label}</Text>
+      <View style={styles.timeChip}>
+        <Text style={styles.timeChipText}>{value}</Text>
+      </View>
+    </PressableScale>
+  );
 }
 
-function Review({ label, value }: { label: string; value: string }) {
+function TimeChip({ value, onPress, label, testID }: { value: string; onPress: () => void; label: string; testID: string }) {
   const styles = useStyles();
   return (
-    <View style={styles.reviewRow}>
-      <Text style={styles.reviewLabel}>{label}</Text>
-      <Text style={styles.reviewValue}>{value}</Text>
+    <PressableScale haptic="selection" onPress={onPress} style={styles.timeChip} accessibilityRole="button" accessibilityLabel={`${label} ${value}`} testID={testID}>
+      <Text style={styles.timeChipText}>{value}</Text>
+    </PressableScale>
+  );
+}
+
+function SummaryPart({ text, onPress, first }: { text: string; onPress?: () => void; first?: boolean }) {
+  const styles = useStyles();
+  const dot = first ? null : <Text style={styles.summaryPart}>·</Text>;
+  if (!onPress) {
+    return (
+      <View style={styles.summaryItem}>
+        {dot}
+        <Text style={styles.summaryPart}>{text}</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.summaryItem}>
+      {dot}
+      <PressableScale pressEffect="opacity" haptic="selection" onPress={onPress} hitSlop={6} accessibilityRole="button">
+        <Text style={[styles.summaryPart, styles.summaryLink]}>{text}</Text>
+      </PressableScale>
     </View>
+  );
+}
+
+/** A simple coast drawing for a destination card (there are no destination photos yet). */
+function CoastArt() {
+  const { colors } = useTheme();
+  return (
+    <Svg width="100%" height="100%" viewBox="0 0 220 96" preserveAspectRatio="xMidYMid slice">
+      <Path d="M150 0 C 140 30, 160 50, 150 96 L 220 96 L 220 0 Z" fill={colors.successBg} />
+      <Path d="M20 40c10 0 10-6 20-6s10 6 20 6 10-6 20-6 10 6 20 6" stroke={colors.link} strokeWidth={2} opacity={0.6} fill="none" />
+      <Path d="M40 62c10 0 10-6 20-6s10 6 20 6 10-6 20-6 10 6 20 6" stroke={colors.link} strokeWidth={2} opacity={0.4} fill="none" />
+      <Circle cx={182} cy={30} r={12} stroke={colors.warning} strokeWidth={2} fill="none" />
+    </Svg>
   );
 }
 
 const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.bg },
-  stepBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 12 },
-  stepItem: { alignItems: 'center', gap: 4, flex: 1 },
-  dot: { width: 26, height: 26, borderRadius: 13, backgroundColor: t.colors.surface, borderWidth: 1, borderColor: t.colors.border, alignItems: 'center', justifyContent: 'center' },
-  dotActive: { backgroundColor: t.colors.accent, borderColor: t.colors.accent },
-  dotText: { color: t.colors.onAccent, fontSize: 12, fontWeight: '700' },
-  stepName: { color: t.colors.textTertiary, fontSize: 11, fontWeight: '600' },
-  stepNameActive: { color: t.colors.link },
-  content: { padding: 20, paddingBottom: 40, gap: 12 },
-  title: { color: t.colors.textPrimary, fontSize: 24, fontWeight: '800' },
-  hint: { color: t.colors.textTertiary, fontSize: 13, lineHeight: 18 },
-  label: { color: t.colors.textSecondary, fontSize: 13, fontWeight: '600' },
-  input: { backgroundColor: t.colors.surface, color: t.colors.textPrimary, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: t.colors.border, fontSize: 15 },
-  inputError: { borderColor: t.colors.danger },
-  error: { color: t.colors.danger, fontSize: 13 },
-  loadError: { gap: 8, alignItems: 'flex-start' },
-  retryBtn: { paddingVertical: 8, paddingHorizontal: 18, borderRadius: 999, borderWidth: 1, borderColor: t.colors.accent, backgroundColor: t.colors.surface },
-  retryText: { color: t.colors.link, fontWeight: '600' },
-  option: { backgroundColor: t.colors.surface, borderRadius: 20, padding: 16, gap: 2, borderWidth: 2, borderColor: 'transparent' },
-  optionActive: { borderColor: t.colors.accent, backgroundColor: t.colors.accentSoft },
-  optionTitle: { color: t.colors.textPrimary, fontWeight: '700', fontSize: 15 },
-  optionBody: { color: t.colors.textSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
-  browseLink: { alignSelf: 'flex-start', marginTop: 6, paddingVertical: 4 },
-  browseText: { color: t.colors.link, fontSize: 13, fontWeight: '600' },
-  optionDesc: { color: t.colors.textTertiary, fontSize: 12 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  subTitle: { color: t.colors.textPrimary, fontSize: 16, fontWeight: '700', marginTop: 16 },
-  originRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   flex: { flex: 1 },
-  modeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 48, paddingHorizontal: 14, borderRadius: t.radius.chip, backgroundColor: t.colors.surface },
-  modeChipOn: { backgroundColor: t.colors.accent },
-  modeChipText: { color: t.colors.textSecondary, fontSize: 14, fontWeight: '600' },
-  chip: { minHeight: 40, justifyContent: 'center', paddingVertical: 7, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: t.colors.border, backgroundColor: t.colors.surface },
-  chipOn: { backgroundColor: t.colors.accentSoft, borderColor: t.colors.accent },
-  chipMust: { backgroundColor: t.colors.successBg, borderColor: t.colors.success },
-  chipExclude: { backgroundColor: t.colors.dangerBg, borderColor: t.colors.danger },
-  chipText: { color: t.colors.textSecondary, fontSize: 13 },
-  chipTextOn: { color: t.colors.textPrimary, fontWeight: '600' },
-  choiceRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  choice: { minHeight: 40, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: t.colors.border, backgroundColor: t.colors.surface },
-  choiceOn: { backgroundColor: t.colors.accent, borderColor: t.colors.accent },
-  choiceText: { color: t.colors.textSecondary, fontWeight: '600' },
-  choiceTextOn: { color: t.colors.onAccent },
-  inlineFields: { flexDirection: 'row', gap: 12 },
-  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  reviewRow: { flexDirection: 'row', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.colors.divider },
-  reviewLabel: { color: t.colors.textTertiary, width: 120, fontSize: 13 },
-  reviewValue: { color: t.colors.textPrimary, flex: 1, fontSize: 13, fontWeight: '600' },
-  footer: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingTop: 12, backgroundColor: t.colors.bg },
-  backBtn: { flex: 1, paddingVertical: 14, borderRadius: 999, alignItems: 'center', backgroundColor: t.colors.surface },
-  backText: { color: t.colors.textSecondary, fontWeight: '600' },
-  nextBtn: { flex: 2, paddingVertical: 14, borderRadius: 999, alignItems: 'center', backgroundColor: t.colors.accent },
-  nextText: { color: t.colors.onAccent, fontWeight: '700', fontSize: 15 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: t.spacing.md, paddingTop: t.spacing.sm, gap: t.spacing.sm },
+  headerButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24 },
+  headerTitle: { ...t.type.headline, color: t.colors.textPrimary, flex: 1 },
+  stepOf: { ...t.type.footnote, color: t.colors.textSecondary, paddingRight: t.spacing.sm },
+  bar: { flexDirection: 'row', gap: 6, paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.sm },
+  barPart: { flex: 1, height: 4, borderRadius: 2, backgroundColor: t.colors.surfaceRaised },
+  barPartOn: { backgroundColor: t.colors.accent },
+  content: { paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, paddingBottom: t.spacing.xxl },
+  stepBody: { gap: t.spacing.md },
+  h2: { ...t.type.title, color: t.colors.textPrimary },
+  // Wraps with large text instead of cutting the note off
+  h2Row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', columnGap: t.spacing.sm, marginTop: t.spacing.md },
+  hint: { ...t.type.callout, color: t.colors.textSecondary, marginTop: 4 },
+  muted: { ...t.type.footnote, color: t.colors.textSecondary },
+  error: { ...t.type.callout, color: t.colors.danger },
+  loadError: { gap: t.spacing.sm, alignItems: 'flex-start' },
+  link: { ...t.type.callout, fontWeight: '600', color: t.colors.link },
+  onAccent: { color: t.colors.onAccent },
+  // Two to a row (11 destinations since step 10)
+  destScroll: { marginHorizontal: -t.spacing.lg },
+  destRow: { gap: t.spacing.md, paddingHorizontal: t.spacing.lg },
+  destCard: { width: DEST_CARD, backgroundColor: t.colors.surface, borderRadius: 20, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent' },
+  destCardOn: { borderColor: t.colors.accent },
+  destArt: { height: 76, backgroundColor: t.colors.accentSoft },
+  destCheck: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: t.colors.accent, alignItems: 'center', justifyContent: 'center' },
+  destText: { padding: t.spacing.md, gap: 2 },
+  destName: { ...t.type.headline, color: t.colors.textPrimary },
+  unchecked: { ...t.type.caption, fontWeight: '600', color: t.colors.warning },
+  sourcesNote: { ...t.type.footnote, color: t.colors.textTertiary },
+  rowCard: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, backgroundColor: t.colors.surface, borderRadius: 20, paddingHorizontal: t.spacing.lg, minHeight: 64 },
+  rowLabel: { ...t.type.body, color: t.colors.textPrimary },
+  group: { backgroundColor: t.colors.surface, borderRadius: 20, overflow: 'hidden' },
+  divider: { height: 1, backgroundColor: t.colors.divider, marginLeft: 54 },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, paddingHorizontal: t.spacing.lg, minHeight: 60 },
+  timeChip: { minHeight: 40, minWidth: 72, paddingHorizontal: t.spacing.md, borderRadius: t.radius.control, backgroundColor: t.colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  timeChipText: { ...t.type.callout, fontWeight: '700', color: t.colors.onAccentSoft },
+  originRow: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, paddingHorizontal: t.spacing.lg, minHeight: 60 },
+  originSearch: { padding: t.spacing.md, paddingBottom: 0 },
+  modes: { flexDirection: 'row', gap: t.spacing.sm, padding: t.spacing.md },
+  mode: { flex: 1, minHeight: 48, borderRadius: t.radius.control, backgroundColor: t.colors.surfaceInset, alignItems: 'center', justifyContent: 'center', gap: 2, paddingVertical: 6 },
+  modeOn: { backgroundColor: t.colors.accent },
+  modeText: { ...t.type.caption, fontWeight: '600', color: t.colors.textSecondary },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm },
+  interest: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: t.radius.chip, backgroundColor: t.colors.surface },
+  interestOn: { backgroundColor: t.colors.accent },
+  interestText: { ...t.type.callout, fontSize: 14, fontWeight: '600', color: t.colors.textPrimary },
+  paces: { flexDirection: 'row', gap: t.spacing.sm },
+  pace: { flex: 1, minHeight: 76, borderRadius: 16, backgroundColor: t.colors.surface, padding: t.spacing.md, gap: 4, justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
+  paceOn: { borderColor: t.colors.accent, backgroundColor: t.colors.accentSoft },
+  paceLabel: { ...t.type.callout, fontWeight: '700', color: t.colors.textPrimary },
+  paceDesc: { ...t.type.caption, color: t.colors.textSecondary },
+  budgetCard: { backgroundColor: t.colors.surface, borderRadius: 20, padding: t.spacing.lg, gap: t.spacing.md },
+  budgetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  budgetTotal: { fontSize: 30, fontWeight: '700', color: t.colors.textPrimary },
+  segment: { flexDirection: 'row', backgroundColor: t.colors.surfaceInset, borderRadius: t.radius.control, padding: 3 },
+  segmentPart: { flex: 1, minHeight: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  segmentOn: { backgroundColor: t.colors.segmentThumb },
+  segmentText: { ...t.type.callout, fontWeight: '600', color: t.colors.textSecondary },
+  segmentTextOn: { color: t.colors.textPrimary },
+  dayRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.sm, backgroundColor: t.colors.surface, borderRadius: 20, padding: t.spacing.lg },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm },
+  stepperButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: t.colors.surfaceInset, alignItems: 'center', justifyContent: 'center' },
+  stepperValue: { ...t.type.headline, minWidth: 28, textAlign: 'center', color: t.colors.textPrimary },
+  footer: { paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.sm, backgroundColor: t.colors.bg },
+  buildNow: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: t.spacing.lg },
+  summary: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 6, rowGap: 2 },
+  summaryItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  summaryPart: { ...t.type.footnote, color: t.colors.textSecondary },
+  summaryLink: { color: t.colors.link, fontWeight: '600' },
 }));

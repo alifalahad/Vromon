@@ -8,6 +8,8 @@ import * as WebBrowser from 'expo-web-browser';
 import { unregisterForPush } from '../friends/push';
 import { useUploadStore } from '../photos/uploads';
 import { authRedirectUrl, supabase } from './supabase';
+import { cancelAllTripReminders } from '../trips/today/reminders';
+import { useTodaySettings } from '../trips/today/settings';
 
 const NOT_CONFIGURED = 'Sign-in is not set up in this build.';
 
@@ -82,6 +84,9 @@ export async function signOut(): Promise<void> {
   // While still signed in: stop this phone getting the account's notifications
   await unregisterForPush();
   await supabase?.auth.signOut();
+  // Trip reminders and Today mode's switches belong to this person, not the phone
+  await cancelAllTripReminders();
+  useTodaySettings.setState({ useLocation: false, leaveReminders: false, weatherReminders: false });
   // Photos (yours and friends') are cached by id; the next person on this phone mustn't see them
   useUploadStore.setState({ pending: [] });
   await Promise.all([Image.clearDiskCache(), Image.clearMemoryCache()]).catch(() => undefined);

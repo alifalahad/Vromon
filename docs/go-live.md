@@ -9,7 +9,7 @@ Today the app runs only with this Mac: the backend runs here, and the developmen
 | Create a hosting account (Render recommended; the repo has `backend/Dockerfile`) | You | Free tier sleeps after 15 min idle (the first request then takes ~1 min); Starter ($7/month) doesn't |
 | Push the code to GitHub so the host can build it | You approve; I can commit and push | Nothing is committed yet |
 | Production database: Supabase Postgres (same project) | You copy the connection string from Supabase → Project Settings → Database | Set `DATABASE_URL=postgresql+psycopg://…`; migrations run on start-up |
-| Environment variables on the host | You paste them; I'll list the exact set | `APP_ENV=production`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `LLM_PROVIDER`/`LLM_API_KEY`/`EMBEDDING_*` (optional), `ADMIN_TOKEN`, `SENTRY_DSN` (optional), `CORS_ORIGINS` |
+| Environment variables on the host | You paste them; I'll list the exact set | `APP_ENV=production`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `LLM_PROVIDER`/`LLM_API_KEY`/`EMBEDDING_*` (optional), `ADMIN_TOKEN`, `SENTRY_DSN` (optional), `CORS_ORIGINS`, `ORS_API_KEY` or `ROUTING_PROVIDER` (road times; see below) |
 | Map tiles (regions and cities, ~30 MB of `.pmtiles`) on a public URL | Me, once a bucket exists | e.g. a public Supabase Storage bucket `tiles`; the app reads `EXPO_PUBLIC_TILES_URL` |
 | Smoke test: `GET https://<host>/health` and sign in from a phone on mobile data | Me | |
 
@@ -35,3 +35,4 @@ Today the app runs only with this Mac: the backend runs here, and the developmen
 - **Push notifications:** EAS project id plus Firebase `google-services.json` (Phase 5 notes).
 - **Over-the-air updates:** `expo-updates` with an EAS Update channel (needs the Expo account).
 - **Legal pages:** host `docs/legal/privacy-policy.md` and `docs/legal/terms.md` (fill in the `[TO FILL]` items first).
+- **Road distances and times (trip planner step 5):** development uses OpenRouteService with a free key (`ORS_API_KEY` in `backend/.env`). Before launch, choose the best option: a self-hosted OSRM server for Bangladesh (free software; a small server, about $5–10 a month; no request limits) or a paid OpenRouteService plan. Only `backend/app/services/routing/` changes; road data already fetched is kept in the `route_cache` table. Without a key the app uses straight-line estimates and says so.

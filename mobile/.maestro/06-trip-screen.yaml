@@ -1,0 +1,75 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: 06 Open a trip, build its plan, look at a stop and the menu
+---
+# Every flow starts fresh on the Map tab, so one failure can't leave the next on another screen
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
+- tapOn:
+    id: tab-trips
+- tapOn:
+    id: "next-trip|trip-\\d+"
+    index: 0
+# A trip that's on today opens Today mode first: go on to the full plan
+- extendedWaitUntil:
+    visible:
+      id: "today-full-plan|trip-title"
+    timeout: 30000
+- runFlow:
+    when:
+      visible:
+        id: today-full-plan
+    commands:
+      - tapOn:
+          id: today-full-plan
+- extendedWaitUntil:
+    visible:
+      id: trip-title
+    timeout: 20000
+# A trip from flow 05 has no plan yet: build it (the optimiser can take a few seconds)
+- runFlow:
+    when:
+      visible:
+        id: build-plan
+    commands:
+      - tapOn:
+          id: build-plan
+- extendedWaitUntil:
+    visible:
+      id: day-tab-1
+    timeout: 60000
+- assertVisible:
+    id: day-ribbon
+# Pull the plan up so the stop cards are on screen (a day's warnings can push them below the half-open sheet)
+- swipe:
+    start: "50%,56%"
+    end: "50%,12%"
+    duration: 600
+# The first stop's details, then close them by tapping above the sheet
+- tapOn:
+    id: "stop-\\d+"
+    index: 0
+- assertVisible:
+    id: stop-sheet
+- tapOn:
+    point: "50%,8%"
+- assertNotVisible:
+    id: stop-sheet
+# The ⋯ menu opens the budget
+- tapOn:
+    id: trip-menu
+- tapOn:
+    id: action-budget
+- extendedWaitUntil:
+    visible:
+      id: budget-total
+    timeout: 20000
+- assertVisible:
+    id: budget-part-stay
+- back
+- assertVisible:
+    id: trip-title

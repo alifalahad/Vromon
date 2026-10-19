@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<title>ভ্রমণ পরিকল্পনা, দিন ১</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700;800&amp;display=swap">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; position: relative; overflow: hidden; background: #FFFFFF; color: #111111; font-family: 'Noto Sans Bengali', Roboto, system-ui, sans-serif; display: flex; flex-direction: column;">
+
+  <div style="display: flex; justify-content: center; padding: 10px 0 2px;">
+    <span style="width: 40px; height: 5px; border-radius: 5px; background: #C8C8CC;"></span>
+  </div>
+  <header style="display: flex; align-items: center; gap: 6px; padding: 0 10px 0 6px;">
+    <a href="#" aria-label="ফিরে যান" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 999px;">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+    </a>
+    <div style="flex: 1; min-width: 0;">
+      <div style="font-size: 20px; font-weight: 700;">কক্সবাজার</div>
+      <div style="font-size: 13px; color: #5C5C5C;">সোম ১৯ – বুধ ২১ অক্টোবর · ২ জন</div>
+    </div>
+    <a href="#" style="height: 40px; padding: 0 14px; border-radius: 999px; background: #EDEDEF; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: #245FD0;">
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14"/></svg>ম্যাপ</a>
+  </header>
+
+  <div role="tablist" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px 16px 0;">
+    <a href="#" role="tab" aria-selected="true" style="height: 52px; border-radius: 14px; background: #2563D9; color: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+      <span style="font-size: 15px; font-weight: 700;">দিন ১</span><span style="font-size: 12px;">সোম ১৯</span></a>
+    <a href="#" role="tab" aria-selected="false" style="height: 52px; border-radius: 14px; background: #EDEDEF; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+      <span style="font-size: 15px; font-weight: 700;">দিন ২</span><span style="font-size: 12px; color: #5C5C5C;">মঙ্গল ২০</span></a>
+    <a href="#" role="tab" aria-selected="false" style="height: 52px; border-radius: 14px; background: #EDEDEF; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+      <span style="font-size: 15px; font-weight: 700;">দিন ৩</span><span style="font-size: 12px; color: #5C5C5C;">বুধ ২১</span></a>
+  </div>
+
+  <div style="flex: 1; overflow-y: auto; padding: 14px 16px 24px; display: flex; flex-direction: column;">
+    <p style="margin: 0; font-size: 16px; line-height: 25px;">হিমছড়িতে ঠান্ডা সকাল, কলাতলীতে সামুদ্রিক খাবারে দুপুরের খাবার, তারপর সূর্যাস্তের আগে সাগরে নৌকা ভ্রমণ।</p>
+    <div style="display: flex; gap: 14px; margin-top: 8px; font-size: 13px; color: #5C5C5C;">
+      <span>৬টি গন্তব্য</span><span>জনপ্রতি ৳২,০৩০</span><span>যাতায়াত ১ ঘ ১৭ মি</span>
+    </div>
+
+    <div style="display: flex; gap: 8px; padding: 12px 0 4px; overflow-x: auto;">
+      <span style="flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 999px; background: #EDEDEF; display: flex; align-items: center; font-size: 13px;">৩১° / ২৬°</span>
+      <span style="flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 999px; background: rgba(198,40,40,0.10); color: #C62828; display: flex; align-items: center; font-size: 13px; font-weight: 600;">২টি সতর্কতা</span>
+      <span style="flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 999px; background: #EDEDEF; display: flex; align-items: center; font-size: 13px;">সূর্যাস্ত ১৭:৩০</span>
+      <span style="flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 999px; background: #EDEDEF; display: flex; align-items: center; font-size: 13px;">ঢেউ ১.৮ মি</span>
+    </div>
+
+    <div style="height: 8px;"></div>
+    <sc-for list="{{items}}" as="s" hint-placeholder-count="6">
+      <sc-if value="{{s.isStop}}" hint-placeholder-val="{{true}}">
+        <div style="display: flex; gap: 10px;">
+          <div style="width: 48px; flex-shrink: 0; padding-top: 12px; text-align: right;">
+            <div style="font-size: 15px; font-weight: 700;">{{s.time}}</div>
+            <div style="font-size: 12px; color: #676767;">{{s.dur}}</div>
+          </div>
+          <div style="flex: 1; min-width: 0; border-radius: 18px; background: #F3F3F5; box-shadow: {{s.ring}};">
+            <div style="padding: 12px; display: flex; gap: 12px; align-items: flex-start;">
+              <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 999px; background: {{s.badge}}; color: {{s.badgeText}}; font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center;">{{s.n}}</span>
+              <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-size: 16px; font-weight: 600; line-height: 23px;">{{s.title}}</span>
+                <span style="font-size: 14px; color: #5C5C5C;">{{s.sub}}</span>
+                <sc-if value="{{s.hasTag}}" hint-placeholder-val="{{false}}"><span style="font-size: 13px; color: #245FD0;">{{s.tag}}</span></sc-if>
+              </span>
+            </div>
+            <sc-if value="{{s.hasWarning}}" hint-placeholder-val="{{false}}">
+              <div style="margin: 0 10px 10px; padding: 10px 12px; border-radius: 12px; background: rgba(198,40,40,0.08); display: flex; flex-direction: column; gap: 8px;">
+                <span style="font-size: 14px; line-height: 21px;">{{s.warning}}</span>
+                <div style="display: flex; gap: 8px;">
+                  <button style="height: 38px; padding: 0 14px; border-radius: 999px; background: #2563D9; color: #FFFFFF; font-size: 14px; font-weight: 600;">মঙ্গলবারে সরান</button>
+                  <button style="height: 38px; padding: 0 14px; border-radius: 999px; background: transparent; color: #111111; box-shadow: inset 0 0 0 1px #C8C8CC; font-size: 14px;">রাখুন</button>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{s.isLeg}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; gap: 10px; align-items: center; min-height: 44px;">
+          <div style="width: 48px; flex-shrink: 0;"></div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-left: 14px; padding-left: 14px; border-left: 2px dashed #C8C8CC; min-height: 44px; font-size: 13px; color: #5C5C5C;">
+            <span style="color: #111111; font-weight: 600;">{{s.leg}}</span>
+            <sc-if value="{{s.hasTraffic}}" hint-placeholder-val="{{false}}">
+              <span style="width: 8px; height: 8px; border-radius: 999px; background: {{s.trafficColor}};"></span>
+              <span>{{s.traffic}}</span>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{s.isFree}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; gap: 10px; margin: 6px 0;">
+          <div style="width: 48px; flex-shrink: 0; padding-top: 12px; text-align: right; font-size: 15px; font-weight: 700; color: #5C5C5C;">১৩:১০</div>
+          <div style="flex: 1; border-radius: 18px; border: 1.5px dashed #C8C8CC; padding: 12px; display: flex; flex-direction: column; gap: 2px;">
+            <span style="font-size: 15px; font-weight: 600;">অবসর সময় · ২ ঘ ২৩ মি</span>
+            <span style="font-size: 13px; color: #5C5C5C;">সি ক্রাউন হোটেলে বিশ্রাম, অথবা গন্তব্য যোগ করুন</span>
+          </div>
+        </div>
+      </sc-if>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const base = { isStop: false, isLeg: false, isFree: false, hasTag: false, hasWarning: false, hasTraffic: false, ring: 'none' };
+    const stop = (n, kind, time, dur, title, sub, extra) => ({ ...base, isStop: true, n, time, dur, title, sub, badge: kind === 'meal' ? '#E39A2D' : '#2563D9', badgeText: kind === 'meal' ? '#1F1F1F' : '#FFFFFF', ...extra });
+    const leg = (text, traffic, color) => ({ ...base, isLeg: true, leg: text, hasTraffic: !!traffic, traffic: traffic || '', trafficColor: color || 'transparent' });
+    const items = [
+      stop('১', 'meal', '০৭:৩০', '৪৫ মি', 'নাস্তা · ঝাউবন রেস্টুরেন্ট', 'বাংলাদেশি সামুদ্রিক খাবার · জনপ্রতি ৳২৮০'),
+      leg('সিএনজি · ২৫ মি · ১২ কিমি', 'রাস্তা ফাঁকা', '#2B742E'),
+      stop('২', 'visit', '০৮:৪০', '১ ঘ', 'হিমছড়ি পাহাড়চূড়ার ভিউপয়েন্ট', 'ভিউপয়েন্ট · জনপ্রতি ৳১০০', { hasTag: true, tag: 'আপনার জন্য: প্রকৃতি, ফটোগ্রাফি' }),
+      leg('হাঁটা · ১০ মি · ০.৬ কিমি'),
+      stop('৩', 'visit', '০৯:৫০', '২ ঘ', 'হিমছড়ি ঝর্ণা', 'প্রকৃতি · জনপ্রতি ৳১৫০'),
+      leg('সিএনজি · ২০ মি · ৯ কিমি', 'কলাতলীর কাছে ধীর', '#C26A12'),
+      stop('৪', 'meal', '১২:১০', '১ ঘ', 'দুপুরের খাবার · মারমেইড ক্যাফে', 'সামুদ্রিক খাবার ও বারবিকিউ · জনপ্রতি ৳৬০০'),
+      { ...base, isFree: true },
+      leg('রিকশা · ১২ মি · ২.১ কিমি'),
+      stop('৫', 'visit', '১৫:৪৫', '২ ঘ', 'সূর্যাস্তের নৌকা ভ্রমণ', 'অ্যাডভেঞ্চার · জনপ্রতি ৳৫০০', { hasWarning: true, warning: '১৫:০০ থেকে ১৭:০০ ঝড়ের সম্ভাবনা। নৌকা না-ও চলতে পারে।', ring: 'inset 0 0 0 1.5px #C62828' })
+    ];
+    return { items };
+  }
+}
+</script>
+</body>
+</html>

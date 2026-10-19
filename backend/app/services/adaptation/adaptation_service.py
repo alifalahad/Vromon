@@ -74,7 +74,8 @@ class AdaptationService:
     def _select_removals(trip: Trip, day: Itinerary, adaptation_type: str) -> List[ItineraryItem]:
         protected = edits.must_visit_ids(trip)
         activities = [i for i in day.items if i.item_type == "activity"]
-        removable = [i for i in activities if i.place_id not in protected]
+        # Must-visit places and pinned stops ("keep this time") are never removed
+        removable = [i for i in activities if i.place_id not in protected and not i.pinned]
 
         if adaptation_type == "relax":
             if len(activities) <= 1 or not removable:

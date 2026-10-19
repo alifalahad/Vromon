@@ -11,11 +11,11 @@ import { Camera, GeoJSONSource, Layer, Map, type LngLatBounds } from '@maplibre/
 import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 
+import { useStreetStyle } from '../features/trips/plan/mapStyle';
 import { makeStyles, useTheme } from '../ui/theme';
 import type { ItineraryDay } from '../types';
 import { dayColor, mapStops, type MapStop } from '../utils/itinerary';
 
-const STREETS = { light: 'https://tiles.openfreemap.org/styles/liberty', dark: 'https://tiles.openfreemap.org/styles/dark' };
 const FONT = ['Noto Sans Regular'];
 const HOTEL_COLOR = '#7A7A7A';
 
@@ -35,6 +35,7 @@ export function boundsFor(points: Point[]): LngLatBounds | null {
 export function TripMap({ days, hotel }: { days: ItineraryDay[]; hotel?: Hotel }) {
   const styles = useStyles();
   const { scheme, colors } = useTheme();
+  const mapStyle = useStreetStyle(scheme);
   const [picked, setPicked] = useState<string | null>(null);
 
   const perDay = useMemo(() => days.map((d) => ({ day: d, stops: mapStops(d) })), [days]);
@@ -86,7 +87,7 @@ export function TripMap({ days, hotel }: { days: ItineraryDay[]; hotel?: Hotel }
   return (
     <View style={styles.wrap}>
       <View style={styles.mapBox}>
-        <Map style={styles.map} mapStyle={STREETS[scheme]} logo={false} compass={false} touchPitch={false} attribution attributionPosition={{ bottom: 6, right: 6 }}>
+        <Map style={styles.map} mapStyle={mapStyle} logo={false} compass={false} touchPitch={false} attribution attributionPosition={{ bottom: 6, right: 6 }}>
           <Camera initialViewState={{ bounds, padding: { top: 40, right: 40, bottom: 40, left: 40 } }} />
           <GeoJSONSource id="trip-lines" data={lines}>
             <Layer id="trip-line" type="line" paint={{ 'line-color': ['get', 'color'], 'line-width': 3, 'line-dasharray': [2, 1.5] }} layout={{ 'line-cap': 'round' }} />

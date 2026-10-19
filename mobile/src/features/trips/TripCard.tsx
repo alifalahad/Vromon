@@ -1,57 +1,108 @@
 /**
- * A trip on the Trips tab (10-trips-tab.jpg): the date range, "Duration N days"
- * in green, and the stops, each with its country's flag, how you get there and
- * "City, Country", joined by a dotted line.
+ * A trip on the Trips tab (trip planner step 8, the "Trips tab" mockup): a
+ * compact card with a tile (a past trip's first photo when it has one), the
+ * name, the dates and length, the route when the trip has several stops, and
+ * what's next: "Plan not built yet" for an upcoming trip, "On your map" or
+ * "Mark visited" for a finished one. `StopList` is the full route (trip details).
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 
-import type { Trip, TripStop } from '../../types';
+import type { Photo, Trip, TripStop } from '../../types';
 import { PressableScale } from '../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../ui/theme';
 import { flagEmoji } from '../geo/countries';
-import { durationDays, formatRange } from './dates';
+import { thumbSource } from '../photos/queries';
+import { localDigits } from './plan/usePlanFormat';
+import { friendlyRange } from './plan/timeline';
+import { durationDays, formatRange, tripPhase } from './dates';
 import { transportIcon } from './transport';
 
 export function stopName(stop: TripStop): string {
   return stop.city_name ? `${stop.city_name}, ${stop.country_name}` : stop.country_name;
 }
 
-export function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void }) {
+const placeName = (stop: TripStop) => stop.city_name ?? stop.country_name;
+
+export function TripCard({
+  trip,
+  today,
+  onPress,
+  photos = [],
+  onMap,
+  onMark,
+  marking,
+}: {
+  trip: Trip;
+  today: string;
+  onPress: () => void;
+  photos?: readonly Photo[];
+  /** Finished trips: every stop is on your map already */
+  onMap?: boolean;
+  onMark?: () => void;
+  marking?: boolean;
+}) {
   const styles = useStyles();
   const { colors } = useTheme();
   const { t, i18n } = useTranslation();
+  const d = (v: number) => localDigits(String(v), i18n.language);
   const days = durationDays(trip.start_date, trip.end_date);
-  const range = formatRange(trip.start_date, trip.end_date, i18n.language);
+  const past = tripPhase(trip.start_date, trip.end_date, today) === 'past';
+  const range = past ? formatRange(trip.start_date, trip.end_date, i18n.language) : friendlyRange(trip.start_date, trip.end_date, i18n.language, today);
   const stops = trip.stops ?? [];
+  const route = stops.length > 1 ? stops.map((s) => `${flagEmoji(s.country_iso2)}\u00A0${placeName(s)}`).join('  →  ') : null;
+  const name = trip.title || trip.destination;
+  const cover = photos[0];
+  const status = !past && trip.status === 'draft' ? t('trips.row.notBuilt') : null;
+  const photoLine = past && photos.length ? t('trips.row.photos', { count: photos.length, n: d(photos.length) }) : null;
+  const lengthText = t('trips.row.days', { count: days, n: d(days) });
 
   return (
     <PressableScale
       style={styles.card}
       onPress={onPress}
-      accessibilityLabel={`${range}. ${t('trips.duration')} ${t('trips.durationDays', { count: days })}. ${stops.map(stopName).join(', ') || trip.destination}`}
+      accessibilityRole="button"
+      accessibilityLabel={[name, `${range} · ${lengthText}`, route?.replace(/→/g, ','), status, photoLine].filter(Boolean).join('. ')}
       testID={`trip-${trip.id}`}
     >
-      <View style={styles.top}>
-        <MaterialCommunityIcons name="calendar-blank-outline" size={22} color={colors.textSecondary} />
-        <Text style={styles.range} numberOfLines={1}>
-          {range}
-        </Text>
-        <Text style={styles.durationLabel}>
-          {t('trips.duration')} <Text style={styles.durationValue}>{t('trips.durationDays', { count: days })}</Text>
-        </Text>
+      <View style={[styles.tile, past ? styles.tilePast : styles.tileUpcoming]}>
+        {cover ? (
+          <Image source={thumbSource(cover)} style={styles.cover} contentFit="cover" accessible={false} transition={150} />
+        ) : (
+          <MaterialCommunityIcons name={past ? 'image-filter-hdr' : 'waves'} size={28} color={past ? colors.textSecondary : colors.link} />
+        )}
       </View>
-
-      {stops.length ? <StopList stops={stops} /> : <Text style={styles.place}>{trip.destination}</Text>}
-
-      {trip.status === 'draft' ? (
-        <View style={styles.draft}>
-          <Text style={styles.draftText}>{t('trips.draft')}</Text>
+      <View style={styles.text}>
+        <Text style={styles.name} numberOfLines={1}>{name}</Text>
+        <Text style={styles.range}>{`${range} · ${lengthText}`}</Text>
+        {route ? <Text style={styles.route} numberOfLines={2}>{route}</Text> : null}
+        {status ? <Text style={styles.status}>{status}</Text> : null}
+        {photoLine ? <Text style={styles.photos}>{photoLine}</Text> : null}
+        {/* Under the text, so the name and dates keep the card's width */}
+        {past && onMap ? (
+        <View style={styles.onMap} testID={`on-map-${trip.id}`}>
+          <MaterialCommunityIcons name="check" size={16} color={colors.success} />
+          <Text style={styles.onMapText}>{t('trips.row.onMap')}</Text>
         </View>
-      ) : null}
+        ) : past && onMark ? (
+          <PressableScale
+          haptic="selection"
+          onPress={onMark}
+          disabled={marking}
+          style={styles.mark}
+          accessibilityRole="button"
+          accessibilityLabel={t('trips.row.markA11y', { places: stops.map(stopName).join(', ') || name })}
+          testID={`mark-visited-${trip.id}`}
+        >
+            {marking ? <ActivityIndicator size="small" color={colors.link} /> : <Text style={styles.markText}>{t('trips.row.markVisited')}</Text>}
+          </PressableScale>
+        ) : null}
+      </View>
+      <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textTertiary} />
     </PressableScale>
   );
 }
@@ -87,11 +138,23 @@ export function StopList({ stops }: { stops: readonly TripStop[] }) {
 }
 
 const useStyles = makeStyles((t) => ({
-  card: { marginHorizontal: t.spacing.lg + 2, backgroundColor: t.colors.surface, borderRadius: t.radius.card, padding: t.spacing.xl, gap: t.spacing.lg },
-  top: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm },
-  range: { ...t.type.callout, fontSize: 17, color: t.colors.textSecondary, flex: 1 },
-  durationLabel: { ...t.type.callout, color: t.colors.textSecondary },
-  durationValue: { color: t.colors.success, fontWeight: '600' },
+  // The compact card
+  card: { marginHorizontal: t.spacing.lg, flexDirection: 'row', alignItems: 'center', gap: 14, padding: t.spacing.md, borderRadius: 20, backgroundColor: t.colors.surface },
+  tile: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  tileUpcoming: { backgroundColor: t.colors.accentSoft },
+  tilePast: { backgroundColor: t.colors.surfaceInset },
+  cover: { width: 56, height: 56 },
+  text: { flex: 1, minWidth: 0, gap: 2 },
+  name: { ...t.type.body, fontSize: 17, fontWeight: '600', color: t.colors.textPrimary },
+  range: { ...t.type.footnote, fontSize: 14, color: t.colors.textSecondary },
+  route: { ...t.type.footnote, color: t.colors.textSecondary },
+  status: { ...t.type.footnote, fontWeight: '600', color: t.colors.warning },
+  photos: { ...t.type.footnote, color: t.colors.textSecondary },
+  onMap: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  onMapText: { ...t.type.footnote, fontWeight: '600', color: t.colors.success },
+  mark: { alignSelf: 'flex-start', minHeight: 40, marginTop: 6, paddingHorizontal: 16, borderRadius: 999, backgroundColor: t.colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  markText: { ...t.type.footnote, fontWeight: '700', color: t.colors.onAccentSoft },
+  // The full route (trip details)
   stops: { gap: 0 },
   stop: { flexDirection: 'row', gap: t.spacing.lg },
   flagColumn: { width: 48, alignItems: 'center' },
@@ -102,6 +165,4 @@ const useStyles = makeStyles((t) => ({
   modeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   mode: { ...t.type.footnote, fontSize: 15, color: t.colors.textSecondary },
   place: { ...t.type.headline, fontSize: 19, fontWeight: '500', color: t.colors.textPrimary },
-  draft: { alignSelf: 'flex-start', borderWidth: 1, borderColor: t.colors.warning, borderRadius: t.radius.chip, paddingHorizontal: 10, paddingVertical: 2, marginTop: -t.spacing.sm },
-  draftText: { ...t.type.caption, fontWeight: '600', color: t.colors.warning },
 }));

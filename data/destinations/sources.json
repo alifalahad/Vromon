@@ -1,0 +1,108 @@
+{
+  "_about": "The destinations the importer builds (backend/scripts/import_destinations.py): centre, how far Wikivoyage listings may be (radius_km: the town's own page is a good guide to what belongs to it) and how far to look for Wikidata sights (wikidata_radius_km: smaller, so a neighbouring city's sights aren't taken), and the Wikivoyage pages used. Re-run the importer after changing this.",
+  "destinations": [
+    {
+      "name": "Dhaka",
+      "latitude": 23.7104,
+      "longitude": 90.4074,
+      "radius_km": 15,
+      "wikivoyage": [
+        "Dhaka"
+      ],
+      "wikidata_radius_km": 15
+    },
+    {
+      "name": "Khulna",
+      "latitude": 22.8456,
+      "longitude": 89.5403,
+      "radius_km": 35,
+      "wikivoyage": [
+        "Khulna",
+        "Bagerhat"
+      ],
+      "wikidata_radius_km": 35
+    },
+    {
+      "name": "Tangail",
+      "latitude": 24.2513,
+      "longitude": 89.9167,
+      "radius_km": 30,
+      "wikivoyage": [
+        "Tangail"
+      ],
+      "wikidata_radius_km": 35
+    },
+    {
+      "name": "Sylhet",
+      "latitude": 24.8949,
+      "longitude": 91.8687,
+      "radius_km": 70,
+      "wikivoyage": [
+        "Sylhet",
+        "Jaflong"
+      ],
+      "wikidata_radius_km": 25
+    },
+    {
+      "name": "Chattogram",
+      "latitude": 22.3569,
+      "longitude": 91.7832,
+      "radius_km": 25,
+      "wikivoyage": [
+        "Chittagong"
+      ],
+      "wikidata_radius_km": 20
+    },
+    {
+      "name": "Bandarban",
+      "latitude": 22.1953,
+      "longitude": 92.2184,
+      "radius_km": 80,
+      "wikivoyage": [
+        "Bandarban"
+      ],
+      "wikidata_radius_km": 25
+    },
+    {
+      "name": "Rangamati",
+      "latitude": 22.6533,
+      "longitude": 92.1789,
+      "radius_km": 50,
+      "wikivoyage": [
+        "Rangamati"
+      ],
+      "wikidata_radius_km": 20
+    },
+    {
+      "name": "Sreemangal",
+      "latitude": 24.3065,
+      "longitude": 91.7296,
+      "radius_km": 25,
+      "wikivoyage": [
+        "Srimangal"
+      ],
+      "wikidata_radius_km": 25
+    },
+    {
+      "name": "Kuakata",
+      "latitude": 21.8167,
+      "longitude": 90.12,
+      "radius_km": 25,
+      "wikivoyage": [
+        "Kuakata"
+      ],
+      "wikidata_radius_km": 25
+    },
+    {
+      "name": "Rajshahi",
+      "latitude": 24.3745,
+      "longitude": 88.6042,
+      "radius_km": 35,
+      "wikivoyage": [
+        "Rajshahi",
+        "Puthia"
+      ],
+      "wikidata_radius_km": 35
+    }
+  ]
+}

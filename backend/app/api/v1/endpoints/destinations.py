@@ -33,6 +33,9 @@ def list_destinations(db: Session = Depends(get_db)):
             longitude=dest.longitude,
             image_url=dest.image_url,
             place_count=place_count,
+            attribution=dest.attribution,
+            sources=dest.sources,
+            checked=dest.checked,
         ))
     return result
 

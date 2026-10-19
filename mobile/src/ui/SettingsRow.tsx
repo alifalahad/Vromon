@@ -54,14 +54,16 @@ export function SettingsRow({
     <>
       <MaterialCommunityIcons name={icon} size={ICON_SIZE} color={danger ? colors.danger : colors.textPrimary} style={styles.icon} />
       <View style={[styles.body, !last && styles.divider]}>
-        <Text style={[styles.title, danger && styles.danger]} numberOfLines={1}>
-          {title}
-        </Text>
-        {value ? (
-          <Text style={styles.value} numberOfLines={1}>
-            {value}
+        <View style={styles.texts}>
+          <Text style={[styles.titleText, danger && styles.danger]} numberOfLines={2}>
+            {title}
           </Text>
-        ) : null}
+          {value ? (
+            <Text style={styles.value} numberOfLines={1}>
+              {value}
+            </Text>
+          ) : null}
+        </View>
         {onPress ? <MaterialCommunityIcons name="chevron-right" size={26} color={colors.textSecondary} /> : null}
       </View>
     </>
@@ -122,7 +124,7 @@ export function SettingsSwitchRow({
     >
       <MaterialCommunityIcons name={icon} size={ICON_SIZE} color={colors.textPrimary} style={styles.icon} />
       <View style={[styles.body, !last && styles.divider]}>
-        <Text style={styles.title} numberOfLines={1}>
+        <Text style={styles.title} numberOfLines={2}>
           {title}
         </Text>
         <Switch
@@ -152,9 +154,11 @@ const useStyles = makeStyles((t) => ({
   },
   row: { flexDirection: 'row', alignItems: 'center', paddingLeft: t.spacing.xl, minHeight: 64 },
   icon: { marginRight: ICON_GAP },
-  body: { flex: 1, flexDirection: 'row', alignItems: 'center', minHeight: 64, paddingRight: t.spacing.lg, gap: t.spacing.sm },
+  body: { flex: 1, flexDirection: 'row', alignItems: 'center', minHeight: 64, paddingVertical: t.spacing.sm, paddingRight: t.spacing.lg, gap: t.spacing.sm },
   divider: { borderBottomWidth: 1, borderBottomColor: t.colors.divider },
   title: { ...t.type.body, fontSize: 17, color: t.colors.textPrimary, flex: 1 },
-  value: { ...t.type.body, fontSize: 17, color: t.colors.textSecondary, flexShrink: 1 },
+  value: { ...t.type.body, fontSize: 17, color: t.colors.textSecondary, flexShrink: 1, marginLeft: 'auto' },
+  texts: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: t.spacing.sm },
+  titleText: { ...t.type.body, fontSize: 17, color: t.colors.textPrimary, flexShrink: 1 },
   danger: { color: t.colors.danger },
 }));

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Travel leg: Himchari Waterfall to Mermaid Café</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; position: relative; overflow: hidden; background: {{c.land}}; color: {{c.t1}}; font-family: Roboto, system-ui, sans-serif;">
+
+  <div role="img" aria-label="Map: route along Marine Drive from Himchari Waterfall to Mermaid Café" style="position: absolute; left: 0; top: 0; width: 390px; height: 330px;">
+    <svg aria-hidden="true" width="390" height="330" viewBox="0 0 390 330" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 0 H190 C 180 80, 170 160, 150 240 L 132 330 H0 Z" fill="{{c.sea}}"/>
+      <path d="M230 170 C 280 150, 340 160, 390 140 V330 H160 C 175 280, 200 220, 230 170 Z" fill="{{c.park}}"/>
+      <path d="M200 0 C 194 80, 184 160, 166 240 L 150 330" stroke="{{c.road}}" stroke-width="7"/>
+      <path d="M210 40 C 204 100, 192 170, 176 240 L 168 280 L 150 300" stroke="{{c.casing}}" stroke-width="10"/>
+      <path d="M210 40 C 204 100, 192 170, 176 240 L 168 280 L 150 300" stroke="{{c.accent}}" stroke-width="6"/>
+      <path d="M205 80 C 201 110, 197 130, 193 150" stroke="{{c.slow}}" stroke-width="6"/>
+      <text x="230" y="120" font-size="12" font-family="Roboto, sans-serif" fill="{{c.mapLabel}}" stroke="none">Marine Drive</text>
+      <text x="40" y="160" font-size="12" font-family="Roboto, sans-serif" fill="{{c.mapLabel}}" stroke="none" font-style="italic">Bay of Bengal</text>
+    </svg>
+    <span style="position: absolute; left: 196px; top: 26px; width: 28px; height: 28px; border-radius: 999px; background: {{c.meal}}; color: #1F1F1F; border: 2px solid #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800;">4</span>
+    <span style="position: absolute; left: 136px; top: 286px; width: 28px; height: 28px; border-radius: 999px; background: {{c.accent}}; color: #FFFFFF; border: 2px solid #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800;">3</span>
+    <a href="TripPlan.dc.html" aria-label="Back" style="position: absolute; left: 14px; top: 16px; width: 48px; height: 48px; border-radius: 999px; background: {{c.surface}}; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+    </a>
+  </div>
+
+  <section style="position: absolute; left: 0; right: 0; top: 300px; bottom: 0; background: {{c.surface}}; border-radius: 24px 24px 0 0; display: flex; flex-direction: column; box-shadow: 0 -4px 20px rgba(0,0,0,0.3);">
+    <div style="display: flex; justify-content: center; padding: 10px 0 6px;"><span style="width: 40px; height: 5px; border-radius: 5px; background: {{c.handle}};"></span></div>
+    <div style="flex: 1; overflow-y: auto; padding: 0 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+      <div>
+        <div style="font-size: 13px; color: {{c.t2}};">Leave 11:50 · 9 km on Marine Drive</div>
+        <h1 style="margin: 4px 0 0; font-size: 20px; font-weight: 700; line-height: 26px;">Himchari Waterfall → Lunch at Mermaid Café</h1>
+      </div>
+
+      <div role="radiogroup" aria-label="How to get there" style="display: flex; flex-direction: column; gap: 8px;">
+        <sc-for list="{{modes}}" as="m" hint-placeholder-count="4">
+          <button role="radio" aria-checked="{{m.on}}" onClick="{{m.pick}}" style="min-height: 60px; padding: 8px 14px; border-radius: 16px; background: {{m.bg}}; color: {{c.t1}}; box-shadow: {{m.ring}}; display: flex; align-items: center; gap: 12px; text-align: left; opacity: {{m.opacity}};">
+            <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{m.icon}}"/></svg>
+            <span style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 16px; font-weight: 600;">{{m.label}}</span>
+              <span style="font-size: 13px; color: {{c.t2}};">{{m.note}}</span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+              <span style="font-size: 16px; font-weight: 700;">{{m.time}}</span>
+              <span style="font-size: 13px; color: {{c.t2}};">{{m.cost}}</span>
+            </span>
+          </button>
+        </sc-for>
+      </div>
+
+      <div style="padding: 12px 14px; border-radius: 16px; background: {{c.inset}}; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 14px;">
+          <span style="width: 10px; height: 10px; border-radius: 999px; background: {{c.slow}};"></span>
+          <span style="flex: 1;">Slow near Kolatoli, about +5 min</span>
+          <span style="font-size: 12px; font-weight: 700; color: {{c.success}};">LIVE · 2 min ago</span>
+        </div>
+        <div style="font-size: 14px; color: {{effectColor}}; font-weight: 600;">{{effect}}</div>
+      </div>
+
+      <button style="height: 52px; border-radius: 999px; background: {{c.accent}}; color: #FFFFFF; font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8z"/></svg>Open in Google Maps</button>
+      <p style="margin: 0; font-size: 12px; line-height: 17px; color: {{c.t3}};">Rickshaw and CNG times and fares are estimates from road distance and local speeds.</p>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { mode: 'cng' };
+  }
+  renderVals() {
+    const P = {
+      dark: { surface: '#333333', inset: '#3D3D3D', handle: '#6A6A6A', land: '#2C2C2C', sea: '#1B2733', park: '#2D3A2B', road: '#474747', casing: '#FFFFFF', accent: '#3379F3', accentSoft: 'rgba(51,121,243,0.20)', link: '#6EA0F6', t1: '#F2F2F2', t2: '#B2B2B2', t3: '#9C9C9C', success: '#4CAF50', warning: '#F2B13C', meal: '#F2B13C', slow: '#F2B13C', mapLabel: '#8A8A8A' },
+      light: { surface: '#FFFFFF', inset: '#F3F3F5', handle: '#C8C8CC', land: '#F1EEE8', sea: '#CFE2F0', park: '#DCEAD2', road: '#FFFFFF', casing: '#FFFFFF', accent: '#2563D9', accentSoft: 'rgba(37,99,217,0.12)', link: '#245FD0', t1: '#111111', t2: '#5C5C5C', t3: '#676767', success: '#2B742E', warning: '#A74D08', meal: '#E39A2D', slow: '#E39A2D', mapLabel: '#7A7A7A' }
+    };
+    const c = P[this.props.theme === 'light' ? 'light' : 'dark'];
+    const I = {
+      walk: 'M14.8 4.5a1.8 1.8 0 1 1-3.6 0 1.8 1.8 0 0 1 3.6 0zM10 21l2-6 3 3v3M8.5 12.5l1.5-4.5 4 1.5 2 3.5M12 15l-1.5-6',
+      rickshaw: 'M9 17a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 17a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM6 17h6l3-7h-5M14 6h3l3 5M9 10V7a4 4 0 0 1 4-3',
+      cng: 'M4 16V9a5 5 0 0 1 5-5h6l4 5v7zM4 12h15M9 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM19 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0z',
+      car: 'M5 16h14v-4l-2-5H7l-2 5zM10 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM18 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0z'
+    };
+    const MODES = [
+      { id: 'walk', label: 'Walk', note: 'Long walk on the highway', time: '1 h 55', cost: 'free', effect: 'Arrive 13:45. Lunch moves to 13:45 and the free time gets shorter.', bad: true },
+      { id: 'rickshaw', label: 'Rickshaw', note: 'Slow, but cheap', time: '50 min', cost: '≈ ৳250', effect: 'Arrive 12:40. Lunch moves 30 min later.', bad: false },
+      { id: 'cng', label: 'CNG', note: 'Recommended for this distance', time: '20 min', cost: '≈ ৳300', effect: 'Arrive 12:10. Lunch stays on time.', bad: false },
+      { id: 'car', label: 'Car', note: 'Hired car with driver', time: '17 min', cost: '≈ ৳900', effect: 'Arrive 12:07. Lunch stays on time.', bad: false }
+    ];
+    const s = this.state.mode;
+    const modes = MODES.map((m) => {
+      const on = m.id === s;
+      return {
+        ...m, icon: I[m.id], on: on ? 'true' : 'false',
+        bg: on ? c.accentSoft : c.inset, ring: on ? 'inset 0 0 0 2px ' + c.accent : 'none', opacity: 1,
+        pick: () => this.setState({ mode: m.id })
+      };
+    });
+    const picked = MODES.find((m) => m.id === s);
+    return { c, modes, effect: picked.effect, effectColor: picked.bad ? c.warning : c.t1 };
+  }
+}
+</script>
+</body>
+</html>

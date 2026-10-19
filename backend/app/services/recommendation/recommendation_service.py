@@ -128,7 +128,7 @@ class RecommendationService:
                 daily_budget=daily_budget,
                 avoid_crowded=avoid_crowded,
             )
-            reasons.insert(0, "Must-visit place selected by you")
+            reasons.insert(0, "Your must-see")
             must_visit_scored.append((place, 1.0, reasons))
 
         # Must-visit first, then top candidates
@@ -168,16 +168,20 @@ class RecommendationService:
             reasons.append(f"Matches your interest in {', '.join(matching_interests[:2])}")
 
         # ── Rating ─────────────────────────────────────────────────────
-        rating_norm = (place.rating - 1.0) / 4.0  # normalise 1–5 → 0–1
+        # An unknown rating (imported places) counts as neutral and isn't given as a reason
+        known_rating = getattr(place, "rating_known", True)
+        rating_norm = (place.rating - 1.0) / 4.0 if known_rating else 0.5  # normalise 1–5 → 0–1
         rating_score = w["rating"] * rating_norm
         score += rating_score
-        if place.rating >= 4.5:
+        if known_rating and place.rating >= 4.5:
             reasons.append(f"Excellent rating ({place.rating}\u2605)")
-        elif place.rating >= 4.0:
+        elif known_rating and place.rating >= 4.0:
             reasons.append(f"Good rating ({place.rating}\u2605)")
 
         # ── Budget match ───────────────────────────────────────────────
-        if daily_budget > 0:
+        if not getattr(place, "cost_known", True):
+            budget_score = w["budget_match"] * 0.5  # an unknown price: neutral, no reason given
+        elif daily_budget > 0:
             cost_ratio = min(place.estimated_cost / daily_budget, 1.0) if daily_budget else 0.5
             if cost_ratio <= 0.2:
                 budget_score = w["budget_match"] * 1.0

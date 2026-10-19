@@ -18,6 +18,8 @@ import type {
   Destination,
   EditResult,
   Compare,
+  ConditionWarning,
+  DayRoute,
   Feedback,
   Friend,
   FriendProfile,
@@ -26,9 +28,17 @@ import type {
   GeoCity,
   GeoRegion,
   GroundedAnswer,
+  Hotel,
   Itinerary,
   Me,
   MeUpdate,
+  LatePlan,
+  LateResult,
+  LateUndo,
+  LegOptions,
+  MoveResult,
+  MustDosChange,
+  MustDosResult,
   Person,
   Photo,
   PhotoFilter,
@@ -36,7 +46,12 @@ import type {
   Place,
   PlaceType,
   PublicProfile,
+  SaveAction,
+  SaveResult,
+  Suggestion,
+  TravelMode,
   TravelStats,
+  TripConditions,
   Trip,
   TripCreate,
   TripStats,
@@ -133,6 +148,7 @@ export const destinationsApi = {
   list: () => api.get<Destination[]>('/destinations').then((r) => r.data),
   get: (id: number) => api.get<Destination>(`/destinations/${id}`).then((r) => r.data),
   places: (id: number) => api.get<Place[]>(`/destinations/${id}/places`).then((r) => r.data),
+  hotels: (id: number) => api.get<Hotel[]>(`/destinations/${id}/hotels`).then((r) => r.data),
 };
 
 export const placesApi = {
@@ -169,6 +185,16 @@ export const tripsApi = {
 
   getItinerary: (id: number) => api.get<Itinerary>(`/trips/${id}/itinerary`).then((r) => r.data),
   budget: (id: number) => api.get<BudgetBreakdown>(`/trips/${id}/budget`).then((r) => r.data),
+  /** Running late: what pushing the rest of the day back would do (preview), or do it */
+  late: (tripId: number, dayId: number, now: string, minutes: number) =>
+    api.post<LatePlan>(`/trips/${tripId}/days/${dayId}/late`, { now, minutes, apply: false }).then((r) => r.data),
+  applyLate: (tripId: number, dayId: number, now: string, minutes: number) =>
+    api.post<LateResult>(`/trips/${tripId}/days/${dayId}/late`, { now, minutes, apply: true }).then((r) => r.data),
+  undoLate: (tripId: number, dayId: number, undo: LateUndo) =>
+    api.post<EditResult>(`/trips/${tripId}/days/${dayId}/late/undo`, { undo }).then((r) => r.data),
+  /** Apply a way to save from the budget, or its undo */
+  saveBudget: (id: number, action: SaveAction) =>
+    api.post<SaveResult>(`/trips/${id}/budget/save`, { action }).then((r) => r.data),
 
   // Item editing
   removeItem: (tripId: number, itemId: number) =>
@@ -179,6 +205,30 @@ export const tripsApi = {
     api
       .post<EditResult>(`/trips/${tripId}/items/${itemId}/replace`, { place_id: placeId ?? null })
       .then((r) => r.data),
+
+  // Rearranging (trip planner step 3); each re-times the day on the server
+  reorderDay: (tripId: number, dayId: number, itemIds: number[]) =>
+    api.put<EditResult>(`/trips/${tripId}/days/${dayId}/order`, { item_ids: itemIds }).then((r) => r.data),
+  moveItem: (tripId: number, itemId: number, dayId: number, position?: number) =>
+    api.post<MoveResult>(`/trips/${tripId}/items/${itemId}/move`, { day_id: dayId, position: position ?? null }).then((r) => r.data),
+  updateItem: (tripId: number, itemId: number, changes: { duration_minutes?: number; pinned?: boolean; travel_mode?: TravelMode | null }) =>
+    api.patch<EditResult>(`/trips/${tripId}/items/${itemId}`, changes).then((r) => r.data),
+  // Roads (trip planner step 5): how to get to the next stop, and the day's road lines
+  leg: (tripId: number, itemId: number) => api.get<LegOptions>(`/trips/${tripId}/items/${itemId}/leg`).then((r) => r.data),
+  dayRoute: (tripId: number, dayId: number) => api.get<DayRoute>(`/trips/${tripId}/days/${dayId}/route`).then((r) => r.data),
+  // Live conditions (trip planner step 6): weather, sea, sun and usual traffic, with warnings per stop
+  conditions: (tripId: number, refresh = false) =>
+    api.get<TripConditions>(`/trips/${tripId}/conditions`, { params: refresh ? { refresh: true } : undefined }).then((r) => r.data),
+  keepWarning: (tripId: number, itemId: number, code: ConditionWarning['code'], kept = true) =>
+    api.post<{ item_id: number; kept_warnings: string[] }>(`/trips/${tripId}/items/${itemId}/keep`, { code, kept }).then((r) => r.data),
+  addItem: (tripId: number, dayId: number, placeId: number, position?: number) =>
+    api.post<EditResult>(`/trips/${tripId}/days/${dayId}/items`, { place_id: placeId, position: position ?? null }).then((r) => r.data),
+  suggestions: (tripId: number, dayId: number, params: { near_item_id?: number; q?: string }) =>
+    api.get<{ suggestions: Suggestion[] }>(`/trips/${tripId}/days/${dayId}/suggestions`, { params }).then((r) => r.data.suggestions),
+
+  // The traveller's must-dos (trip planner step 4); only the days that need it are re-planned
+  updateMustDos: (tripId: number, change: MustDosChange) =>
+    api.put<MustDosResult>(`/trips/${tripId}/must-dos`, change).then((r) => r.data),
 
   adapt: (tripId: number, adaptationType: AdaptationType) =>
     api

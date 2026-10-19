@@ -1,0 +1,111 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: 08 Rearrange a plan from a stop's details and add a stop
+---
+# Drag and drop needs press-and-hold-and-move, which Maestro can't do; it was checked by hand
+# (adb motion events). This flow covers the same changes through the stop's details.
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
+- tapOn:
+    id: tab-trips
+- tapOn:
+    id: "next-trip|trip-\\d+"
+    index: 0
+# A trip that's on today opens Today mode first: go on to the full plan
+- extendedWaitUntil:
+    visible:
+      id: "today-full-plan|trip-title"
+    timeout: 30000
+- runFlow:
+    when:
+      visible:
+        id: today-full-plan
+    commands:
+      - tapOn:
+          id: today-full-plan
+- extendedWaitUntil:
+    visible:
+      id: trip-title
+    timeout: 20000
+- runFlow:
+    when:
+      visible:
+        id: build-plan
+    commands:
+      - tapOn:
+          id: build-plan
+- extendedWaitUntil:
+    visible:
+      id: day-tab-1
+    timeout: 60000
+# Start from a fresh plan, so a pin or move from an earlier run doesn't carry over
+- tapOn:
+    id: trip-menu
+- tapOn:
+    id: action-rebuild
+- tapOn: "(?i)rebuild"
+- extendedWaitUntil:
+    visible:
+      id: day-tab-1
+    timeout: 60000
+# Pull the plan up so the stop cards are on screen (a day's warnings can push them below the half-open sheet)
+- swipe:
+    start: "50%,56%"
+    end: "50%,12%"
+    duration: 600
+# The day's line ("6 stops · …"), to see each change land (the 5 s messages can be gone before Maestro looks)
+- copyTextFrom:
+    id: day-stats
+# The first stop's details: stay longer, keep its time, move it to day 2
+- tapOn:
+    id: "stop-\\d+"
+    index: 0
+- assertVisible:
+    id: stop-sheet
+- scrollUntilVisible:
+    element:
+      id: stay-more
+    direction: DOWN
+- tapOn:
+    id: stay-more
+- tapOn:
+    id: stop-pin
+# …and move it to day 2, in the same visit to its details
+- scrollUntilVisible:
+    element:
+      id: stop-move-day
+    direction: DOWN
+- tapOn:
+    id: stop-move-day
+- scrollUntilVisible:
+    element:
+      id: move-to-day-2
+    direction: DOWN
+- tapOn:
+    id: move-to-day-2
+- extendedWaitUntil:
+    notVisible: ${maestro.copiedText}
+    timeout: 20000
+- copyTextFrom:
+    id: day-stats
+# Add a stop at the end of the day
+- scrollUntilVisible:
+    element:
+      id: add-stop
+    direction: DOWN
+- tapOn:
+    id: add-stop
+- tapOn:
+    id: "add-place-\\d+"
+    index: 0
+- scrollUntilVisible:
+    element:
+      id: day-stats
+    direction: UP
+- extendedWaitUntil:
+    notVisible: ${maestro.copiedText}
+    timeout: 20000

@@ -29,6 +29,10 @@ class DestinationOut(BaseModel):
     longitude: float
     image_url: Optional[str] = None
     place_count: int = 0
+    # Imported destinations (step 10): where the data comes from, and whether a person has checked it
+    attribution: Optional[str] = None
+    sources: List[Dict[str, Any]] = []
+    checked: bool = True
 
     model_config = {"from_attributes": True}
 
@@ -60,6 +64,12 @@ class PlaceBase(BaseModel):
 class PlaceOut(PlaceBase):
     id: int
     destination_name: str
+    cost_known: bool = True
+    hours_known: bool = True
+    rating_known: bool = True
+    source: str = "curated"
+    url: Optional[str] = None
+    checked: bool = True
 
     model_config = {"from_attributes": True}
 
@@ -84,6 +94,9 @@ class RestaurantOut(BaseModel):
     closing_time: str = "22:00"
     tags: List[str] = []
     description: Optional[str] = None
+    cost_known: bool = True
+    hours_known: bool = True
+    rating_known: bool = True
 
     model_config = {"from_attributes": True}
 
@@ -105,6 +118,8 @@ class HotelOut(BaseModel):
     longitude: float = 0.0
     description: Optional[str] = None
     amenities: List[str] = []
+    price_known: bool = True
+    rating_known: bool = True
 
     model_config = {"from_attributes": True}
 
@@ -120,11 +135,14 @@ class TripPreferenceCreate(BaseModel):
     accommodation_preference: str = "Standard"
     preferred_start_time: str = "09:00"
     preferred_end_time: str = "20:00"
+    # The first day starts at the arrival time and the last day ends at the leaving time (None = usual times)
+    arrive_time: Optional[str] = None
+    leave_time: Optional[str] = None
 
-    @field_validator("preferred_start_time", "preferred_end_time")
+    @field_validator("preferred_start_time", "preferred_end_time", "arrive_time", "leave_time")
     @classmethod
     def valid_time(cls, v):
-        if not TIME_PATTERN.match(v):
+        if v is not None and not TIME_PATTERN.match(v):
             raise ValueError("time must be HH:MM in 24-hour format (00:00-23:59)")
         return v
 
@@ -145,10 +163,64 @@ class TripPreferenceCreate(BaseModel):
         return v
 
 
+MustSeeWhen = Literal["morning", "afternoon", "sunset", "evening"]
+
+
+class MustSeeIn(BaseModel):
+    """A place the traveller must see, optionally on a day and at a time of day or an exact time."""
+    place_id: int = Field(ge=1)
+    day: Optional[int] = Field(None, ge=1, le=MAX_TRIP_DAYS)
+    when: Optional[MustSeeWhen] = None
+    at: Optional[str] = None        # "HH:MM", an exact start (instead of `when`)
+
+    @field_validator("at")
+    @classmethod
+    def valid_at(cls, v):
+        if v is not None and not TIME_PATTERN.match(v):
+            raise ValueError("at must be HH:MM in 24-hour format (00:00-23:59)")
+        return v
+
+    @model_validator(mode="after")
+    def one_time(self):
+        if self.when and self.at:
+            raise ValueError("give either a time of day (when) or an exact time (at), not both")
+        return self
+
+
+class BusyIn(BaseModel):
+    """A time on a day when the traveller is busy: nothing is planned then."""
+    day: int = Field(ge=1, le=MAX_TRIP_DAYS)
+    start: str
+    end: str
+    label: Optional[str] = Field(None, max_length=60)
+
+    @field_validator("start", "end")
+    @classmethod
+    def valid_time(cls, v):
+        if not TIME_PATTERN.match(v):
+            raise ValueError("time must be HH:MM in 24-hour format (00:00-23:59)")
+        return v
+
+    @field_validator("label")
+    @classmethod
+    def clean_label(cls, v):
+        return (v or "").strip() or None
+
+    @model_validator(mode="after")
+    def ends_after_start(self):
+        if self.end <= self.start:
+            raise ValueError("a busy time must end after it starts")
+        return self
+
+
 class TripConstraintCreate(BaseModel):
+    # Omitted: follows the pace (Relaxed 3, Balanced 4, Packed 6 stops a day)
     max_activities_per_day: int = Field(default=4, ge=1, le=10)
     max_daily_budget: float = Field(default=0.0, ge=0)
+    must_sees: List[MustSeeIn] = Field(default_factory=list, max_length=50)
+    # The plain id list older clients send; ids not in must_sees become must-sees with no day or time
     must_visit: List[int] = Field(default_factory=list, max_length=50)
+    busy: List[BusyIn] = Field(default_factory=list, max_length=30)
     excluded_places: List[int] = Field(default_factory=list, max_length=200)
     avoid_crowded: bool = False
     avoid_high_activity: bool = False
@@ -159,6 +231,25 @@ class TripConstraintCreate(BaseModel):
         if any(i < 1 for i in v):
             raise ValueError("place IDs must be positive integers")
         return list(dict.fromkeys(v))  # drop duplicates, keep order
+
+    @field_validator("must_sees")
+    @classmethod
+    def one_per_place(cls, v):
+        seen, out = set(), []
+        for m in v:
+            if m.place_id not in seen:
+                seen.add(m.place_id)
+                out.append(m)
+        return out
+
+    @model_validator(mode="after")
+    def merge_must_visit(self):
+        listed = {m.place_id for m in self.must_sees}
+        merged = self.must_sees + [MustSeeIn(place_id=pid) for pid in self.must_visit if pid not in listed]
+        # Not through __setattr__: a partial update must still see which of the two the client sent
+        object.__setattr__(self, "must_sees", merged)
+        object.__setattr__(self, "must_visit", [m.place_id for m in merged])
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -261,6 +352,12 @@ class ItineraryItemOut(BaseModel):
     currency: str = "BDT"
     # "data": cost comes from a place/restaurant record; "placeholder": no record, estimate only
     cost_source: Literal["data", "placeholder"] = "data"
+    # The leg to the next activity (trip planner step 5): how, from road data or estimated, and
+    # the fare per vehicle (an estimate). None on the last activity and on meals.
+    travel_mode: Optional[str] = None
+    travel_mode_chosen: bool = False
+    travel_source: Optional[Literal["road", "estimate"]] = None
+    travel_fare: Optional[float] = None
     place: Optional[PlaceOut] = None
     restaurant: Optional[RestaurantOut] = None
 
@@ -277,6 +374,8 @@ class ItineraryDayOut(BaseModel):
     day_number: int
     day_date: Optional[date] = None
     theme: Optional[str] = None
+    # The day in a line, as parts the app puts into words (step 7)
+    summary: List[Dict[str, Any]] = []
     total_cost: float
     total_travel_time: float
     items: List[ItineraryItemOut] = []
@@ -318,6 +417,25 @@ class GenerateMeta(BaseModel):
     solver: Optional[Dict[str, Any]] = None   # CP-SAT status, bounds and diagnostics
 
 
+class UnplacedSuggestion(BaseModel):
+    day: int
+    at: str
+
+
+class UnplacedOut(BaseModel):
+    """A must-see that isn't in the plan: why, and the nearest change that would fit."""
+    place_id: int
+    name: str
+    day: Optional[int] = None
+    when: Optional[str] = None
+    at: Optional[str] = None
+    # code: closes_before | opens_after | day_ends | day_starts | arrive | leave | busy | clash | budget | full,
+    # with what explains it (closes, opens, sunset, wanted, end, start, arrive, leave, label, other)
+    reason: Dict[str, Any]
+    message: str
+    suggestion: Optional[UnplacedSuggestion] = None
+
+
 class GenerateResponse(BaseModel):
     trip_id: int
     status: GenerationStatus
@@ -328,6 +446,7 @@ class GenerateResponse(BaseModel):
     meta: GenerateMeta
     validation: ValidationReportOut
     itinerary: List[ItineraryDayOut]
+    unplaced: List[UnplacedOut] = []
 
 
 class ItineraryResponse(BaseModel):
@@ -344,6 +463,9 @@ class ItineraryResponse(BaseModel):
     hotel: Optional[Dict[str, Any]] = None
     days: List[ItineraryDayOut]
     validation: Optional[ValidationReportOut] = None
+    unplaced: List[UnplacedOut] = []
+    # From the trip's starting city, by its mode: {from, to, mode, km, minutes, fare, fare_per, source}
+    getting_there: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -358,15 +480,33 @@ class TripPreferenceOut(BaseModel):
     accommodation_preference: str
     preferred_start_time: str
     preferred_end_time: str
+    arrive_time: Optional[str] = None
+    leave_time: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+
+class MustSeeOut(BaseModel):
+    place_id: int
+    day: Optional[int] = None
+    when: Optional[str] = None
+    at: Optional[str] = None
+
+
+class BusyOut(BaseModel):
+    day: int
+    start: str
+    end: str
+    label: Optional[str] = None
 
 
 class TripConstraintOut(BaseModel):
     id: int
     max_activities_per_day: int
     max_daily_budget: float
+    must_sees: List[MustSeeOut] = []
     must_visit: List[int] = []
+    busy: List[BusyOut] = []
     excluded_places: List[int] = []
     avoid_crowded: bool
     avoid_high_activity: bool

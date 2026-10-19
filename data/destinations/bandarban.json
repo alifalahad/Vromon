@@ -1,0 +1,186 @@
+{
+  "destination": {
+    "name": "Bandarban",
+    "country": "Bangladesh",
+    "latitude": 22.1953,
+    "longitude": 92.2184,
+    "description": "Bandarban Hill District is the most remote and least populated district in Bangladesh. The lure of the tallest peaks of Bangladesh, treks through virgin forests and chance to meet more than 15 tribes of the region up close is growing both among Bangladeshis and tourists from other countries. Since the insurgency ceased in the Chittagong Hill Tracts (a cluster that includes all three hill districts of Bangladesh) it has opened up for tourists more than a decade back, though some of the western tourist guides may still describe the area as a major security risk."
+  },
+  "attribution": "Text and listings from Wikivoyage (CC BY-SA 4.0); places from Wikidata (CC0). Prices and opening hours are as the sources state them and haven't been checked.",
+  "sources": [
+    {
+      "name": "Wikivoyage",
+      "license": "CC BY-SA 4.0",
+      "url": "https://en.wikivoyage.org/wiki/Bandarban_District"
+    },
+    {
+      "name": "Wikidata",
+      "license": "CC0 1.0",
+      "url": "https://www.wikidata.org/"
+    }
+  ],
+  "fetched_on": "2026-10-19",
+  "checked": false,
+  "places": [
+    {
+      "source": "wikidata",
+      "ref": "wd:Q4984151",
+      "wikidata": "Q4984151",
+      "name": "Buddha Dhatu Jadi",
+      "latitude": 22.2231095,
+      "longitude": 92.1977168,
+      "description": "The largest Theravada Buddhist temple in Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q4984151",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q64517866",
+      "wikidata": "Q64517866",
+      "name": "Chimbuk hill",
+      "latitude": 22.0575707,
+      "longitude": 92.2549117,
+      "description": "Hill of Bandarban, Chattogram",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Photography"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q64517866",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q21745963",
+      "wikidata": "Q21745963",
+      "name": "Tankhol Taung",
+      "latitude": 22.306944444,
+      "longitude": 92.405277777,
+      "description": "Mountain in Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q21745963",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q21749454",
+      "wikidata": "Q21749454",
+      "name": "Bothli Taung",
+      "latitude": 22.11826,
+      "longitude": 92.23834,
+      "description": "Mountain in Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q21749454",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q21749461",
+      "wikidata": "Q21749461",
+      "name": "Marmiāna Taung",
+      "latitude": 22.187777777,
+      "longitude": 92.196111111,
+      "description": "Mountain in Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q21749461",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q66638457",
+      "wikidata": "Q66638457",
+      "name": "Meghla Park Lake",
+      "latitude": 22.1817895,
+      "longitude": 92.187076,
+      "description": "Lake in Bandarban",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Photography",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q66638457",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q70317033",
+      "wikidata": "Q70317033",
+      "name": "Rama Zadi Temple",
+      "latitude": 22.1955224,
+      "longitude": 92.2444087,
+      "description": null,
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q70317033",
+      "hours_text": null,
+      "price_text": null
+    }
+  ],
+  "restaurants": [],
+  "hotels": [],
+  "_report": {
+    "listings": 1,
+    "no_coordinates": 1,
+    "too_far": 0,
+    "merged": 0
+  }
+}

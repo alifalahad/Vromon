@@ -23,6 +23,13 @@ export function parseDay(iso: string): Date {
   return new Date(y, m - 1, d);
 }
 
+/** "2026-10-19" + 1 → "2026-10-20" (calendar days, local). */
+export function addDays(iso: string, n: number): string {
+  const d = parseDay(iso);
+  d.setDate(d.getDate() + n);
+  return localToday(d);
+}
+
 export function durationDays(start: string, end: string): number {
   return Math.round((Date.UTC(...ymd(end)) - Date.UTC(...ymd(start))) / 86_400_000) + 1;
 }

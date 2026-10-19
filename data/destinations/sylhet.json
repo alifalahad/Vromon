@@ -1,0 +1,433 @@
+{
+  "destination": {
+    "name": "Sylhet",
+    "country": "Bangladesh",
+    "latitude": 24.8949,
+    "longitude": 91.8687,
+    "description": "Sylhet is the capital of Sylhet Division in Bangladesh."
+  },
+  "attribution": "Text and listings from Wikivoyage (CC BY-SA 4.0); places from Wikidata (CC0). Prices and opening hours are as the sources state them and haven't been checked.",
+  "sources": [
+    {
+      "name": "Wikivoyage",
+      "license": "CC BY-SA 4.0",
+      "url": "https://en.wikivoyage.org/wiki/Sylhet"
+    },
+    {
+      "name": "Wikidata",
+      "license": "CC0 1.0",
+      "url": "https://www.wikidata.org/"
+    }
+  ],
+  "fetched_on": "2026-10-19",
+  "checked": false,
+  "places": [
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sylhet:see:ali-amjad-s-clock",
+      "name": "Ali Amjad's Clock",
+      "latitude": 24.888352,
+      "longitude": 91.867794,
+      "description": "It is known as \"the Big Ben of Sylhet\", is the oldest clock tower located on the bank of Surma River. The tower was constructed around 1895 under the supervision of Nawab Ali Amjad Khan, the landlord of former Prithimpasha estate in Sylhet.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": "https://en.wikipedia.org/wiki/Ali_Amjad%27s_Clock",
+      "hours_text": null,
+      "price_text": null,
+      "wikidata": "Q13057129",
+      "category": "History",
+      "tags": [
+        "History"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sylhet:see:shah-jalal-dargah",
+      "name": "Shah Jalal Dargah",
+      "latitude": 24.910403175,
+      "longitude": 91.8674620625,
+      "description": "Resting place of historic Sufi guru who in large part brought Islam to this area, with distinctive blue and white coloration.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": "https://shahjalalmazar.com/",
+      "hours_text": null,
+      "price_text": null,
+      "wikidata": null,
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "History",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sylhet:see:shah-paran-dargah",
+      "name": "Shah Paran Dargah",
+      "latitude": 24.90647,
+      "longitude": 91.93508,
+      "description": "Tomb and honorary masjid for another historic Islamic Sufi figure of the 14th century.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": null,
+      "hours_text": null,
+      "price_text": null,
+      "wikidata": null,
+      "category": "Culture",
+      "tags": [
+        "Culture",
+        "History",
+        "Religion"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sylhet:see:museum-of-rajas",
+      "name": "Museum of Rajas'",
+      "latitude": 24.894916,
+      "longitude": 91.865088,
+      "description": "Huge and rare collection of folk musical instruments, artifacts of Hason Raja movie (recipient of the best movie award 2002) and various folk and mystic poets.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": null,
+      "hours_text": null,
+      "price_text": null,
+      "wikidata": "Q16257913",
+      "category": "Culture",
+      "tags": [
+        "Culture"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sylhet:see:bichanakandi",
+      "name": "Bichanakandi",
+      "latitude": 25.167,
+      "longitude": 91.888,
+      "description": "This is the excellent place for travellers who love nature. Near Bangladesh-India border; famous for crystal water, stone, hills, green & wide landscape.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": "https://en.wikipedia.org/wiki/Bichnakandi",
+      "hours_text": null,
+      "price_text": null,
+      "wikidata": "Q28225474",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Photography"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sylhet:buy:aarong",
+      "name": "Aarong",
+      "latitude": 24.894637,
+      "longitude": 91.873236,
+      "description": "Aarong is a social enterprise chain of Bangladeshi department stores specializing in Bengali ethnic wear and handicrafts. It is owned by the non-profit development agency BRAC.",
+      "opening_time": "10:00",
+      "closing_time": "20:00",
+      "url": "https://www.aarong.com/",
+      "hours_text": "10AM-8PM",
+      "price_text": null,
+      "wikidata": "Q4662619",
+      "category": "Shopping",
+      "tags": [
+        "Shopping"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Low"
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sylhet:buy:deshidosh",
+      "name": "Deshidosh",
+      "latitude": 24.896494,
+      "longitude": 91.878466,
+      "description": "Deshidash is a clothing brand where you will find a collection representing the top 10 fashion houses of the country under one roof. Souvenirs representing Bangladeshi culture are also available here.",
+      "opening_time": "11:00",
+      "closing_time": "21:00",
+      "url": null,
+      "hours_text": "11AM-9PM",
+      "price_text": null,
+      "wikidata": null,
+      "category": "Shopping",
+      "tags": [
+        "Shopping"
+      ],
+      "estimated_cost": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Low"
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q7295485",
+      "wikidata": "Q7295485",
+      "name": "Ratargul Swamp Forest",
+      "latitude": 25.0176,
+      "longitude": 91.9317,
+      "description": "Freshwater swamp forest in Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q7295485",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q16345294",
+      "wikidata": "Q16345294",
+      "name": "Khadimnagar National Park",
+      "latitude": 24.89777778,
+      "longitude": 91.87138889,
+      "description": "National park of Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q16345294",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q7107142",
+      "wikidata": "Q7107142",
+      "name": "Osmany Museum",
+      "latitude": 24.894,
+      "longitude": 91.8773,
+      "description": "A museum in Kotwali Thana of Sylhet, Bangladesh",
+      "category": "Culture",
+      "tags": [
+        "Culture"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.0,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q7107142",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q31728085",
+      "wikidata": "Q31728085",
+      "name": "Tilagar Eco-Park",
+      "latitude": 24.917118,
+      "longitude": 91.90673,
+      "description": "Eco Park, located in Sylhet, Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q31728085",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q62070580",
+      "wikidata": "Q62070580",
+      "name": "Madani Chattar",
+      "latitude": 24.8994,
+      "longitude": 91.8748,
+      "description": "Monument in Sylhet, Bangladesh",
+      "category": "History",
+      "tags": [
+        "History"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q62070580",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q25587353",
+      "wikidata": "Q25587353",
+      "name": "Sylhet Central Shaheed Minar",
+      "latitude": 24.898241666,
+      "longitude": 91.868652777,
+      "description": "Monument in Sylhet, Bangladesh",
+      "category": "History",
+      "tags": [
+        "History"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Medium",
+      "url": "https://www.wikidata.org/wiki/Q25587353",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q21747925",
+      "wikidata": "Q21747925",
+      "name": "Kailas Tila",
+      "latitude": 24.786663333,
+      "longitude": 92.027496666,
+      "description": "Mountain in Bangladesh",
+      "category": "Nature",
+      "tags": [
+        "Nature"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 2.5,
+      "activity_level": "High",
+      "url": "https://www.wikidata.org/wiki/Q21747925",
+      "hours_text": null,
+      "price_text": null
+    },
+    {
+      "source": "wikidata",
+      "ref": "wd:Q64825249",
+      "wikidata": "Q64825249",
+      "name": "Bongobir Osmani Shishu Uddan",
+      "latitude": 24.89281,
+      "longitude": 91.87587,
+      "description": "Park in Bangladesh",
+      "category": "Family",
+      "tags": [
+        "Family",
+        "Relaxation"
+      ],
+      "estimated_cost": null,
+      "opening_time": null,
+      "closing_time": null,
+      "average_visit_duration": 1.5,
+      "activity_level": "Low",
+      "url": "https://www.wikidata.org/wiki/Q64825249",
+      "hours_text": null,
+      "price_text": null
+    }
+  ],
+  "restaurants": [],
+  "hotels": [
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sylhet:sleep:grand-sylhet-hotel-and-resort",
+      "name": "Grand Sylhet Hotel and Resort",
+      "latitude": 24.954875622433924,
+      "longitude": 91.86127240020146,
+      "description": null,
+      "opening_time": null,
+      "closing_time": null,
+      "url": "http://grandsylhet.com/",
+      "hours_text": null,
+      "price_text": null,
+      "price_per_night": null,
+      "category": null
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sylhet:sleep:shuktara-nature-retreat",
+      "name": "Shuktara Nature Retreat",
+      "latitude": 24.918090237944686,
+      "longitude": 91.93409999961277,
+      "description": null,
+      "opening_time": null,
+      "closing_time": null,
+      "url": "https://shuktararetreat.com",
+      "hours_text": null,
+      "price_text": null,
+      "price_per_night": null,
+      "category": null
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sylhet:sleep:hotel-golden-city",
+      "name": "Hotel Golden City",
+      "latitude": 24.895147,
+      "longitude": 91.870331,
+      "description": null,
+      "opening_time": null,
+      "closing_time": null,
+      "url": null,
+      "hours_text": null,
+      "price_text": null,
+      "price_per_night": null,
+      "category": null
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sylhet:sleep:nirvana-inn",
+      "name": "Nirvana Inn",
+      "latitude": 24.893284,
+      "longitude": 91.863827,
+      "description": "Modern hotel in centre of town. Air conditioned. Air conditioning in rooms can be too effective and beds are a little hard. Restaurant has very good reasonably priced food. Indoor pool on ground floor. Wireless Internet is available throughout.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": "http://www.nirvanainn.com/",
+      "hours_text": null,
+      "price_text": null,
+      "price_per_night": null,
+      "category": null
+    },
+    {
+      "source": "wikivoyage",
+      "ref": "wv:sylhet:sleep:richmond-hotel-apartments-sylhet",
+      "name": "Richmond Hotel & Apartments Sylhet",
+      "latitude": 24.897237,
+      "longitude": 91.867889,
+      "description": "Hotel suite and apartment with restaurant.",
+      "opening_time": null,
+      "closing_time": null,
+      "url": null,
+      "hours_text": null,
+      "price_text": null,
+      "price_per_night": null,
+      "category": null
+    }
+  ],
+  "_report": {
+    "listings": 14,
+    "no_coordinates": 2,
+    "too_far": 0,
+    "merged": 1
+  }
+}

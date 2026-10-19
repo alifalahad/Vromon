@@ -8,7 +8,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router/js-tabs';
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ColorValue } from 'react-native';
+import { StyleSheet, Text, type ColorValue } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -66,6 +66,13 @@ export default function TabLayout() {
           paddingBottom: insets.bottom + 8,
         },
         tabBarLabelStyle: { ...theme.type.tabLabel, marginTop: 2 },
+        // Four labels share the bar: they grow with the system font size up to 1.25×
+        // (beyond that "Settings" would be cut off); the icons carry the meaning too
+        tabBarLabel: ({ color, children }) => (
+          <Text style={[theme.type.tabLabel, tabStyles.label, { color }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>
+            {children}
+          </Text>
+        ),
         sceneStyle: { backgroundColor: theme.colors.bg },
       }}
     >
@@ -91,3 +98,5 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const tabStyles = StyleSheet.create({ label: { marginTop: 2 } });

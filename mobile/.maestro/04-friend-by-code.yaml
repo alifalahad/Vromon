@@ -1,8 +1,25 @@
 appId: ${APP_ID}
 env:
   APP_ID: com.vromon.app.dev
-name: Add a friend by code, the friend accepts, compare maps
+name: 04 Add a friend by code, the friend accepts, compare maps
 ---
+# Every flow starts fresh on the Map tab, so one failure can't leave the next on another screen
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
+- runScript:
+    file: scripts/reset-friendship.js
+    env:
+      API_URL: ${API_URL}
+      FRIEND_TOKEN: ${FRIEND_TOKEN}
+# The friend gets a planned trip before its profile is first loaded (flow 07 opens it)
+- runScript:
+    file: scripts/friend-trip.js
+    env:
+      API_URL: ${API_URL}
+      FRIEND_TOKEN: ${FRIEND_TOKEN}
 - tapOn:
     id: tab-friends
 - tapOn:
@@ -14,8 +31,14 @@ name: Add a friend by code, the friend accepts, compare maps
     id: use-code
 - assertVisible:
     id: code-preview
-- tapOn:
-    id: code-add
+# A request left pending by an earlier run shows "Requested" instead of the Add button
+- runFlow:
+    when:
+      visible:
+        id: code-add
+    commands:
+      - tapOn:
+          id: code-add
 - assertVisible: "Requested"
 # The second account accepts over the API (a second phone in real life)
 - runScript:
