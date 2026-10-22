@@ -61,11 +61,13 @@ import type {
   Visit,
   VisitInput,
 } from '../types';
+import { apiUrl } from './serverConfig';
 
 // ---------------------------------------------------------------------------
 // Base URL — defaults to local dev server; override with EXPO_PUBLIC_API_URL
 // ---------------------------------------------------------------------------
 export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:8000';
+// The address can change while the app runs (a shared build reads it from a file): see serverConfig.ts
 
 const api = create({
   baseURL: `${BASE_URL}/api/v1`,
@@ -76,6 +78,8 @@ const api = create({
     Accept: 'application/json',
   },
 });
+// Every request goes to the address known now
+api.interceptors.request.use((config) => ({ ...config, baseURL: `${apiUrl()}/api/v1` }));
 
 // ---------------------------------------------------------------------------
 // Errors — keep the HTTP status and structured detail for the UI
@@ -136,7 +140,7 @@ api.interceptors.response.use(
     const detail = error.response?.data?.detail;
     const fallback = error.response
       ? `Request failed (${status})`
-      : `Cannot reach the server at ${BASE_URL}. Is the backend running and EXPO_PUBLIC_API_URL correct?`;
+      : `Cannot reach the server at ${apiUrl()}. Is the backend running and EXPO_PUBLIC_API_URL correct?`;
     return Promise.reject(new ApiError(errorMessage(detail, fallback), status, detail));
   },
 );
@@ -329,7 +333,7 @@ export const geoApi = {
 
 /** PMTiles archive URL for MapLibre (must be absolute). */
 export const tilesUrl = (name: 'regions' | 'cities') =>
-  `pmtiles://${process.env.EXPO_PUBLIC_TILES_URL ?? `${BASE_URL}/api/v1/geo/tiles`}/${name}.pmtiles`;
+  `pmtiles://${process.env.EXPO_PUBLIC_TILES_URL ?? `${apiUrl()}/api/v1/geo/tiles`}/${name}.pmtiles`;
 
 // ---------------------------------------------------------------------------
 // Grounded explanations (Phase 8; returns 503 when no LLM is configured)

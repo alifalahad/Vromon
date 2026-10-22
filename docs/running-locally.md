@@ -2,6 +2,8 @@
 
 Three things run on your Mac: the **backend** (API, port 8001), **Metro** (serves the app's JavaScript, port 8081) and, once per native change, a **Gradle build** (the app itself). The phone reaches the Mac over the USB cable (`adb reverse`), so Wi-Fi addresses don't matter.
 
+To let friends on other networks use the app (an APK plus a free tunnel to this Mac), see `docs/sharing-with-friends.md`.
+
 ## Every time (3 terminals)
 
 **Terminal 1: backend**

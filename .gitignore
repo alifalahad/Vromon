@@ -54,3 +54,7 @@ dist/
 # Geo pipeline: downloads and large build outputs (regenerate with scripts/geo/build.sh)
 data/geo/raw/
 data/geo/build/
+
+# Sharing from this Mac (scripts/share/start.sh)
+scripts/share/logs/
+scripts/share/apk/

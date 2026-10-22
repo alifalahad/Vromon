@@ -30,6 +30,7 @@ import { signOut } from '../src/features/auth/actions';
 import { startAuthListener, useAuth } from '../src/features/auth/session';
 import { useFriendNotifications } from '../src/features/friends/useFriendNotifications';
 import { useReminderTaps } from '../src/features/trips/today/useReminderTaps';
+import { useServerConfigReady } from '../src/services/serverConfig';
 import { flushOutbox } from '../src/features/map/visits';
 import { useSettingsSync } from '../src/features/preferences/sync';
 import { initMonitoring, wrapRoot } from '../src/services/monitoring';
@@ -191,6 +192,9 @@ function ThemedStack() {
 initMonitoring();
 
 function RootLayout() {
+  // A build shared through a tunnel first reads where the backend is (under the splash)
+  const serverReady = useServerConfigReady();
+  if (!serverReady) return null;
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
