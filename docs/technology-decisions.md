@@ -285,3 +285,30 @@ The developer chose to keep everything local for now: no deployment, cloud build
   - Screen with the tab bar visible 2.8–3.1 s by screenshot polling (includes up to ~0.4 s of capture delay). That is at or just above the 2.5 s target; the splash waits for the stored session and the account (`/me`).
   - Panning the world map: 410 frames, 0.24% janky, 50th/90th/99th percentile frame time 21/24/25 ms.
 - **E2E on the device:** the Maestro suite passed 7/7 flows in one run (5 min) on the phone, with throwaway accounts `e2e.ana` and `e2e.bob`. The friend flow first resets their friendship (`scripts/reset-friendship.js`), so the suite is repeatable.
+
+### 28. Trip planner, steps 1–11 (2026-10-18 to 2026-10-22)
+
+The plan is `docs/trip-planner-plan.md`; each step has a report in `docs/trip-planner/`.
+
+- **Roads (step 5):** OpenRouteService (HeiGIT), free tier, key only in `backend/.env`. Answers are cached in `route_cache`. An implausible road (longer than 2.5× the straight line + 2 km) isn't believed, and the straight-line estimate (30 km/h) is used and labelled. Self-hosted OSRM before launch (`docs/go-live.md`).
+- **Weather and sea (step 6):** Open-Meteo (free, no key), cached 30 min in `conditions_cache`. Traffic is the usual pattern of Bangladesh towns (08–10 ×1.3, 17–20 ×1.4), never called live: no free live source covers Bangladesh.
+- **Planners:** the app builds with CP-SAT first and falls back to the quick planner, so every planning rule lives in both (rain hours, sunset stops, must-sees, busy times). The tests run each rule against both.
+- **Budget (step 7):** getting there both ways, the stay, food, tickets and every local ride, each with a range when it's an estimate. "Ways to save" are applied and undone on the server.
+- **Day summaries:** fixed templates in English and Bangla, not AI (decision 4).
+- **Today mode (step 9):**
+  - **Location:** `expo-location` while in use only, opt-in. Background location is removed from the manifest. "Leave by" is worked out on the phone, so the location is never sent or stored.
+  - **Reminders:** local notifications scheduled on the phone, with `SCHEDULE_EXACT_ALARM` so they're on time (not `USE_EXACT_ALARM`, which Play keeps for alarm-clock apps).
+  - **"Running late?":** a server preview, then apply, with an exact undo.
+- **More destinations (step 10):**
+  - **Sources:** Wikivoyage (CC BY-SA) and Wikidata (CC0), because OpenStreetMap's Overpass servers were down.
+  - **Unknown stays unknown:** unknown prices, hours and ratings are stored as unknown (`cost_known`, `hours_known`, `rating_known`, `price_known`) with planning defaults that are never shown as facts.
+  - **Data:** the files are in `data/destinations/` and are loaded at startup when they change. Nothing imported has been checked by a person yet.
+- **Hardening (step 11):**
+  - Android's Back closes an open sheet before it leaves the screen.
+  - Deleting a trip goes to the Trips tab and drops the trip's saved data.
+  - The budget is saved for offline with the plan.
+  - Text on the soft-accent buttons has its own colour (`onAccentSoft`), because link blue was 3.9:1 on it in dark mode.
+- **Measured on the realme RMX2170 (Android 12, 60 Hz), release build of the dev variant:**
+  - **The trip screen from the saved copy:** 232–330 ms (target under 1 s). The development build takes 1.3–1.5 s, from unoptimised JavaScript.
+  - **Scrolling the plan and switching days:** 932 frames, 2.8% janky; 50th/90th/99th percentile 12/21/32 ms.
+  - **Dragging a stop (6 drags):** 1,035 frames, 4.1% janky; 50th/90th/95th percentile 19/22/26 ms. That's about 50 fps while a card is held: usable, not perfectly smooth.

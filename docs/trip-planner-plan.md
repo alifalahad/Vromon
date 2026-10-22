@@ -1,6 +1,6 @@
 # Trip Planner Plan
 
-**Updated:** 2026-10-19 (rewritten after step 3) · **Status:** steps 1–9 done; step 10 (more destinations) built, waiting for approval
+**Updated:** 2026-10-19 (rewritten after step 3) · **Status:** all 11 steps done (2026-10-22); the final report is `docs/trip-planner/step-11-report.md`
 **Goal:** a trip plan that fits what the traveller actually needs (their must-sees, their times, their budget), built for them, easy to change, with live information. It should be minimal and professional, use calm motion, and contain nothing that isn't needed.
 
 **How we work:** one step per session.

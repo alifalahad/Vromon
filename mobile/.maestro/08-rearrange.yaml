@@ -92,7 +92,11 @@ name: 08 Rearrange a plan from a stop's details and add a stop
     timeout: 20000
 - copyTextFrom:
     id: day-stats
-# Add a stop at the end of the day
+# Add a stop at the end of the day (the plan sheet up again: half open, a scroll would land on the map)
+- swipe:
+    start: "50%,56%"
+    end: "50%,12%"
+    duration: 600
 - scrollUntilVisible:
     element:
       id: add-stop
