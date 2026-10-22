@@ -28,7 +28,8 @@ cd ~/Codes/Vromon
 scripts/share/start.sh
 ```
 
-- Leave that Terminal window open. The script prints the **APK download link** (it changes each run) and stops everything with Ctrl+C.
+- Leave that Terminal window open. The script prints the **APK download link** (it changes each run).
+- **To stop:** press Ctrl+C, or close the Terminal window (that stops everything too). If something was left running (the Mac crashed, or the script was force-killed), `scripts/share/stop.sh` stops it.
 - If friends had the app open while the share was off, they close it fully and reopen it.
 - **A link that doesn't change:** upload `scripts/share/apk/vromon.apk` (106 MB) to Google Drive once and share that link ("Anyone with the link"). Friends need the APK only once; after that they just open the app.
 

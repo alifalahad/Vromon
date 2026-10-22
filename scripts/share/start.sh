@@ -32,7 +32,7 @@ cleanup() {
   for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done
   wait 2>/dev/null || true
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT INT TERM HUP   # HUP: the Terminal window was closed
 
 # Wait for a quick tunnel to print its https address in its log
 tunnel_url() {
