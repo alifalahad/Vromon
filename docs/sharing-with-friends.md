@@ -35,7 +35,8 @@ scripts/share/start.sh
 
 ## Testing the friends' app on a phone
 
-- The Maestro flows set `APP_ID` (and `launch.yaml` sets `DEV_CLIENT`) in their own `env`, and with Maestro 2.11 that beats `-e`. So to test the preview app, run a copy of `.maestro` with `com.vromon.app.dev` replaced by `com.vromon.app.preview` and `DEV_CLIENT: "true"` by `"false"`.
+- The Maestro flows set `APP_ID` in their own `env`, and with Maestro 2.11 that beats `-e`. So to test the preview app, run a copy of `.maestro` with `com.vromon.app.dev` replaced by `com.vromon.app.preview`, and pass `-e DEV_CLIENT=false`.
+- With both apps on one phone, Metro's link (`exp+vromon://…`) makes Android ask which app to open, and the flows stall. Pass `-e DEV_CLIENT=false` for the dev app too: it launches the app, which reopens the last Metro project (checked on 2026-10-27).
 - On 2026-10-22, flows 00, 01, 05, 06, 09 and 99 passed this way on the realme phone. The phone had no USB route to the share backend, so every request went through the tunnel.
 
 ## Building the friends' APK again (only after app code changes)

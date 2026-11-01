@@ -18,7 +18,8 @@ router = APIRouter(prefix="/destinations", tags=["destinations"])
 @router.get("", response_model=List[DestinationOut])
 def list_destinations(db: Session = Depends(get_db)):
     """Return a list of available destinations with place counts."""
-    destinations = db.query(Destination).filter(Destination.is_active == True).all()
+    # By id: the order they were added (PostgreSQL gives no order without one; step 10)
+    destinations = db.query(Destination).filter(Destination.is_active == True).order_by(Destination.id).all()
     result = []
     for dest in destinations:
         place_count = db.query(Place).filter(
@@ -36,6 +37,8 @@ def list_destinations(db: Session = Depends(get_db)):
             attribution=dest.attribution,
             sources=dest.sources,
             checked=dest.checked,
+            country_iso2=dest.country_iso2,
+            region_code=dest.region_code,
         ))
     return result
 
@@ -59,6 +62,11 @@ def get_destination(destination_id: int, db: Session = Depends(get_db)):
         longitude=dest.longitude,
         image_url=dest.image_url,
         place_count=place_count,
+        attribution=dest.attribution,
+        sources=dest.sources,
+        checked=dest.checked,
+        country_iso2=dest.country_iso2,
+        region_code=dest.region_code,
     )
 
 
@@ -71,7 +79,7 @@ def get_destination_places(destination_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Destination not found")
     places = db.query(Place).filter(
         Place.destination_id == dest.id, Place.is_active == True
-    ).all()
+    ).order_by(Place.id).all()
     return [_place_out(p) for p in places]
 
 
@@ -84,7 +92,7 @@ def get_destination_restaurants(destination_id: int, db: Session = Depends(get_d
         raise HTTPException(status_code=404, detail="Destination not found")
     restaurants = db.query(Restaurant).filter(
         Restaurant.destination_id == dest.id, Restaurant.is_active == True
-    ).all()
+    ).order_by(Restaurant.id).all()
     return [_restaurant_out(r) for r in restaurants]
 
 
@@ -97,7 +105,7 @@ def get_destination_hotels(destination_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Destination not found")
     hotels = db.query(Hotel).filter(
         Hotel.destination_id == dest.id, Hotel.is_active == True
-    ).all()
+    ).order_by(Hotel.id).all()
     return [_hotel_out(h) for h in hotels]
 
 

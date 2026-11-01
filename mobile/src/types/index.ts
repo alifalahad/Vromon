@@ -16,6 +16,9 @@ export interface Destination {
   attribution?: string | null;
   sources?: { name: string; license?: string; url?: string }[];
   checked?: boolean;
+  /** Where it is on the travel map (ISO 3166-1 / 3166-2), for matching map places to destinations */
+  country_iso2?: string | null;
+  region_code?: string | null;
 }
 
 /** A hotel of a destination (GET /destinations/{id}/hotels) */
@@ -256,6 +259,11 @@ export interface TripStop {
   transport_mode: TransportMode | null;
   arrive_on: string | null;
   depart_on: string | null;
+  /** Where it is: the city, or the country's label point (map home step 5) */
+  lat?: number | null;
+  lon?: number | null;
+  /** The city's region (ISO 3166-2) */
+  region_code?: string | null;
 }
 
 export interface TripStopInput {
@@ -723,6 +731,13 @@ export interface UserSettings {
   map_theme: Record<string, unknown> | null;
   notify_friend_requests: boolean;
   notify_friend_accepted: boolean;
+  /** Chat (friends-chat steps 1 and 5) */
+  read_receipts?: boolean;
+  notify_messages?: boolean;
+  notify_trip_rooms?: boolean;
+  notification_previews?: boolean;
+  /** Friends see your current and coming trips (On the road, the chat header, your profile) */
+  share_trips_with_friends?: boolean;
   updated_at?: string | null;
 }
 
@@ -798,6 +813,15 @@ export interface PublicProfile {
   avatar_url: string | null;
 }
 
+/** A place friends have visited or lived in, and who, newest first (map home step 9) */
+export interface FriendFootprint {
+  place_type: PlaceType;
+  place_code: string;
+  count: number;
+  latest_at: string;
+  friends: PublicProfile[];
+}
+
 export type Relation = 'self' | 'none' | 'requested' | 'incoming' | 'friends';
 
 /** A search result or friend-code preview, with the button state. */
@@ -824,7 +848,249 @@ export interface FriendProfile extends PublicProfile {
   is_self: boolean;
   friends_since: string | null;
   home_country_iso2: string | null;
+  /** False when they hide their trips from friends (their trip list is then empty) */
+  shares_trips?: boolean;
 }
+
+/** A friend's trip today, or their next one within 14 days (friends-chat step 6). */
+export interface RoadTrip {
+  trip_id: number;
+  destination: string;
+  /** Local dates, YYYY-MM-DD */
+  start_date: string;
+  end_date: string;
+  /** Day N of `days` while it's on; null before it starts */
+  day: number | null;
+  days: number;
+  /** Days until it starts; 0 once it has */
+  starts_in: number;
+}
+
+/** GET /me/friends/on-the-road */
+export interface OnTheRoad {
+  friend: PublicProfile;
+  trip: RoadTrip;
+}
+
+// ---------------------------------------------------------------------------
+// Chat (docs/friends-chat-plan.md)
+// ---------------------------------------------------------------------------
+
+export interface ChatMessage {
+  id: number;
+  conversation_id: number;
+  /** null: a line from Vromon itself (kind "system") */
+  sender_id: string | null;
+  /** "text", "system", or a card: "trip", "place", "idea", "poll" */
+  kind: string;
+  /** Both empty once the sender unsends it (`deleted`) */
+  body: string | null;
+  /** A card's snapshot (TripCard, PlaceCard, IdeaCard, PollCard), or `{available: false}` */
+  payload: Record<string, unknown> | null;
+  reply_to_id: number | null;
+  /** Only on your own messages: the id the app sent it with */
+  client_id: string | null;
+  /** UTC with offset */
+  created_at: string;
+  deleted: boolean;
+  /** Polls and trip ideas: who chose each answer, by option id */
+  votes?: Record<string, string[]> | null;
+  /** Who reacted with what ("heart": [user ids]) */
+  reactions?: Record<string, string[]>;
+  /** The message this one replies to, as you may see it */
+  reply_to?: ReplyPreview | null;
+}
+
+export type ReactionKind = 'heart' | 'thumbs_up' | 'laugh' | 'wow' | 'want';
+
+export interface ReplyPreview {
+  id: number;
+  sender_id: string | null;
+  kind: string;
+  body: string | null;
+  payload: Record<string, unknown> | null;
+  deleted: boolean;
+}
+
+export type ReportReason = 'spam' | 'harassment' | 'inappropriate' | 'scam' | 'other';
+
+export type CardKind = 'trip' | 'place' | 'idea' | 'poll' | 'invite' | 'checkin' | 'late' | 'live';
+
+/** A trip card, as it was when sent ("Open plan" shows the trip as it is now). */
+export interface TripCard {
+  trip_id: number;
+  owner_id: string;
+  owner_name: string;
+  title: string | null;
+  destination: string;
+  start_date: string;
+  end_date: string;
+  days: number;
+  travelers: number;
+  /** Planned activities; 0 while the trip has no plan */
+  stops: number;
+  region?: string | null;
+  lat?: number;
+  lon?: number;
+}
+
+export type PlaceCardType = 'attraction' | 'destination' | 'country' | 'region' | 'city';
+
+/** A place card: an attraction or destination from the catalogue, or a country, division or city. */
+export interface PlaceCard {
+  type: PlaceCardType;
+  /** Attractions and destinations */
+  id?: number;
+  /** Countries, divisions and cities (what the visits API calls them) */
+  code?: string;
+  name: string;
+  name_bn?: string | null;
+  /** Attractions */
+  category?: string;
+  destination?: string;
+  destination_id?: number;
+  /** About how long people spend there, in hours */
+  hours?: number;
+  /** Destinations: how many places Vromon knows there */
+  places?: number;
+  country?: string;
+  /** The division it's in (a division's own code for a division) */
+  region?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+  /** In a trip room: what the owner did with it (step 7) */
+  suggestion?: RoomSuggestion;
+}
+
+export type IdeaPart = 'early' | 'mid' | 'late';
+
+/** "Let's go to …": answered with I'm in (1), Maybe (2) or Can't (3). */
+export interface IdeaCard {
+  destination_id: number;
+  destination: string;
+  region?: string | null;
+  lat?: number;
+  lon?: number;
+  /** "2026-12" */
+  month: string | null;
+  part: IdeaPart | null;
+  days: number | null;
+  note: string | null;
+}
+
+export interface PollCard {
+  question: string;
+  options: { id: number; text: string }[];
+  multiple: boolean;
+}
+
+/** A trip room's trip (friends-chat step 7): its header and the pinned plan bar. */
+export interface RoomTrip {
+  id: number;
+  title: string | null;
+  destination: string;
+  start_date: string;
+  end_date: string;
+  owner_id: string;
+  /** Planned activities */
+  stops: number;
+  /** The first two places of up to three days ("Day 1 Lawachara, Tea Cabin") */
+  preview: { day: number; places: string[] }[];
+}
+
+export interface Conversation {
+  id: number;
+  kind: 'direct' | 'trip';
+  /** A direct chat's other person; null when their account was deleted */
+  other: PublicProfile | null;
+  trip_id: number | null;
+  /** A trip room's trip, and everyone in it (the owner first) */
+  trip?: RoomTrip | null;
+  members?: PublicProfile[];
+  can_send: boolean;
+  read_only_reason: 'not_friends' | 'account_deleted' | null;
+  last_message: ChatMessage | null;
+  unread_count: number;
+  last_read_message_id: number;
+  /** How far the other person has read; only when both have read receipts on */
+  other_read_up_to: number | null;
+  muted_until: string | null;
+  created_at: string;
+}
+
+/** Where the viewer stands with an invite card's trip room */
+export type RoomStatus = 'owner' | 'invited' | 'joined' | 'none';
+
+/** A trip room invite: a trip card plus the viewer's place in its room (server-made, step 7). */
+export interface InviteCard extends TripCard {
+  room: { status: RoomStatus; conversation_id: number | null };
+}
+
+/** A place suggested in a trip room: still open, added to a day, or "not this time". */
+export interface RoomSuggestion {
+  status: 'open' | 'added' | 'declined';
+  day: number | null;
+}
+
+/** "I'm here" (step 8): the stop it snapped to and how early or late, or roughly where. Never the point itself. */
+export interface CheckinCard {
+  day: number;
+  /** The phone's time when it was sent, "HH:MM" */
+  time: string;
+  stop?: string;
+  place_id?: number;
+  /** The plan's time for that stop, and minutes late (negative: early) */
+  planned?: string;
+  late_by?: number;
+  /** No stop within 300 m: the destination within 50 km, or null */
+  near?: string | null;
+}
+
+/** "Running late" (step 8) */
+export interface LateCard {
+  day: number;
+  time: string;
+  minutes: number;
+  /** The next stop of the day, if there's one */
+  stop: string | null;
+  source: 'today' | 'room';
+}
+
+/** A live location (step 8): the latest point while it runs (members only), then only that it ended */
+export interface LiveCard {
+  active: boolean;
+  /** UTC, when it stops */
+  until: string;
+  lat?: number;
+  lon?: number;
+  accuracy_m?: number | null;
+  updated_at?: string;
+  /** The day's stop it's at, if any */
+  near?: string | null;
+}
+
+/** GET /trips/{id}/members */
+export interface TripRoom {
+  trip_id: number;
+  conversation_id: number | null;
+  members: { user: PublicProfile; status: 'owner' | 'invited' | 'joined' }[];
+}
+
+export interface MessagePage {
+  /** Oldest first */
+  messages: ChatMessage[];
+  has_more: boolean;
+}
+
+/** What the live socket sends (WS /api/v1/ws). */
+export type LiveEvent =
+  | { type: 'ready'; user_id: string }
+  | { type: 'ping' }
+  | { type: 'pong' }
+  | { type: 'message.created' | 'message.updated'; conversation_id: number; message: ChatMessage }
+  | { type: 'conversation.read'; conversation_id: number; user_id: string; last_read_message_id: number }
+  | { type: 'conversation.updated'; conversation_id: number }
+  | { type: 'typing'; conversation_id: number; user_id: string };
 
 export interface ComparePlace {
   code: string;

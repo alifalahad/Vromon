@@ -16,7 +16,20 @@ import { usePreferences, type Preferences } from './store';
 const PUSH_DELAY_MS = 800;
 
 const synced = (p: Preferences) =>
-  [p.appearance, p.language, p.haptics, p.units, JSON.stringify(p.mapTheme), p.notifyFriendRequests, p.notifyFriendAccepted].join('|');
+  [
+    p.appearance,
+    p.language,
+    p.haptics,
+    p.units,
+    JSON.stringify(p.mapTheme),
+    p.notifyFriendRequests,
+    p.notifyFriendAccepted,
+    p.readReceipts,
+    p.notifyMessages,
+    p.notifyTripRooms,
+    p.notificationPreviews,
+    p.shareTrips,
+  ].join('|');
 
 function push(userId: string) {
   const state = usePreferences.getState();
@@ -30,6 +43,12 @@ function push(userId: string) {
       map_theme: state.mapTheme,
       notify_friend_requests: state.notifyFriendRequests,
       notify_friend_accepted: state.notifyFriendAccepted,
+      // Every setting goes: one left out would go back to its default on the server
+      read_receipts: state.readReceipts,
+      notify_messages: state.notifyMessages,
+      notify_trip_rooms: state.notifyTripRooms,
+      notification_previews: state.notificationPreviews,
+      share_trips_with_friends: state.shareTrips,
     })
     .then(() => {
       // Only clear the flag if nothing changed while the request was in flight
@@ -64,6 +83,11 @@ export function useSettingsSync(userId: string | null) {
             units: s.units,
             notifyFriendRequests: s.notify_friend_requests ?? true,
             notifyFriendAccepted: s.notify_friend_accepted ?? true,
+            readReceipts: s.read_receipts ?? true,
+            notifyMessages: s.notify_messages ?? true,
+            notifyTripRooms: s.notify_trip_rooms ?? true,
+            notificationPreviews: s.notification_previews ?? true,
+            shareTrips: s.share_trips_with_friends ?? true,
             // Accounts saved before map themes existed keep this device's theme
             ...(s.map_theme ? { mapTheme: normalizeUserMapTheme(s.map_theme) } : {}),
           });

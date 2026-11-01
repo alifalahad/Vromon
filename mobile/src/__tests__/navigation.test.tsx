@@ -29,6 +29,8 @@ jest.mock('../services/api', () => {
     },
     // No friends or requests: the Friends tab shows its empty state (12-friends-empty.jpg)
     friendsApi: { ...actual.friendsApi, list: jest.fn(() => Promise.resolve([])), requests: jest.fn(() => Promise.resolve([])) },
+    // No chats either
+    chatApi: { ...actual.chatApi, list: jest.fn(() => Promise.resolve([])) },
   };
 });
 
@@ -97,16 +99,16 @@ describe('bottom tabs', () => {
     await renderRouter(routes, { initialUrl: '/' });
     await screen.findByTestId('tab-friends');
     await fireEvent.press(screen.getByTestId('tab-friends'));
-    expect(await screen.findByText('No Friends Yet')).toBeTruthy();
+    expect(await screen.findByText('Travel is better together')).toBeTruthy();
   });
 });
 
 describe('Friends empty state', () => {
-  it('shows the Invite and add-via-code links', async () => {
+  it('offers to invite a friend or add one by code or QR', async () => {
     await renderRouter(routes, { initialUrl: '/friends' });
     await screen.findByTestId('friends-invite');
-    expect(screen.getByTestId('friends-invite')).toHaveTextContent('Invite');
-    expect(screen.getByTestId('friends-add-via-code')).toHaveTextContent('add via code');
+    expect(screen.getByTestId('friends-invite')).toHaveTextContent('Invite a friend');
+    expect(screen.getByTestId('friends-add-via-code')).toHaveTextContent('Add by code or QR');
   });
 });
 

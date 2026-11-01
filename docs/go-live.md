@@ -13,6 +13,22 @@ Today the app runs only with this Mac: the backend runs here, and the developmen
 | Map tiles (regions and cities, ~30 MB of `.pmtiles`) on a public URL | Me, once a bucket exists | e.g. a public Supabase Storage bucket `tiles`; the app reads `EXPO_PUBLIC_TILES_URL` |
 | Smoke test: `GET https://<host>/health` and sign in from a phone on mobile data | Me | |
 
+### Live chat on the host (friends and chat, step 10)
+
+Chat messages reach open apps over a WebSocket (`wss://<host>/api/v1/ws`); push notifications reach closed ones. Render supports WebSockets on web services with no maximum connection time ([Render docs](https://render.com/docs/websocket)). What the server needs:
+
+| Rule | Why | Where it's set |
+|---|---|---|
+| **Exactly one instance, with one uvicorn worker.** No autoscaling, no `--workers`, no second region | The hub that hands messages to open sockets is in the server's memory (`app/services/live.py`). Render's load balancer gives each socket to a random instance, so with two, a message saved on one wouldn't reach apps connected to the other. Scaling out later needs Postgres `LISTEN/NOTIFY` behind `Hub.publish` (technology decision 30) | Render: instance count 1 (the default) |
+| **A plan that doesn't sleep** (Starter, not Free) | A sleeping server drops every socket and answers the next request after about a minute | Render plan |
+| **Keepalive** | The server pings every 25 s (and uvicorn every 20 s at the protocol level); the app treats 60 s of silence as a dead connection and reconnects with backoff (1, 2, 4 … 30 s) | Built in |
+| **Deploys close the sockets** | Render replaces the instance and closes its connections (30 s shutdown window). Apps reconnect to the new one and fetch what they missed, so nothing is lost or doubled, even in the moment both instances run | Nothing to do |
+| **Frame size cap** `--ws-max-size 16384` | The socket's messages are tiny; uvicorn's default would read frames up to 16 MB | `backend/Dockerfile` |
+| **Request size cap** (1 MB of JSON; photos up to their own limit) | Nothing else limits request bodies | `app/core/body_limit.py` |
+| **Push notifications** need Firebase and EAS set up first | Without them the app still works: messages arrive live while it's open | See "Optional, any time" |
+
+The first start on an empty Postgres database runs the migrations and seeds the catalogue and the map (about 10 s). Step 10 checked this on a fresh local PostgreSQL 16, and runs the whole backend test suite against PostgreSQL too: `TEST_API_POSTGRES_URL=postgresql+psycopg://localhost/<empty db> pytest`.
+
 ## 2. A standalone app build
 
 | Step | Who | Notes |
@@ -32,7 +48,7 @@ Today the app runs only with this Mac: the backend runs here, and the developmen
 ## Optional, any time
 
 - **Crash reports:** create a free Sentry project. Set `EXPO_PUBLIC_SENTRY_DSN` (app) and `SENTRY_DSN` (backend); for readable stack traces also `SENTRY_ORG`, `SENTRY_PROJECT` and `SENTRY_AUTH_TOKEN` in the build environment.
-- **Push notifications:** EAS project id plus Firebase `google-services.json` (Phase 5 notes).
+- **Push notifications** (friend requests, and from friends and chat step 9 messages, trip-room invites and places added to a plan): create a Firebase project and add the Android app (`com.vromon.app`); download `google-services.json` and set `GOOGLE_SERVICES_FILE` to it when building; set `EAS_PROJECT_ID` (`npx eas-cli@latest init`); upload the FCM V1 service-account key to EAS (`eas credentials` → Android → push notifications). The backend already sends through Expo (`PUSH_ENABLED` is on by default); nothing changes there.
 - **Over-the-air updates:** `expo-updates` with an EAS Update channel (needs the Expo account).
 - **Legal pages:** host `docs/legal/privacy-policy.md` and `docs/legal/terms.md` (fill in the `[TO FILL]` items first).
 - **Road distances and times (trip planner step 5):** development uses OpenRouteService with a free key (`ORS_API_KEY` in `backend/.env`). Before launch, choose the best option: a self-hosted OSRM server for Bangladesh (free software; a small server, about $5–10 a month; no request limits) or a paid OpenRouteService plan. Only `backend/app/services/routing/` changes; road data already fetched is kept in the `route_cache` table. Without a key the app uses straight-line estimates and says so.

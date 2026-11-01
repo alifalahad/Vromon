@@ -13,13 +13,27 @@ import type { MapView } from '../preferences/store';
 import type { PlaceRef } from './visits';
 
 export type PressedPlace = PlaceRef & { name: string };
-export type WorldMapHandle = { recentre: () => void };
+export type WorldMapHandle = { home: () => void; world: () => void; fit: (bounds: [number, number, number, number], padding?: { top: number; bottom: number; left: number; right: number }) => void; focus: (center: [number, number]) => void; snapshot: () => Promise<string | null> };
+export type MapScope = 'home' | 'world';
 
-type Props = { view: MapView; visits: readonly Visit[]; theme: ResolvedMapTheme; onPressPlace: (place: PressedPlace) => void };
+type Props = {
+  view: MapView;
+  visits: readonly Visit[];
+  theme: ResolvedMapTheme;
+  home: string;
+  onPressPlace: (place: PressedPlace) => void;
+  onScopeChange?: (scope: MapScope) => void;
+  onUserMove?: () => void;
+  children?: React.ReactNode;
+  bottomInset?: number;
+  selected?: PlaceRef | null;
+  namedPlaces?: readonly string[];
+  onLongPressPlace?: (place: PressedPlace, point: [number, number]) => void;
+};
 
 export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ visits }, ref) {
   const { t } = useTranslation();
-  useImperativeHandle(ref, () => ({ recentre: () => {} }));
+  useImperativeHandle(ref, () => ({ home: () => {}, world: () => {}, fit: () => {}, focus: () => {}, snapshot: async () => null }));
   const countries = visits.filter((v) => v.place_type === 'country').length;
   return (
     <View style={styles.wrap}>

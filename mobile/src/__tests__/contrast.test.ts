@@ -4,8 +4,9 @@
  */
 
 import { contrast, mix } from '../features/mapThemes/color';
+import { AVATAR_COLORS } from '../ui/Avatar';
 import { ON_SUNSET, SUNSET_CARD } from '../ui/theme/cards';
-import { darkColors, lightColors, type ThemeColors } from '../ui/theme/tokens';
+import { darkColors, lightColors, SENDER_NAMES, type ThemeColors } from '../ui/theme/tokens';
 
 const AA = 4.5;
 const TEXT: (keyof ThemeColors)[] = ['textPrimary', 'textSecondary', 'textTertiary', 'link', 'danger', 'success', 'warning'];
@@ -38,8 +39,55 @@ describe.each([
     }
   });
 
+  it('text on the glass over the map (capsule, round buttons, dock), whatever the map shows under it', () => {
+    const m = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(colors.glass)!;
+    const top = `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+    for (const under of ['#000000', '#FFFFFF']) {
+      const seen = mix(under, top, Number(m[4]));
+      for (const text of ['textPrimary', 'textSecondary', 'link'] as const) {
+        expect(contrast(colors[text], seen)).toBeGreaterThanOrEqual(AA);
+      }
+    }
+  });
+
+  it('white on the strong accent (filled buttons)', () => {
+    expect(contrast(colors.onAccent, colors.accentStrong)).toBeGreaterThanOrEqual(AA);
+  });
+
   it('white on the sunset cards (next trip, Today\'s "Now")', () => {
     expect(contrast(ON_SUNSET, SUNSET_CARD)).toBeGreaterThanOrEqual(AA);
+  });
+
+  it('chat bubbles: white on yours, primary and secondary text on theirs', () => {
+    expect(contrast(colors.onAccent, colors.bubbleMine)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.textPrimary, colors.bubbleTheirs)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.textSecondary, colors.bubbleTheirs)).toBeGreaterThanOrEqual(AA);
+  });
+
+  it('cards in chat: text on the ones you sent, their buttons, and the small capitals on everyone\'s', () => {
+    expect(contrast(colors.textPrimary, colors.cardMine)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.cardMineText2, colors.cardMine)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.cardEyebrowMine, colors.cardMine)).toBeGreaterThanOrEqual(AA);
+    // The button fill is translucent in dark mode: what's seen is it over the card
+    const m = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(colors.cardButtonMine);
+    const button = m
+      ? mix(colors.cardMine, `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`.toUpperCase(), Number(m[4]))
+      : colors.cardButtonMine;
+    expect(contrast(colors.textPrimary, button)).toBeGreaterThanOrEqual(AA);
+    // Theirs: a trip's or poll's capitals in onAccentSoft, an idea's in warning; buttons on surfaceRaised
+    expect(contrast(colors.onAccentSoft, colors.bubbleTheirs)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.warning, colors.bubbleTheirs)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.textPrimary, colors.surfaceRaised)).toBeGreaterThanOrEqual(AA);
+  });
+
+  it("trip rooms: every sender's name on other people's bubbles", () => {
+    const names = SENDER_NAMES[colors === darkColors ? 'dark' : 'light'];
+    expect(names.length).toBe(6);
+    for (const c of names) expect(contrast(c, colors.bubbleTheirs)).toBeGreaterThanOrEqual(AA);
+  });
+
+  it('white initials on every avatar colour', () => {
+    for (const c of AVATAR_COLORS) expect(contrast(colors.onAccent, c)).toBeGreaterThanOrEqual(AA);
   });
 
   it('text on the accent colour (buttons, FAB, badges)', () => {

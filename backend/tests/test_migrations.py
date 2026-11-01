@@ -118,3 +118,42 @@ def test_0002_deletes_pre_account_trips_only_in_production(engine, monkeypatch):
         with engine.connect() as conn:
             assert conn.execute(text("SELECT COUNT(*) FROM trips")).scalar() == expected, env
             assert conn.execute(text("SELECT COUNT(*) FROM trip_preferences")).scalar() == expected, env
+
+
+def test_0013_brings_old_bangladesh_divisions_up_to_date(engine):
+    """A database seeded from Natural Earth (7 divisions) gets Mymensingh, the fixed names and city links."""
+    def regions(conn):
+        return dict(conn.execute(text("SELECT code, name || '|' || COALESCE(name_bn, '') FROM regions WHERE country_iso2 = 'BD'")).all())
+
+    def city_region(conn, geonameid):
+        return conn.execute(text("SELECT region_code FROM cities WHERE geonameid = :g"), {"g": geonameid}).scalar()
+
+    with engine.begin() as conn:
+        command.upgrade(alembic_config(conn), "0012")
+        conn.execute(text("INSERT INTO countries (iso2, name, counts_toward_world) VALUES ('BD', 'Bangladesh', true)"))
+        for code, name, name_bn in (
+            ("BD-A", "Barisal", "বরিশাল বিভাগ"), ("BD-B", "Chattogram", "চট্টগ্রাম বিভাগ"), ("BD-C", "Dhaka", "ঢাকা বিভাগ"),
+            ("BD-D", "Khulna", "খুলনা জেলা"), ("BD-E", "Rajshahi", "রাজশাহী জেলা"), ("BD-F", "Rangpur", "রংপুর জেলা"),
+            ("BD-G", "Sylhet", "সিলেট বিভাগ"),
+        ):
+            conn.execute(text("INSERT INTO regions (code, country_iso2, name, name_bn, type) VALUES (:c, 'BD', :n, :b, 'Division')"),
+                         {"c": code, "n": name, "b": name_bn})
+        for geonameid, region in ((1185162, None), (1205481, "BD-D"), (1185241, "BD-C")):  # Mymensingh, Uttar Char Fasson, Dhaka
+            conn.execute(text("INSERT INTO cities (geonameid, country_iso2, region_code, name, lat, lon, population) "
+                              "VALUES (:g, 'BD', :r, 'x', 0, 0, 0)"), {"g": geonameid, "r": region})
+
+    upgrade_to_head(engine)
+    with engine.connect() as conn:
+        after = regions(conn)
+        assert len(after) == 8
+        assert after["BD-H"] == "Mymensingh|ময়মনসিংহ বিভাগ"
+        assert after["BD-A"] == "Barishal|বরিশাল বিভাগ"
+        assert all(v.endswith("বিভাগ") for v in after.values())
+        assert (city_region(conn, 1185162), city_region(conn, 1205481), city_region(conn, 1185241)) == ("BD-H", "BD-A", "BD-C")
+
+    with engine.begin() as conn:
+        command.downgrade(alembic_config(conn), "0012")
+    with engine.connect() as conn:
+        before = regions(conn)
+        assert len(before) == 7 and before["BD-D"] == "Khulna|খুলনা জেলা" and before["BD-A"].startswith("Barisal|")
+        assert (city_region(conn, 1185162), city_region(conn, 1205481)) == (None, "BD-D")

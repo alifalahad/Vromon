@@ -17,11 +17,20 @@ name: 05 Plan a trip with must-sees, fix one that can't fit, see the plan
 # 1 Where & when: only the destination is needed (dates default to next week)
 - extendedWaitUntil:
     visible:
-      id: "destination-\\d+"
+      id: destination-search
     timeout: 20000
+# "Where to?" is a search: type, then pick Cox's Bazar (destination 1)
 - tapOn:
-    id: "destination-\\d+"
-    index: 0
+    id: destination-search
+- extendedWaitUntil:
+    visible:
+      id: where-input
+    timeout: 5000
+- inputText: "Cox"
+- tapOn:
+    id: where-hit-1
+- assertVisible:
+    id: destination-chosen
 - scrollUntilVisible:
     element:
       id: mode-bus

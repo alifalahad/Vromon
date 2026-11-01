@@ -26,6 +26,9 @@ from app.models.models import Block, Device, FriendRequest, Photo, Trip, User, U
 from app.services.photos import StorageError, delete_photos, photos_out
 from app.services.photos.storage import PhotoStore, optional_photo_store
 from app.schemas.schemas import TripStatsOut
+from app.services import live
+from app.services.chat import delete_chat_data, export_chats, partners
+from app.services.rooms import delete_user_rooms
 from app.services.friends import delete_social_data, friend_ids
 from app.services.stats import trip_stats
 from app.services.stats.trips import viewer_today
@@ -183,6 +186,7 @@ def export_my_data(
             for d in db.scalars(select(Device).where(Device.user_id == user.id))
         ],
         "photos": photo_rows,
+        "chats": export_chats(db, user.id),
     }
 
 
@@ -208,8 +212,8 @@ def delete_me(
 ):
     """
     Permanently delete the account: photos (files first), trips (with itineraries
-    and feedback), visits, friendships, friend requests, blocks, push tokens,
-    settings, the profile, and the Supabase sign-in identity.
+    and feedback), visits, chat messages and memberships, friendships, friend
+    requests, blocks, push tokens, settings, the profile, and the Supabase sign-in identity.
     """
     removes_identity = user.auth_subject != DEV_BYPASS_SUBJECT
     if removes_identity and not settings.supabase_service_role_key and settings.app_env == "production":
@@ -223,14 +227,25 @@ def delete_me(
         db.rollback()
         logger.error("Account %s: deleting photos failed: %s", subject, exc)
         raise HTTPException(status_code=502, detail="Deleting your photos failed. Nothing was deleted; please try again.")
+    chat_partners = partners(db, user.id)
+    # Trip rooms first: their own trips' rooms, and their places in friends' rooms (step 7)
+    delete_user_rooms(db, user.id)
     for trip in db.scalars(select(Trip).where(Trip.user_id == user.id)).all():
         db.delete(trip)  # ORM cascades to preferences, constraints, itinerary, feedback
+    # Now, before the account: nothing tells the ORM that a trip goes before its user, and
+    # PostgreSQL checks the plan's foreign keys (SQLite doesn't; found in step 10)
+    db.flush()
     db.execute(delete(Visit).where(Visit.user_id == user.id))
+    delete_chat_data(db, user.id)
     delete_social_data(db, user.id)
     db.execute(delete(Device).where(Device.user_id == user.id))
     db.delete(user)  # cascades to settings
     db.commit()
     logger.info("Deleted account data for subject %s", subject)
+    # Their chats lost this person's messages: the other people's apps fetch them again
+    for conversation_id, other_id in chat_partners:
+        live.conversation_updated([other_id], conversation_id)
+    live.hub.close_user(user.id, live.UNAUTHORIZED)
 
     if removes_identity and settings.supabase_service_role_key:
         try:

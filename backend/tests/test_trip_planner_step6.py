@@ -279,3 +279,28 @@ class TestFetching:
         monkeypatch.setattr(openmeteo, "forecast", sky.forecast)
         out = conditions(client, trip["id"])
         assert out["days"][0]["in_forecast"] is False and out["forecast_until"] is None
+
+
+def test_a_locked_cache_save_still_returns_fresh_conditions(monkeypatch):
+    """SQLite: while a plan is being built, the request holds the write lock and the
+    cache's own session can't save. The fresh forecast must still be used (map home step 11)."""
+    import sqlalchemy.orm
+    from sqlalchemy.exc import OperationalError
+
+    from app.services.conditions import service
+    from tests.conftest import _ApiTestSession
+
+    class LockedSession:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            raise OperationalError("INSERT", {}, Exception("database is locked"))
+
+        def __exit__(self, *exc):
+            return False
+
+    with _ApiTestSession() as db:
+        monkeypatch.setattr(sqlalchemy.orm, "Session", LockedSession)
+        payload, fetched_at, stale = service._cached(db, "weather", 1.234, 5.678, lambda lat, lon: {"ok": True}, refresh=True)
+    assert payload == {"ok": True} and fetched_at is not None and stale is False

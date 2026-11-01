@@ -372,10 +372,16 @@ class TestPush:
             assert db.scalar(select(Device.user_id).where(Device.expo_push_token == token)) == b.id
         # Someone else can't unregister it
         act_as(a)
-        client.delete(f"/api/v1/me/devices/{token}")
+        assert client.post("/api/v1/me/devices/remove", json={"expo_push_token": token}).status_code == 204
         with _ApiTestSession() as db:
             assert db.scalar(select(Device).where(Device.expo_push_token == token)) is not None
         assert client.post("/api/v1/me/devices", json={"expo_push_token": "not-a-token", "platform": "android"}).status_code == 422
+        # Its owner can, with the token in the body; never in a URL, where it would reach the logs (step 10)
+        act_as(b)
+        assert client.delete(f"/api/v1/me/devices/{token}").status_code in (404, 405)
+        assert client.post("/api/v1/me/devices/remove", json={"expo_push_token": token}).status_code == 204
+        with _ApiTestSession() as db:
+            assert db.scalar(select(Device).where(Device.expo_push_token == token)) is None
 
     def test_request_and_acceptance_notify_the_other_person(self, client, act_as, pushes):
         a, b = _user("pusha"), _user("pushb")
@@ -446,3 +452,49 @@ def test_notification_settings_round_trip(client, act_as):
     act_as(_user("notif"))
     saved = client.put("/api/v1/me/settings", json={"notify_friend_requests": False, "notify_friend_accepted": True}).json()
     assert saved["notify_friend_requests"] is False and saved["notify_friend_accepted"] is True
+
+
+# ---------------------------------------------------------------------------
+# Friends on the travel map (map home step 9)
+# ---------------------------------------------------------------------------
+
+class TestFootprints:
+    def _mark(self, client, act_as, user: User, visits: list[dict]) -> None:
+        act_as(user)
+        assert client.put("/api/v1/me/visits", json={"visits": visits}).status_code == 200
+
+    def test_friends_places_with_who_newest_first(self, client, act_as):
+        me, rafi, nadia, stranger = _user("me"), _user("rafi"), _user("nadia"), _user("stranger")
+        _befriend(client, act_as, me, rafi)
+        _befriend(client, act_as, me, nadia)
+        self._mark(client, act_as, rafi, [{"place_type": "country", "place_code": "NP", "status": "visited"},
+                                         {"place_type": "country", "place_code": "TH", "status": "lived"},
+                                         {"place_type": "country", "place_code": "JP", "status": "want"}])  # a wish: not a footprint
+        self._mark(client, act_as, nadia, [{"place_type": "country", "place_code": "TH", "status": "visited"},
+                                          {"place_type": "region", "place_code": "BD-G", "status": "visited"}])
+        self._mark(client, act_as, stranger, [{"place_type": "country", "place_code": "FR", "status": "visited"}])
+
+        act_as(me)
+        rows = {r["place_code"]: r for r in client.get("/api/v1/me/friends/footprints").json()}
+        assert set(rows) == {"NP", "TH"}  # countries only; not the stranger's France, not Rafi's wish
+        assert rows["TH"]["count"] == 2
+        assert [f["display_name"] for f in rows["TH"]["friends"]] == ["Nadia", "Rafi"]  # newest first
+        regions = client.get("/api/v1/me/friends/footprints", params={"place_type": "region"}).json()
+        assert [(r["place_code"], r["count"]) for r in regions] == [("BD-G", 1)]
+
+    def test_pending_blocked_and_removed_friends_show_nothing(self, client, act_as):
+        me, pending, blocked, removed = _user("me2"), _user("pending"), _user("blocked"), _user("removed")
+        _befriend(client, act_as, me, blocked)
+        _befriend(client, act_as, me, removed)
+        act_as(pending)
+        client.post("/api/v1/friend-requests", json={"user_id": str(me.id)})  # never accepted
+        for u in (pending, blocked, removed):
+            self._mark(client, act_as, u, [{"place_type": "country", "place_code": "IN", "status": "visited"}])
+        act_as(me)
+        assert client.post("/api/v1/blocks", json={"user_id": str(blocked.id)}).status_code == 204
+        assert client.delete(f"/api/v1/friends/{removed.id}").status_code == 204
+        assert client.get("/api/v1/me/friends/footprints").json() == []
+
+    def test_rejects_unknown_place_types(self, client, act_as):
+        act_as(_user("me3"))
+        assert client.get("/api/v1/me/friends/footprints", params={"place_type": "planet"}).status_code == 422

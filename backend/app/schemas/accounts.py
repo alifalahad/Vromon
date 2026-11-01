@@ -133,6 +133,14 @@ class SettingsIn(BaseModel):
     map_theme: Optional[MapThemeSelection] = None
     notify_friend_requests: bool = True
     notify_friend_accepted: bool = True
+    # Chat: mutual, so off also hides your friends' read ticks from you
+    read_receipts: bool = True
+    # Chat notifications (sent once push exists); previews off: only who wrote
+    notify_messages: bool = True
+    notify_trip_rooms: bool = True
+    notification_previews: bool = True
+    # Friends see your trips (On the road, the chat header, your profile); off hides them everywhere
+    share_trips_with_friends: bool = True
 
 
 class SettingsOut(SettingsIn):

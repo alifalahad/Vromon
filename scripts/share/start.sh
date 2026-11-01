@@ -50,7 +50,7 @@ echo "Starting the backend (production mode) on port $API_PORT…"
 (
   cd "$ROOT/backend"
   APP_ENV=production DEV_AUTH_BYPASS=false exec venv/bin/uvicorn app.main:app \
-    --host 127.0.0.1 --port $API_PORT --proxy-headers --forwarded-allow-ips 127.0.0.1
+    --host 127.0.0.1 --port $API_PORT --proxy-headers --forwarded-allow-ips 127.0.0.1 --ws-max-size 16384
 ) >"$LOGS/backend.log" 2>&1 &
 pids+=($!)
 for _ in $(seq 1 60); do

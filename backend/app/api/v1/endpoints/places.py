@@ -31,7 +31,7 @@ def list_places(
         query = query.filter(Place.destination_name == destination)
     if category:
         query = query.filter(Place.category == category)
-    places = query.all()
+    places = query.order_by(Place.id).all()  # PostgreSQL gives no order without one
     return [_place_out(p) for p in places]
 
 

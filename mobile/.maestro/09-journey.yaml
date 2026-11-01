@@ -18,17 +18,46 @@ name: 09 The whole journey - a trip from today, rearranged, its conditions, Toda
 # 1 Where & when: Cox's Bazar, today and tomorrow
 - extendedWaitUntil:
     visible:
-      id: "destination-\\d+"
+      id: destination-search
     timeout: 20000
+# "Where to?" is a search: type, then pick Cox's Bazar (destination 1)
 - tapOn:
-    id: "destination-\\d+"
-    index: 0
+    id: destination-search
+- extendedWaitUntil:
+    visible:
+      id: where-input
+    timeout: 5000
+- inputText: "Cox"
+- tapOn:
+    id: where-hit-1
+- assertVisible:
+    id: destination-chosen
+# The calendar opens on the month of the suggested dates (next weekend), which can be next
+# month: go back to this month for today, and on to the next for tomorrow on a month's last day
+- scrollUntilVisible:
+    element:
+      id: cal-prev
+    direction: DOWN
+- runFlow:
+    when:
+      notVisible:
+        id: "day-${output.today}"
+    commands:
+      - tapOn:
+          id: cal-prev
 - scrollUntilVisible:
     element:
       id: "day-${output.today}"
     direction: DOWN
 - tapOn:
     id: "day-${output.today}"
+- runFlow:
+    when:
+      notVisible:
+        id: "day-${output.tomorrow}"
+    commands:
+      - tapOn:
+          id: cal-next
 - tapOn:
     id: "day-${output.tomorrow}"
 - tapOn:

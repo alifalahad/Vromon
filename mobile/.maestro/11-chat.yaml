@@ -1,0 +1,51 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: 11 Chat with a friend - send, a live reply, read ticks
+---
+# Every flow starts fresh on the Map tab, so one failure can't leave the next on another screen
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
+- tapOn:
+    id: tab-friends
+- tapOn:
+    id: chat-compose-fab
+- tapOn:
+    id: new-chat-${FRIEND_USERNAME}
+- extendedWaitUntil:
+    visible:
+      id: chat-input
+    timeout: 15000
+- runScript:
+    file: scripts/chat-text.js
+- tapOn:
+    id: chat-input
+- inputText: ${output.text}
+- tapOn:
+    id: chat-send
+- extendedWaitUntil:
+    visible: ${output.text}
+    timeout: 15000
+# The friend reads it and answers over the API; the answer arrives live, without leaving the chat
+- runScript:
+    file: scripts/reply-message.js
+    env:
+      API_URL: ${API_URL}
+      FRIEND_TOKEN: ${FRIEND_TOKEN}
+      SENT: ${output.text}
+- extendedWaitUntil:
+    visible: ${output.reply}
+    timeout: 15000
+# The friend read it before answering, so your message says Read (its accessibility label)
+- assertVisible:
+    text: "You, .*: ${output.text}\\. Read"
+# Android Back: the first press only closes the keyboard
+- hideKeyboard
+- back
+- extendedWaitUntil:
+    visible:
+      id: chat-${FRIEND_USERNAME}
+    timeout: 15000

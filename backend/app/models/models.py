@@ -62,6 +62,9 @@ class Destination(Base):
     sources_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
     checked: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     data_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # hash of the loaded data file
+    # Where it is on the travel map (map home step 4): filled at startup from the nearest city
+    country_iso2: Mapped[Optional[str]] = mapped_column(String(2), nullable=True, index=True)
+    region_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
 
     @property
     def sources(self) -> list:
@@ -254,6 +257,14 @@ class UserSettings(Base):
     # Push notifications (Phase 5)
     notify_friend_requests: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa_true(), nullable=False)
     notify_friend_accepted: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa_true(), nullable=False)
+    # Chat: read ticks are mutual, so turning yours off also hides your friends' from you
+    read_receipts: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa_true(), nullable=False)
+    # Chat notifications (step 5; sent once push exists, step 9). Previews off: a notification only says who wrote
+    notify_messages: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa_true(), nullable=False)
+    notify_trip_rooms: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa_true(), nullable=False)
+    notification_previews: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa_true(), nullable=False)
+    # Friends see your current and coming trips (On the road, the chat header, your profile); off hides them all (C3, C7)
+    share_trips_with_friends: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa_true(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     user: Mapped["User"] = relationship("User", back_populates="settings")
@@ -309,6 +320,157 @@ class Device(Base):
     expo_push_token: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     platform: Mapped[str] = mapped_column(String(10), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# Chat (docs/friends-chat-plan.md). SQLite doesn't enforce the ON DELETE rules,
+# so app.services.chat deletes chat data explicitly.
+# ---------------------------------------------------------------------------
+
+class Conversation(Base):
+    """A chat: one per pair of friends (`direct`), or one per trip (`trip`, step 7)."""
+    __tablename__ = "conversations"
+    __table_args__ = (
+        CheckConstraint("kind IN ('direct', 'trip')", name="ck_conversations_kind"),
+        CheckConstraint("(kind = 'direct') = (direct_key IS NOT NULL)", name="ck_conversations_direct_key"),
+        CheckConstraint("(kind = 'trip') = (trip_id IS NOT NULL)", name="ck_conversations_trip"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)
+    # The two user ids as friendships store them ("smaller hex:larger hex"), so a pair has one chat
+    direct_key: Mapped[Optional[str]] = mapped_column(String(65), unique=True, nullable=True)
+    trip_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), unique=True, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ConversationMember(Base):
+    """A member of a chat, with their own state in it. Message ids only grow, so positions are ids."""
+    __tablename__ = "conversation_members"
+
+    conversation_id: Mapped[int] = mapped_column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    role: Mapped[str] = mapped_column(String(10), default="member", nullable=False)  # owner / member
+    last_read_message_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # "Delete chat" for this member only: messages up to this id are hidden from them
+    cleared_up_to_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    muted_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Message(Base):
+    """
+    One message; `id` orders a chat. A system line ("Nusrat joined") has no sender.
+    Unsending clears `body` and `payload` and sets `deleted_at`.
+    """
+    __tablename__ = "messages"
+    __table_args__ = (
+        Index("ix_messages_conversation_id_id", "conversation_id", "id"),
+        # The app's id for a message it sends: a retry returns the first message instead of a copy
+        UniqueConstraint("sender_id", "client_id", name="uq_messages_sender_client"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
+    sender_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    client_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    kind: Mapped[str] = mapped_column(String(16), default="text", nullable=False)  # text, system; cards from step 4
+    body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    reply_to_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class MessageReaction(Base):
+    """One reaction per person per message (step 5)."""
+    __tablename__ = "message_reactions"
+
+    message_id: Mapped[int] = mapped_column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    reaction: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class LiveLocation(Base):
+    """
+    Someone sharing their live location with a trip room (step 8): only the latest point,
+    never a history. Deleted on Stop, when it runs out, or when they leave the room.
+    """
+    __tablename__ = "live_locations"
+
+    conversation_id: Mapped[int] = mapped_column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    # The card in the room that shows it
+    message_id: Mapped[int] = mapped_column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, unique=True)
+    lat: Mapped[float] = mapped_column(Float, nullable=False)
+    lon: Mapped[float] = mapped_column(Float, nullable=False)
+    accuracy_m: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+
+
+class TripMember(Base):
+    """
+    Someone the owner invited to plan a trip together (step 7): `invited` until they
+    join the trip's room, then `joined`. The owner isn't a row here (Trip.user_id is).
+    Joined members read the trip and its plan; only the owner changes it (decision C1).
+    """
+    __tablename__ = "trip_members"
+    __table_args__ = (CheckConstraint("status IN ('invited', 'joined')", name="ck_trip_members_status"),)
+
+    trip_id: Mapped[int] = mapped_column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    status: Mapped[str] = mapped_column(String(10), default="invited", nullable=False)
+    invited_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    joined_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class TripSuggestion(Base):
+    """
+    What the owner did with a place suggested in a trip room (step 7). No row: still open.
+    `added` keeps the day it went to and the stop it became.
+    """
+    __tablename__ = "trip_suggestions"
+    __table_args__ = (CheckConstraint("status IN ('added', 'declined')", name="ck_trip_suggestions_status"),)
+
+    message_id: Mapped[int] = mapped_column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True)
+    trip_id: Mapped[int] = mapped_column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(10), nullable=False)
+    day_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    item_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("itinerary_items.id", ondelete="SET NULL"), nullable=True)
+    decided_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MessageReport(Base):
+    """
+    Someone reported a message (step 5). The snapshot keeps what was reported even if
+    it's unsent later; the message link goes when the message does.
+    """
+    __tablename__ = "message_reports"
+    __table_args__ = (UniqueConstraint("message_id", "reporter_id", name="uq_message_reports_once"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    message_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True)
+    conversation_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True)
+    reporter_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    reported_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    reason: Mapped[str] = mapped_column(String(20), nullable=False)  # spam / harassment / inappropriate / scam / other
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(10), default="open", server_default="open", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PollVote(Base):
+    """A vote in a poll, or an answer to a trip idea (step 4)."""
+    __tablename__ = "poll_votes"
+
+    message_id: Mapped[int] = mapped_column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    option_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 # ---------------------------------------------------------------------------

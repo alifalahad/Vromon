@@ -9,6 +9,7 @@
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter, useScrollToTop } from 'expo-router';
 import React, { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +24,7 @@ import { useTrips, useTripStats } from '../../src/features/trips/queries';
 import { StatsCard } from '../../src/features/trips/StatsCard';
 import { TripCard } from '../../src/features/trips/TripCard';
 import { onMap, useMarkVisited } from '../../src/features/trips/useMarkVisited';
+import { roomsApi } from '../../src/services/api';
 import type { Photo, Trip } from '../../src/types';
 import { Button } from '../../src/ui/Button';
 import { Fab } from '../../src/ui/Fab';
@@ -42,14 +44,13 @@ export default function TripsScreen() {
   const today = localToday();
   const me = useMe();
   const trips = useTrips();
+  // Friends' trips you joined to plan together (friends-chat step 7), not yet over
+  const joined = useQuery({ queryKey: ['joinedTrips'], queryFn: () => roomsApi.joined(), enabled: !!me.data });
   const stats = useTripStats(undefined, today);
   const visits = useVisits(me.data?.id);
   const photos = usePhotos(me.data?.id, {});
   const marking = useMarkVisited(me.data?.id);
-  const visited = useMemo(
-    () => new Set((visits.data ?? []).filter((v) => v.status !== 'want').map((v) => `${v.place_type}:${v.place_code}`)),
-    [visits.data],
-  );
+  const visited = useMemo(() => new Set((visits.data ?? []).filter((v) => v.status !== 'want').map((v) => `${v.place_type}:${v.place_code}`)), [visits.data]);
   const photosByTrip = useMemo(() => {
     const by = new Map<number, Photo[]>();
     for (const p of photos.data ?? []) if (p.trip_id != null) by.set(p.trip_id, [...(by.get(p.trip_id) ?? []), p]);
@@ -59,8 +60,15 @@ export default function TripsScreen() {
   // The next trip: the one you're on, else the soonest upcoming; the rest are listed below it
   const all = groupTrips(trips.data ?? [], today);
   const next = all.find((s) => s.phase === 'ongoing')?.data[0] ?? all.find((s) => s.phase === 'upcoming')?.data[0];
-  const sections = all.map((s) => ({ ...s, data: s.data.filter((trip) => trip !== next) })).filter((s) => s.data.length);
-  const hasTrips = (trips.data?.length ?? 0) > 0;
+  const withFriends = (joined.data ?? []).filter((trip) => trip.end_date >= today);
+  const mineSections = all.map((s) => ({ ...s, data: s.data.filter((trip) => trip !== next) })).filter((s) => s.data.length);
+  // "With friends" goes before past trips
+  const sections: { phase: string; data: Trip[] }[] = [
+    ...mineSections.filter((s) => s.phase !== 'past'),
+    ...(withFriends.length ? [{ phase: 'withFriends', data: withFriends }] : []),
+    ...mineSections.filter((s) => s.phase === 'past'),
+  ];
+  const hasTrips = (trips.data?.length ?? 0) > 0 || withFriends.length > 0;
   const open = (trip: Trip) => router.push({ pathname: '/trip/[id]', params: { id: trip.id } });
   // On the trip (or the evening before it starts), the next trip opens on Today mode
   const openNext = (trip: Trip) =>
@@ -70,6 +78,7 @@ export default function TripsScreen() {
 
   const refresh = () => {
     void trips.refetch();
+    void joined.refetch();
     void stats.refetch();
     void photos.refetch();
   };
@@ -98,14 +107,15 @@ export default function TripsScreen() {
         )}
         renderItem={({ item }) => {
           const past = item.end_date < today;
+          const theirs = !!me.data && !!item.user_id && item.user_id !== me.data.id;
           return (
             <TripCard
               trip={item}
               today={today}
               onPress={() => open(item)}
               photos={photosByTrip.get(item.id) ?? NO_PHOTOS}
-              onMap={past && visits.data ? onMap(item, visited) : undefined}
-              onMark={past && visits.data && (item.stops?.length ?? 0) > 0 ? () => marking.mark(item) : undefined}
+              onMap={past && !theirs && visits.data ? onMap(item, visited) : undefined}
+              onMark={past && !theirs && visits.data && (item.stops?.length ?? 0) > 0 ? () => marking.mark(item) : undefined}
               marking={marking.busyId === item.id}
             />
           );
@@ -126,7 +136,9 @@ export default function TripsScreen() {
               <View style={styles.firstIcon}>
                 <MaterialCommunityIcons name="map-marker-path" size={32} color={colors.link} />
               </View>
-              <Text style={styles.firstTitle} accessibilityRole="header">{t('trips.firstTitle')}</Text>
+              <Text style={styles.firstTitle} accessibilityRole="header">
+                {t('trips.firstTitle')}
+              </Text>
               <Text style={styles.muted}>{t('trips.firstBody')}</Text>
               <Button label={t('trips.planTrip')} icon="plus" onPress={() => router.push('/trip/new')} testID="plan-first-trip" />
             </View>
@@ -142,12 +154,27 @@ const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.bg },
   list: { paddingBottom: 120 },
   header: { gap: t.spacing.lg + 6, paddingBottom: t.spacing.xs },
-  sectionTitle: { ...t.type.headline, fontSize: 20, color: t.colors.textPrimary, paddingHorizontal: t.spacing.lg + 4, paddingTop: t.spacing.xl, paddingBottom: t.spacing.md },
+  sectionTitle: {
+    ...t.type.headline,
+    fontSize: 20,
+    color: t.colors.textPrimary,
+    paddingHorizontal: t.spacing.lg + 4,
+    paddingTop: t.spacing.xl,
+    paddingBottom: t.spacing.md,
+  },
   separator: { height: 10 },
   center: { alignItems: 'center', justifyContent: 'center', gap: t.spacing.md, paddingHorizontal: 32, paddingTop: 48 },
   muted: { ...t.type.callout, color: t.colors.textSecondary, textAlign: 'center' },
   errorText: { ...t.type.callout, color: t.colors.danger, textAlign: 'center' },
-  first: { marginHorizontal: t.spacing.lg, marginTop: t.spacing.md, padding: t.spacing.xl, borderRadius: 24, backgroundColor: t.colors.surface, alignItems: 'center', gap: t.spacing.md },
+  first: {
+    marginHorizontal: t.spacing.lg,
+    marginTop: t.spacing.md,
+    padding: t.spacing.xl,
+    borderRadius: 24,
+    backgroundColor: t.colors.surface,
+    alignItems: 'center',
+    gap: t.spacing.md,
+  },
   firstIcon: { width: 64, height: 64, borderRadius: 20, backgroundColor: t.colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
   firstTitle: { ...t.type.headline, fontSize: 22, color: t.colors.textPrimary, textAlign: 'center' },
 }));

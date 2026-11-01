@@ -22,7 +22,21 @@ export type PressableScaleProps = Omit<PressableProps, 'style'> & {
   pressEffect?: 'scale' | 'opacity' | 'none';
 };
 
-export function PressableScale({
+export function PressableScale(props: PressableScaleProps) {
+  // Nothing to animate without a press effect: a plain Pressable is cheaper to mount, which
+  // counts in a long chat, where every message is one (friends and chat step 10)
+  return props.pressEffect === 'none' ? <PlainPressable {...props} /> : <AnimatedPressableScale {...props} />;
+}
+
+function PlainPressable({ haptic: hapticKind = 'light', pressEffect: _none, onPress, accessibilityRole = 'button', ...rest }: PressableScaleProps) {
+  const handlePress = (e: GestureResponderEvent) => {
+    if (hapticKind !== 'none') haptic(hapticKind);
+    onPress?.(e);
+  };
+  return <Pressable {...rest} accessibilityRole={accessibilityRole} onPress={handlePress} />;
+}
+
+function AnimatedPressableScale({
   haptic: hapticKind = 'light',
   pressEffect = 'scale',
   style,

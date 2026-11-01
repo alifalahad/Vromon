@@ -85,6 +85,11 @@ def stop_out(stop: TripStop) -> dict:
         "transport_mode": stop.transport_mode,
         "arrive_on": stop.arrive_on.isoformat() if stop.arrive_on else None,
         "depart_on": stop.depart_on.isoformat() if stop.depart_on else None,
+        # Where it is (map home step 5: trip trails; step 6: trips in a region). A
+        # country-only stop is placed at the country's label point.
+        "lat": stop.city.lat if stop.city else (stop.country.label_lat if stop.country else None),
+        "lon": stop.city.lon if stop.city else (stop.country.label_lon if stop.country else None),
+        "region_code": stop.city.region_code if stop.city else None,
     }
 
 

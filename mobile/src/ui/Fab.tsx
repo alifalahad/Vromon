@@ -11,11 +11,14 @@ export function Fab({
   accessibilityLabel,
   testID,
   label,
+  icon = 'add',
 }: {
   onPress: () => void;
   accessibilityLabel: string;
   testID?: string;
   label?: string;
+  /** "add" unless the button does something else ("edit" for a new message) */
+  icon?: React.ComponentProps<typeof MaterialIcons>['name'];
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
@@ -28,7 +31,7 @@ export function Fab({
       accessibilityRole="button"
       style={[styles.fab, label ? styles.extended : null]}
     >
-      <MaterialIcons name="add" size={label ? 24 : 34} color={colors.onAccent} />
+      <MaterialIcons name={icon} size={label ? 24 : icon === 'add' ? 34 : 28} color={colors.onAccent} />
       {label ? (
         <Text style={styles.label} maxFontSizeMultiplier={1.3}>
           {label}

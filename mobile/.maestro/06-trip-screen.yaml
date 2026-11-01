@@ -42,13 +42,14 @@ name: 06 Open a trip, build its plan, look at a stop and the menu
     visible:
       id: day-tab-1
     timeout: 60000
-- assertVisible:
-    id: day-ribbon
-# Pull the plan up so the stop cards are on screen (a day's warnings can push them below the half-open sheet)
+# Pull the plan up so the day's ribbon and stop cards are on screen: a day's warnings, and on a trip
+# that's on today its Today and Trip room buttons, push them below the half-open sheet
 - swipe:
     start: "50%,56%"
     end: "50%,12%"
     duration: 600
+- assertVisible:
+    id: day-ribbon
 # The first stop's details, then close them by tapping above the sheet
 - tapOn:
     id: "stop-\\d+"

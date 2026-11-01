@@ -2486,11 +2486,11 @@
  {
   "code": "BD-A",
   "country_iso2": "BD",
-  "name": "Barisal",
+  "name": "Barishal",
   "name_bn": "বরিশাল বিভাগ",
   "type": "Division",
-  "lat": 22.4351,
-  "lon": 90.2369
+  "lat": 22.4598,
+  "lon": 90.2537
  },
  {
   "code": "BD-B",
@@ -2498,8 +2498,8 @@
   "name": "Chattogram",
   "name_bn": "চট্টগ্রাম বিভাগ",
   "type": "Division",
-  "lat": 22.4245,
-  "lon": 92.1333
+  "lat": 22.7081,
+  "lon": 91.774
  },
  {
   "code": "BD-C",
@@ -2507,35 +2507,35 @@
   "name": "Dhaka",
   "name_bn": "ঢাকা বিভাগ",
   "type": "Division",
-  "lat": 24.1653,
-  "lon": 90.4053
+  "lat": 23.8298,
+  "lon": 90.2523
  },
  {
   "code": "BD-D",
   "country_iso2": "BD",
   "name": "Khulna",
-  "name_bn": "খুলনা জেলা",
+  "name_bn": "খুলনা বিভাগ",
   "type": "Division",
-  "lat": 22.9179,
-  "lon": 89.3708
+  "lat": 22.8786,
+  "lon": 89.3049
  },
  {
   "code": "BD-E",
   "country_iso2": "BD",
   "name": "Rajshahi",
-  "name_bn": "রাজশাহী জেলা",
+  "name_bn": "রাজশাহী বিভাগ",
   "type": "Division",
-  "lat": 24.6664,
-  "lon": 89.0438
+  "lat": 24.5774,
+  "lon": 89.0575
  },
  {
   "code": "BD-F",
   "country_iso2": "BD",
   "name": "Rangpur",
-  "name_bn": "রংপুর জেলা",
+  "name_bn": "রংপুর বিভাগ",
   "type": "Division",
-  "lat": 25.7571,
-  "lon": 89.112
+  "lat": 25.7672,
+  "lon": 89.0534
  },
  {
   "code": "BD-G",
@@ -2543,8 +2543,17 @@
   "name": "Sylhet",
   "name_bn": "সিলেট বিভাগ",
   "type": "Division",
-  "lat": 24.6452,
-  "lon": 91.7033
+  "lat": 24.7301,
+  "lon": 91.6714
+ },
+ {
+  "code": "BD-H",
+  "country_iso2": "BD",
+  "name": "Mymensingh",
+  "name_bn": "ময়মনসিংহ বিভাগ",
+  "type": "Division",
+  "lat": 24.85,
+  "lon": 90.4105
  },
  {
   "code": "BE-BRU",

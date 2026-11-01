@@ -28,4 +28,6 @@ HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=5 \
 
 # Behind the host's HTTPS proxy: take the client IP from X-Forwarded-For (rate limits are per IP).
 # FORWARDED_ALLOW_IPS narrows which proxies are trusted; '*' suits Render-style single-proxy hosting.
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips=${FORWARDED_ALLOW_IPS:-*}"]
+# --ws-max-size: the chat socket's messages are tiny (the sign-in one is the largest, ~2 KB), so a
+# bigger frame is refused before it's read (the default would take 16 MB).
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips=${FORWARDED_ALLOW_IPS:-*} --ws-max-size 16384"]

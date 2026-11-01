@@ -3,8 +3,8 @@ Vromon API v1 — friends (prompt §6.4, §8).
 
 GET /users/search · GET /friend-codes/{code} · POST /me/friend-code/rotate ·
 POST/GET /friend-requests · POST /friend-requests/{id}/accept|decline|cancel ·
-GET /friends · DELETE /friends/{user_id} · GET/POST /blocks · DELETE /blocks/{user_id} ·
-POST /me/devices · DELETE /me/devices/{token}
+GET /friends · GET /me/friends/on-the-road · DELETE /friends/{user_id} · GET/POST /blocks · DELETE /blocks/{user_id} ·
+POST /me/devices · POST /me/devices/remove
 
 Anything that would reveal a user the viewer may not see answers 404.
 """
@@ -12,8 +12,8 @@ Anything that would reveal a user the viewer may not see answers 404.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
-from typing import List, Literal
+from datetime import date, datetime
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import delete, select
@@ -24,20 +24,28 @@ from app.api.v1.endpoints.me import _me_out
 from app.core.auth import FRIEND_CODE_ALPHABET, FRIEND_CODE_LENGTH, get_current_user, new_friend_code
 from app.core.rate_limit import FRIEND_LOOKUP_LIMIT, FRIEND_REQUEST_LIMIT, limiter
 from app.db import get_db
-from app.models.models import Block, Device, FriendRequest, User
+from app.models.models import Block, Device, FriendRequest, User, Visit
 from app.schemas.accounts import MeOut
 from app.schemas.friends import (
     BlockIn,
     DeviceIn,
+    DeviceTokenIn,
     FriendOut,
     FriendRequestIn,
+    FootprintOut,
     FriendRequestOut,
+    OnTheRoadOut,
     PersonOut,
     PublicProfile,
+    RoadTripOut,
 )
 from app.services import friends as social
+from app.services import live
+from app.services.on_the_road import road_trip, shares_trips
+from app.services.stats.trips import viewer_today
 from app.services.push import Push, queue_push
 from app.services.stats import travel_stats
+from app.services.stats.travel import VISITED
 
 router = APIRouter(tags=["friends"])
 
@@ -225,6 +233,7 @@ def _accept(db: Session, req: FriendRequest, viewer: User, background: Backgroun
     req.status = "accepted"
     req.responded_at = datetime.utcnow()
     db.commit()
+    live.direct_chat_changed(db, req.from_user_id, req.to_user_id)  # their chat can be written in again
     queue_push(background, db, req.from_user_id, Push(
         title="Friend request accepted", body=f"{_name(viewer)} accepted your friend request",
         url=f"/friends/{viewer.id}", preference="notify_friend_accepted",
@@ -267,12 +276,86 @@ def list_friends(viewer: User = Depends(get_current_user), db: Session = Depends
     return sorted(out, key=lambda f: (f.display_name or f.username).lower())
 
 
+@router.get("/me/friends/on-the-road", response_model=List[OnTheRoadOut])
+@limiter.limit(FRIEND_LOOKUP_LIMIT)
+def on_the_road(
+    request: Request,  # required by the rate limiter
+    today: Optional[date] = None,
+    viewer: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Friends on a trip today or leaving within 14 days (step 6): those on a trip first,
+    then by when they leave. `today` is the phone's local date. Friends who hide their
+    trips, and anyone blocked either way, are left out.
+    """
+    day = viewer_today(today)
+    out = []
+    for fid, _ in social.friend_ids(db, viewer.id):
+        if social.blocked_either_way(db, viewer.id, fid) or not shares_trips(db, fid):
+            continue
+        road = road_trip(db, fid, day)
+        if road is None:
+            continue
+        trip = road.trip
+        out.append(OnTheRoadOut(
+            friend=_public(db.get(User, fid)),
+            trip=RoadTripOut(
+                trip_id=trip.id, destination=trip.destination, start_date=trip.start_date, end_date=trip.end_date,
+                day=road.day, days=road.days, starts_in=road.starts_in,
+            ),
+        ))
+    return sorted(out, key=lambda r: (r.trip.starts_in, r.trip.start_date, (r.friend.display_name or r.friend.username).lower()))
+
+
+@router.get("/me/friends/footprints", response_model=List[FootprintOut])
+@limiter.limit(FRIEND_LOOKUP_LIMIT)
+def friend_footprints(
+    request: Request,  # required by the rate limiter
+    place_type: Literal["country", "region", "city"] = Query("country"),
+    viewer: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    The places the viewer's friends have visited or lived in, with who (map home
+    step 9). Only accepted friendships count, and never anyone blocked either way:
+    the same rule as `viewer_can_see`, applied here on the server.
+    """
+    friends = {
+        fid: db.get(User, fid)
+        for fid, _ in social.friend_ids(db, viewer.id)
+        if not social.blocked_either_way(db, viewer.id, fid)
+    }
+    if not friends:
+        return []
+    rows = db.execute(
+        select(Visit.place_code, Visit.user_id, Visit.updated_at)
+        .where(Visit.user_id.in_(friends), Visit.place_type == place_type, Visit.status.in_(VISITED))
+        .order_by(Visit.updated_at.desc())
+    ).all()
+    places: dict[str, list] = {}
+    for code, user_id, at in rows:
+        places.setdefault(code, []).append((user_id, at))
+    out = [
+        FootprintOut(
+            place_type=place_type,
+            place_code=code,
+            count=len(who),
+            latest_at=who[0][1],
+            friends=[_public(friends[uid]) for uid, _ in who],
+        )
+        for code, who in places.items()
+    ]
+    return sorted(out, key=lambda f: f.latest_at, reverse=True)
+
+
 @router.delete("/friends/{user_id}", status_code=204)
 def remove_friend(user_id: uuid.UUID, viewer: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Unfriend: access to each other's data ends immediately."""
     if not social.unfriend(db, viewer.id, user_id):
         raise NOT_FOUND
     db.commit()
+    live.direct_chat_changed(db, viewer.id, user_id)  # their chat turns read-only
     return Response(status_code=204)
 
 
@@ -295,6 +378,7 @@ def block_user(payload: BlockIn, viewer: User = Depends(get_current_user), db: S
     social.unfriend(db, viewer.id, target.id)
     social.cancel_pending_between(db, viewer.id, target.id)
     db.commit()
+    live.direct_chat_changed(db, viewer.id, target.id)  # gone for the blocker, read-only for the other
     return Response(status_code=204)
 
 
@@ -303,6 +387,7 @@ def unblock_user(user_id: uuid.UUID, viewer: User = Depends(get_current_user), d
     if db.execute(delete(Block).where(Block.blocker_id == viewer.id, Block.blocked_id == user_id)).rowcount == 0:
         raise NOT_FOUND
     db.commit()
+    live.direct_chat_changed(db, viewer.id, user_id)  # the chat shows again, read-only
     return Response(status_code=204)
 
 
@@ -322,9 +407,12 @@ def register_device(payload: DeviceIn, viewer: User = Depends(get_current_user),
     return Response(status_code=204)
 
 
-@router.delete("/me/devices/{token}", status_code=204)
-def unregister_device(token: str, viewer: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Called on sign-out, so the next person on this phone doesn't get your notifications."""
-    db.execute(delete(Device).where(Device.expo_push_token == token, Device.user_id == viewer.id))
+@router.post("/me/devices/remove", status_code=204)
+def unregister_device(payload: DeviceTokenIn, viewer: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Called on sign-out, so the next person on this phone doesn't get your notifications.
+    The token is in the body (step 10): a URL would put it in the server's logs.
+    """
+    db.execute(delete(Device).where(Device.expo_push_token == payload.expo_push_token, Device.user_id == viewer.id))
     db.commit()
     return Response(status_code=204)

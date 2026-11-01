@@ -4,6 +4,33 @@
 export const COUNTRIES = require('../../../assets/geo/countries.json') as GeoJSON.FeatureCollection;
 // One label point per country (Natural Earth placement and minimum label zoom)
 export const COUNTRY_LABELS = require('../../../assets/geo/country-labels.json') as GeoJSON.FeatureCollection;
+// The home country's regions (Bangladesh's 8 divisions, geoBoundaries), so they draw offline
+export const HOME_REGIONS = require('../../../assets/geo/home-regions.json') as GeoJSON.FeatureCollection<
+  GeoJSON.Polygon | GeoJSON.MultiPolygon,
+  { code: string; country: string; name: string; name_bn: string; label: [number, number] }
+>;
+// The lines between those regions only: the country layer draws the outer edge
+export const HOME_REGION_BORDERS = require('../../../assets/geo/home-region-borders.json') as GeoJSON.FeatureCollection<GeoJSON.LineString>;
+// Bangladesh's 64 districts: dashed lines between districts of one division, and a label point each
+export const HOME_DISTRICTS = require('../../../assets/geo/home-districts.json') as GeoJSON.FeatureCollection<
+  GeoJSON.LineString | GeoJSON.Point,
+  { name?: string; name_bn?: string; division?: string }
+>;
+// One label point per region (centroid of its largest part), English names: MapLibre can't shape Bengali
+export const HOME_REGION_LABELS: GeoJSON.FeatureCollection<GeoJSON.Point> = {
+  type: 'FeatureCollection',
+  features: HOME_REGIONS.features.map((f) => ({
+    type: 'Feature',
+    properties: { code: f.properties.code, name: f.properties.name },
+    geometry: { type: 'Point', coordinates: f.properties.label },
+  })),
+};
+
+/** A bundled home region's name (Bangla when asked), or undefined for other regions. */
+export function homeRegionName(code: string, lang: 'en' | 'bn'): string | undefined {
+  const p = HOME_REGIONS.features.find((f) => f.properties.code === code)?.properties;
+  return p && (lang === 'bn' ? p.name_bn : p.name);
+}
 
 type Ring = GeoJSON.Position[];
 

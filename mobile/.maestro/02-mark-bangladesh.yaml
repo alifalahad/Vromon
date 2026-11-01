@@ -10,9 +10,16 @@ name: 02 Mark Bangladesh visited (Countries view)
       id: tab-index
     timeout: 60000
 - tapOn:
-    id: map-view-pill
+    id: map-sheet-button
 - tapOn:
     id: map-view-countries
+# Choosing a view closes the Map sheet; it stays open when Countries was already shown
+- runFlow:
+    when:
+      visible:
+        id: map-sheet
+    commands:
+      - pressKey: back
 - tapOn:
     id: add-place-fab
 - tapOn:

@@ -184,6 +184,10 @@ class TestStops:
         assert [(s["city_geonameid"], s["country_iso2"], s["transport_mode"]) for s in resp.json()["stops"]] == [
             (DHAKA, "BD", "car"), (KOLKATA, "IN", "plane"), (None, "FR", "train"),
         ]
+        # Where each stop is, for trails on the travel map (map home step 5)
+        dhaka, _, france = resp.json()["stops"]
+        assert (round(dhaka["lat"], 1), round(dhaka["lon"], 1), dhaka["region_code"]) == (23.7, 90.4, "BD-C")
+        assert france["lat"] is not None and france["region_code"] is None  # a country stop: its label point
         # Again, shorter: positions are reused without clashing
         resp = client.put(f"{API}/trips/{trip['id']}/stops", json={"stops": [{"city_geonameid": KOLKATA}]})
         assert [s["position"] for s in resp.json()["stops"]] == [0]

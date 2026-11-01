@@ -10,7 +10,9 @@ name: 03 Apply the Rustic theme
       id: tab-index
     timeout: 60000
 - tapOn:
-    id: map-theme-button
+    id: map-sheet-button
+- tapOn:
+    id: map-sheet-all-themes
 - assertVisible:
     id: map-theme-screen
 - tapOn:

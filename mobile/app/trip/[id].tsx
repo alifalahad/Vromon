@@ -12,11 +12,7 @@
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import BottomSheet, {
-  BottomSheetFooter,
-  BottomSheetScrollView,
-  type BottomSheetFooterProps,
-} from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetFooter, BottomSheetScrollView, type BottomSheetFooterProps } from '@gorhom/bottom-sheet';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -28,6 +24,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlternativesSheet, ExplanationSheet } from '../../src/components/ItemSheets';
 import { AddStopSheet, type AddTarget } from '../../src/features/trips/plan/AddStopSheet';
 import { useMe } from '../../src/features/account/useMe';
+import { useConversations } from '../../src/features/chat/queries';
+import { tripCard } from '../../src/features/chat/share';
 import { addDays, localToday } from '../../src/features/trips/dates';
 import { DayMap, type MapPin } from '../../src/features/trips/plan/DayMap';
 import { DayRibbon } from '../../src/features/trips/plan/DayRibbon';
@@ -61,7 +59,19 @@ import { useStopDrag } from '../../src/features/trips/plan/useStopDrag';
 import { usePlanFormat } from '../../src/features/trips/plan/usePlanFormat';
 import { daySummaryText } from '../../src/features/trips/plan/daySummary';
 import { ApiError, tripsApi } from '../../src/services/api';
-import type { AdaptationType, Itinerary, ItineraryDay, ItineraryItem, LegOptions, MustSee, Place, TravelMode, Unplaced, ValidationReport } from '../../src/types';
+import type {
+  AdaptationType,
+  Destination,
+  Itinerary,
+  ItineraryDay,
+  ItineraryItem,
+  LegOptions,
+  MustSee,
+  Place,
+  TravelMode,
+  Unplaced,
+  ValidationReport,
+} from '../../src/types';
 import { ActionSheet, type SheetAction } from '../../src/ui/ActionSheet';
 import { Button } from '../../src/ui/Button';
 import { haptics } from '../../src/ui/haptics';
@@ -111,6 +121,8 @@ export default function TripScreen() {
 
   // A friend's trip is read-only; until the owner is known, nothing is editable
   const mine = !!trip.data && !!me.data && (!trip.data.user_id || trip.data.user_id === me.data.id);
+  // The trip's room, once someone was invited (friends-chat step 7), with what's unread
+  const room = useConversations(!!me.data).data?.find((c) => c.kind === 'trip' && c.trip_id === tripId) ?? null;
   const today = localToday();
   const openToday = () => router.push({ pathname: '/trip/today/[id]', params: { id: tripId } });
 
@@ -129,9 +141,7 @@ export default function TripScreen() {
 
   const refresh = useCallback(async () => {
     queryClient.removeQueries({ queryKey: ['alternatives', tripId] });
-    await Promise.all(
-      [['itinerary', tripId], ['budget', tripId], ['trip', tripId], ['trips']].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
-    );
+    await Promise.all([['itinerary', tripId], ['budget', tripId], ['trip', tripId], ['trips']].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
   }, [queryClient, tripId]);
 
   const removal = useDeferredRemoval(tripId, refresh, (e) => notify(t('plan.removeFailed'), errorText(e), 'error'));
@@ -309,7 +319,13 @@ export default function TripScreen() {
   const renderFooter = useCallback(
     (props: BottomSheetFooterProps) => (
       <BottomSheetFooter {...props}>
-        <Snackbar inline message={snack?.message ?? null} actionLabel={snack?.undo ? t('plan.undo') : undefined} onAction={snack?.undo} testID="trip-snackbar" />
+        <Snackbar
+          inline
+          message={snack?.message ?? null}
+          actionLabel={snack?.undo ? t('plan.undo') : undefined}
+          onAction={snack?.undo}
+          testID="trip-snackbar"
+        />
       </BottomSheetFooter>
     ),
     [snack, t],
@@ -358,12 +374,21 @@ export default function TripScreen() {
       old ? { ...old, days: old.days.map((x) => (x.id === d.id ? { ...x, items: preview } : x)) } : old,
     );
     try {
-      putDays(await tripsApi.reorderDay(tripId, d.id, preview.map((i) => i.id)));
+      putDays(
+        await tripsApi.reorderDay(
+          tripId,
+          d.id,
+          preview.map((i) => i.id),
+        ),
+      );
       setSnack({
         message: t('plan.movedStop', { name: stopTitle(before[from]) }),
         undo: () => {
           setSnack(null);
-          restoreOrder(d.id, before.map((i) => i.id));
+          restoreOrder(
+            d.id,
+            before.map((i) => i.id),
+          );
         },
       });
     } catch (e) {
@@ -548,11 +573,7 @@ export default function TripScreen() {
             key={r.key}
             start={r.start}
             minutes={r.minutes}
-            onAdd={
-              mine && !busy && before >= 0
-                ? () => setAddTarget({ dayId: d.id, position: before + 1, nearItemId: stops[before].id })
-                : undefined
-            }
+            onAdd={mine && !busy && before >= 0 ? () => setAddTarget({ dayId: d.id, position: before + 1, nearItemId: stops[before].id }) : undefined}
           />,
         );
         continue;
@@ -615,10 +636,29 @@ export default function TripScreen() {
 
   const actions: SheetAction[] = [];
   if (onTrip) actions.push({ key: 'today', label: t('today.open'), icon: 'calendar-today', onPress: openToday });
+  // Planning together (friends-chat step 7): invite friends to the trip's room
   if (mine) {
-    actions.push({ key: 'route', label: t('trips.editRoute'), icon: 'map-marker-path', onPress: () => router.push({ pathname: '/trip/route/[id]', params: { id: tripId } }) });
+    actions.push({
+      key: 'together',
+      label: room ? t('tripRoom.inviteMore') : t('tripRoom.title'),
+      icon: 'account-group-outline',
+      onPress: () => router.push({ pathname: '/trip/invite/[id]', params: { id: String(tripId) } }),
+    });
+  }
+  if (mine) {
+    actions.push({
+      key: 'route',
+      label: t('trips.editRoute'),
+      icon: 'map-marker-path',
+      onPress: () => router.push({ pathname: '/trip/route/[id]', params: { id: tripId } }),
+    });
     if (hasPlan) {
-      actions.push({ key: 'budget', label: t('plan.budget'), icon: 'wallet-outline', onPress: () => router.push({ pathname: '/trip/budget/[id]', params: { id: tripId } }) });
+      actions.push({
+        key: 'budget',
+        label: t('plan.budget'),
+        icon: 'wallet-outline',
+        onPress: () => router.push({ pathname: '/trip/budget/[id]', params: { id: tripId } }),
+      });
       actions.push({
         key: 'rebuild',
         label: t('plan.rebuild'),
@@ -627,6 +667,24 @@ export default function TripScreen() {
       });
     }
     actions.push({ key: 'duplicate', label: t('plan.duplicate'), icon: 'content-copy', onPress: () => duplicate.mutate() });
+    // A copy of the trip as a card, into friends' chats (friends-chat step 4, mockup 9)
+    if (me.data && data) {
+      const profile = me.data;
+      actions.push({
+        key: 'send',
+        label: t('chat.share.sendToFriend'),
+        icon: 'send-outline',
+        onPress: () => {
+          // The destinations, if loaded, give the card its locator map at once; the server adds it anyway
+          const card = tripCard(
+            data,
+            { id: profile.id, name: profile.display_name || profile.username || '' },
+            queryClient.getQueryData<Destination[]>(['destinations']),
+          );
+          router.push({ pathname: '/share/send', params: { card: JSON.stringify(card) } });
+        },
+      });
+    }
     actions.push({
       key: 'delete',
       label: t('plan.deleteTrip'),
@@ -664,7 +722,9 @@ export default function TripScreen() {
             >
               <View style={[styles.liveDot, conditions.data.stale && styles.staleDot]} />
               <Text style={styles.updatedText} numberOfLines={1}>
-                {conditions.data.stale ? t('conditions.offlinePill', { age: conditionText.age(conditions.data.fetched_at) }) : t('conditions.updated', { age: conditionText.age(conditions.data.fetched_at) })}
+                {conditions.data.stale
+                  ? t('conditions.offlinePill', { age: conditionText.age(conditions.data.fetched_at) })
+                  : t('conditions.updated', { age: conditionText.age(conditions.data.fetched_at) })}
               </Text>
             </PressableScale>
             <PressableScale
@@ -724,18 +784,35 @@ export default function TripScreen() {
                 {data.destination}
               </Text>
               <Text style={styles.subtitle}>
-                {friendlyRange(data.start_date, data.end_date, i18n.language, today)} · {t('plan.travellers', { count: data.num_travelers, n: f.n(data.num_travelers) })}
+                {friendlyRange(data.start_date, data.end_date, i18n.language, today)} ·{' '}
+                {t('plan.travellers', { count: data.num_travelers, n: f.n(data.num_travelers) })}
               </Text>
               {onTrip ? (
-                <PressableScale
-                  haptic="selection"
-                  onPress={openToday}
-                  style={styles.todayPill}
-                  accessibilityRole="button"
-                  testID="open-today"
-                >
+                <PressableScale haptic="selection" onPress={openToday} style={styles.todayPill} accessibilityRole="button" testID="open-today">
                   <MaterialCommunityIcons name="calendar-today" size={18} color={theme.colors.onAccent} />
                   <Text style={styles.todayPillText}>{t('today.open')}</Text>
+                </PressableScale>
+              ) : null}
+              {room ? (
+                <PressableScale
+                  haptic="selection"
+                  onPress={() => router.push({ pathname: '/chat/[id]', params: { id: String(room.id) } })}
+                  style={styles.roomPill}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    room.unread_count
+                      ? `${t('tripRoom.open')}, ${t('chat.unread', { count: room.unread_count, n: f.n(room.unread_count) })}`
+                      : t('tripRoom.open')
+                  }
+                  testID="open-trip-room"
+                >
+                  <MaterialCommunityIcons name="forum-outline" size={18} color={theme.colors.onAccentSoft} />
+                  <Text style={styles.roomPillText}>{t('tripRoom.open')}</Text>
+                  {room.unread_count ? (
+                    <View style={styles.roomBadge}>
+                      <Text style={styles.roomBadgeText}>{f.n(room.unread_count)}</Text>
+                    </View>
+                  ) : null}
                 </PressableScale>
               ) : null}
             </View>
@@ -776,13 +853,27 @@ export default function TripScreen() {
               <Text style={styles.emptyTitle}>{mine ? t('plan.buildTitle') : t('plan.notPlanned')}</Text>
               {mine && <Text style={styles.muted}>{t('plan.buildBody')}</Text>}
               {mine && (
-                <Button label={build.isPending ? t('plan.building') : t('plan.build')} icon="map-marker-path" loading={build.isPending} onPress={() => build.mutate()} testID="build-plan" />
+                <Button
+                  label={build.isPending ? t('plan.building') : t('plan.build')}
+                  icon="map-marker-path"
+                  loading={build.isPending}
+                  onPress={() => build.mutate()}
+                  testID="build-plan"
+                />
               )}
             </View>
           ) : (
             day && (
               <>
-                <DayTabs days={days} index={dayIndex} locale={i18n.language} onPick={(i) => { setDayChoice(i); setSelectedId(null); }} />
+                <DayTabs
+                  days={days}
+                  index={dayIndex}
+                  locale={i18n.language}
+                  onPick={(i) => {
+                    setDayChoice(i);
+                    setSelectedId(null);
+                  }}
+                />
 
                 <View style={styles.daySummary}>
                   {(daySummaryText(day.summary, t) ?? day.theme) ? (
@@ -845,13 +936,7 @@ export default function TripScreen() {
                   </View>
                 )}
 
-                <View
-                  ref={attachRows}
-                  collapsable={false}
-                  onLayout={(e) => (rowsTop.current = e.nativeEvent.layout.y)}
-                  style={styles.rows}
-                  testID="plan-rows"
-                >
+                <View ref={attachRows} collapsable={false} onLayout={(e) => (rowsTop.current = e.nativeEvent.layout.y)} style={styles.rows} testID="plan-rows">
                   {stopCount === 0 && <Text style={styles.muted}>{t('plan.emptyDay')}</Text>}
                   {renderRows(day)}
                 </View>
@@ -898,7 +983,9 @@ export default function TripScreen() {
                       label={t('plan.newIdeas')}
                       disabled={busy}
                       onPress={() =>
-                        confirm(t('plan.newIdeasTitle'), t('plan.newIdeasBody', { n: f.n(day.day_number) }), t('plan.newIdeasOk'), () => regenerateDay.mutate(day.id))
+                        confirm(t('plan.newIdeasTitle'), t('plan.newIdeasBody', { n: f.n(day.day_number) }), t('plan.newIdeasOk'), () =>
+                          regenerateDay.mutate(day.id),
+                        )
                       }
                       testID="new-ideas"
                     />
@@ -995,7 +1082,14 @@ function DayTabs({ days, index, locale, onPick }: { days: ItineraryDay[]; index:
   });
   // The gesture handler's scroll view: inside the plan sheet, a plain one loses the sideways swipe to the sheet
   return scrollable ? (
-    <GHScrollView ref={strip} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} accessibilityRole="tablist" testID="day-tabs">
+    <GHScrollView
+      ref={strip}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.tabs}
+      accessibilityRole="tablist"
+      testID="day-tabs"
+    >
       {tabs}
     </GHScrollView>
   ) : (
@@ -1100,8 +1194,40 @@ const useStyles = makeStyles((t) => {
     title: { fontSize: 24, fontWeight: '700', color: t.colors.textPrimary },
     subtitle: { ...t.type.callout, color: t.colors.textSecondary },
     budget: { alignItems: 'flex-end', gap: 6, paddingTop: 4, minHeight: 48, justifyContent: 'center' },
-    todayPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, marginTop: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: t.colors.accent },
+    todayPill: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      minHeight: 40,
+      marginTop: 8,
+      paddingHorizontal: 14,
+      borderRadius: 999,
+      backgroundColor: t.colors.accent,
+    },
     todayPillText: { ...t.type.callout, fontSize: 14, fontWeight: '700', color: t.colors.onAccent },
+    roomPill: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      minHeight: 40,
+      marginTop: 8,
+      paddingHorizontal: 14,
+      borderRadius: 999,
+      backgroundColor: t.colors.accentSoft,
+    },
+    roomPillText: { ...t.type.callout, fontSize: 14, fontWeight: '700', color: t.colors.onAccentSoft },
+    roomBadge: {
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      paddingHorizontal: 6,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: t.colors.accentStrong,
+    },
+    roomBadgeText: { ...t.type.caption, fontWeight: '700', color: t.colors.onAccent },
     budgetText: { fontSize: 14, fontWeight: '700', color: t.colors.textPrimary },
     budgetOf: { fontWeight: '400', color: t.colors.textSecondary },
     meter: { width: 110, height: 6, borderRadius: 3, backgroundColor: t.colors.surfaceInset, overflow: 'hidden' },
@@ -1109,7 +1235,14 @@ const useStyles = makeStyles((t) => {
     empty: { gap: t.spacing.md, paddingVertical: t.spacing.lg },
     emptyTitle: { ...t.type.title, color: t.colors.textPrimary },
     tabs: { flexDirection: 'row', gap: TAB_GAP },
-    tab: { minHeight: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: t.spacing.sm, backgroundColor: t.colors.surfaceInset },
+    tab: {
+      minHeight: 52,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: t.spacing.sm,
+      backgroundColor: t.colors.surfaceInset,
+    },
     tabFlex: { flex: 1 },
     tabFixed: { width: TAB_WIDTH },
     tabOn: { backgroundColor: t.colors.accent },
@@ -1149,7 +1282,18 @@ const useStyles = makeStyles((t) => {
     },
     dropBarText: { ...t.type.footnote, color: t.colors.textSecondary, textAlign: 'center' },
     dropChips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: t.spacing.sm },
-    dropChip: { minHeight: 52, minWidth: 96, paddingHorizontal: t.spacing.lg, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderStyle: 'dashed', borderColor: t.colors.accent, backgroundColor: t.colors.accentSoft },
+    dropChip: {
+      minHeight: 52,
+      minWidth: 96,
+      paddingHorizontal: t.spacing.lg,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderStyle: 'dashed',
+      borderColor: t.colors.accent,
+      backgroundColor: t.colors.accentSoft,
+    },
     dropChipText: { fontSize: 15, fontWeight: '700', color: t.colors.link },
   };
 });

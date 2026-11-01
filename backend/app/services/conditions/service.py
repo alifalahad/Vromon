@@ -23,6 +23,8 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Callable, Optional
 
+from sqlalchemy.exc import OperationalError
+
 from app.services.conditions import openmeteo
 from app.services.conditions.openmeteo import ConditionsUnavailable
 from app.services.itinerary.trip_rules import m2t, rules_for, sunrise_min, sunset_min, t2m
@@ -73,15 +75,20 @@ def _cached(db: "Session", kind: str, lat: float, lon: float, fetch: Callable[[f
     except ConditionsUnavailable as exc:
         logger.warning("%s for %s,%s unavailable: %s", kind, slat, slon, exc)
         return (json.loads(row.payload_json), row.fetched_at, True) if row is not None else (None, None, True)
-    # Its own session: never commit the request's own changes
-    with _Session(bind=db.get_bind()) as cache:
-        saved = cache.query(ConditionsCache).filter_by(kind=kind, lat=slat, lon=slon).first()
-        if saved is None:
-            saved = ConditionsCache(kind=kind, lat=slat, lon=slon, payload_json="{}", fetched_at=now)
-            cache.add(saved)
-        saved.payload_json = json.dumps(payload)
-        saved.fetched_at = now
-        cache.commit()
+    # Its own session: never commit the request's own changes. On SQLite the
+    # request may already hold the write lock (building a plan), so this save would
+    # wait and fail with "database is locked": then skip caching and use the fresh copy.
+    try:
+        with _Session(bind=db.get_bind()) as cache:
+            saved = cache.query(ConditionsCache).filter_by(kind=kind, lat=slat, lon=slon).first()
+            if saved is None:
+                saved = ConditionsCache(kind=kind, lat=slat, lon=slon, payload_json="{}", fetched_at=now)
+                cache.add(saved)
+            saved.payload_json = json.dumps(payload)
+            saved.fetched_at = now
+            cache.commit()
+    except OperationalError as exc:
+        logger.warning("%s for %s,%s not cached: %s", kind, slat, slon, exc)
     return payload, now, False
 
 

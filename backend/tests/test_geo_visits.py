@@ -76,6 +76,16 @@ class TestReferenceData:
         assert cities[0]["name"] == "Dhaka" and cities[0]["country_iso2"] == "BD"  # largest first
         assert client.get("/api/v1/geo/cities", params={"q": "x"}).status_code == 422  # too short
 
+    def test_bangladesh_has_its_8_divisions(self, client):
+        regions = {r["code"]: r for r in client.get("/api/v1/geo/regions", params={"country": "BD"}).json()}
+        assert sorted(regions) == [f"BD-{c}" for c in "ABCDEFGH"]
+        assert regions["BD-H"]["name"] == "Mymensingh" and regions["BD-H"]["name_bn"] == "ময়মনসিংহ বিভাগ"
+        assert regions["BD-A"]["name"] == "Barishal"
+        assert all(r["type"] == "Division" and r["name_bn"].endswith("বিভাগ") for r in regions.values())
+        # Cities are linked to the division they lie in
+        mymensingh = client.get("/api/v1/geo/cities", params={"q": "mymensingh", "country": "BD"}).json()[0]
+        assert mymensingh["region_code"] == "BD-H"
+
     def test_tiles_support_range_requests(self, client):
         if not (geo_api.TILES_DIR / "regions.pmtiles").is_file():
             pytest.skip("PMTiles not built")
@@ -107,6 +117,14 @@ class TestVisits:
         assert next(r for r in rows if r["place_code"] == "NP")["status"] == "visited"
         assert client.delete("/api/v1/me/visits/country/NP").status_code == 204
         assert client.delete("/api/v1/me/visits/country/NP").status_code == 204  # idempotent
+
+    def test_mymensingh_can_be_marked(self, client, act_as):
+        user = _user("mym")
+        act_as(user)
+        rows = client.put("/api/v1/me/visits", json={"visits": [{"place_type": "region", "place_code": "BD-H", "status": "visited"}]})
+        assert rows.status_code == 200
+        assert rows.json()[0]["country_iso2"] == "BD"
+        assert client.get(f"/api/v1/users/{user.id}/stats").json()["regions"] == 1
 
     def test_unknown_places_and_bad_dates_are_rejected(self, client, act_as):
         act_as(_user("bad"))

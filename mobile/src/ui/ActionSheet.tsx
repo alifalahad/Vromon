@@ -65,6 +65,9 @@ export function ActionSheet({ visible, title, actions, onClose }: { visible: boo
               pressEffect="opacity"
               haptic="selection"
               style={styles.row}
+              // Named by its words: without a name, screen readers also read the icon's glyph
+              accessibilityRole="menuitem"
+              accessibilityLabel={a.label}
               testID={`action-${a.key}`}
               onPress={() => {
                 picked.current = a.onPress;

@@ -15,6 +15,9 @@ import type {
   Algorithm,
   AlternativesResult,
   BudgetBreakdown,
+  CardKind,
+  ChatMessage,
+  Conversation,
   Destination,
   EditResult,
   Compare,
@@ -22,6 +25,7 @@ import type {
   DayRoute,
   Feedback,
   Friend,
+  FriendFootprint,
   FriendProfile,
   FriendRequest,
   GenerateResult,
@@ -31,6 +35,7 @@ import type {
   Hotel,
   Itinerary,
   Me,
+  MessagePage,
   MeUpdate,
   LatePlan,
   LateResult,
@@ -39,6 +44,7 @@ import type {
   MoveResult,
   MustDosChange,
   MustDosResult,
+  OnTheRoad,
   Person,
   Photo,
   PhotoFilter,
@@ -46,6 +52,8 @@ import type {
   Place,
   PlaceType,
   PublicProfile,
+  ReactionKind,
+  ReportReason,
   SaveAction,
   SaveResult,
   Suggestion,
@@ -54,6 +62,7 @@ import type {
   TripConditions,
   Trip,
   TripCreate,
+  TripRoom,
   TripStats,
   TripStopInput,
   UserSettings,
@@ -94,6 +103,12 @@ export class ApiError extends Error {
     this.status = status;
     this.detail = detail;
   }
+}
+
+/** Offline, the server down, a rate limit or an expired session: worth trying again later, it isn't a "no". */
+export function isTemporaryError(e: unknown): boolean {
+  const status = e instanceof ApiError ? e.status : undefined;
+  return status === undefined || status >= 500 || status === 401 || status === 408 || status === 429;
 }
 
 /** One Pydantic validation issue, e.g. {loc: ['body','constraints','max_activities_per_day'], msg}. */
@@ -172,6 +187,8 @@ export const tripsApi = {
     api.patch<Trip>(`/trips/${id}`, payload).then((r) => r.data),
   delete: (id: number) => api.delete(`/trips/${id}`).then((r) => r.data),
   duplicate: (id: number) => api.post<Trip>(`/trips/${id}/duplicate`).then((r) => r.data),
+  /** "Copy to my trips": any trip you can see becomes a draft of your own (not its plan) */
+  copy: (id: number) => api.post<Trip>(`/trips/${id}/copy`).then((r) => r.data),
   setStops: (id: number, stops: TripStopInput[]) => api.put<Trip>(`/trips/${id}/stops`, { stops }).then((r) => r.data),
   markVisited: (id: number, mark: boolean) =>
     api.post<{ visited_prompt: string; places_marked: number }>(`/trips/${id}/mark-visited`, { mark }).then((r) => r.data),
@@ -280,9 +297,76 @@ export const friendsApi = {
   profile: (userId: string) => api.get<FriendProfile>(`/users/${userId}/profile`).then((r) => r.data),
   compare: (userId: string) => api.get<Compare>(`/users/${userId}/compare`).then((r) => r.data),
   trips: (userId: string) => api.get<Trip[]>(`/users/${userId}/trips`).then((r) => r.data),
+  /** Friends on a trip today or leaving within 14 days; `today` is the phone's local date */
+  onTheRoad: (today: string) => api.get<OnTheRoad[]>('/me/friends/on-the-road', { params: { today } }).then((r) => r.data),
+  footprints: (placeType: 'country' | 'region') =>
+    api.get<FriendFootprint[]>('/me/friends/footprints', { params: { place_type: placeType } }).then((r) => r.data),
   registerDevice: (token: string, platform: string) =>
     api.post('/me/devices', { expo_push_token: token, platform }).then(() => undefined),
-  unregisterDevice: (token: string) => api.delete(`/me/devices/${encodeURIComponent(token)}`).then(() => undefined),
+  // The token goes in the body: a URL would put it in the server's logs
+  unregisterDevice: (token: string) => api.post('/me/devices/remove', { expo_push_token: token }).then(() => undefined),
+};
+
+// ---------------------------------------------------------------------------
+// Chat — conversations and messages (live updates come over the socket: features/chat/socket.ts)
+// ---------------------------------------------------------------------------
+/** Trip rooms: planning a trip together (friends-chat step 7). */
+export const roomsApi = {
+  members: (tripId: number) => api.get<TripRoom>(`/trips/${tripId}/members`).then((r) => r.data),
+  /** The owner invites friends; each gets a card (and the note) in their chat */
+  invite: (tripId: number, userIds: string[], note?: string) =>
+    api.post<TripRoom>(`/trips/${tripId}/members`, { user_ids: userIds, note: note || null }).then((r) => r.data),
+  join: (tripId: number) => api.post<TripRoom>(`/trips/${tripId}/members/me/join`).then((r) => r.data),
+  /** Leave (your own id; also turns an invite down), or the owner removes someone */
+  remove: (tripId: number, userId: string) => api.delete(`/trips/${tripId}/members/${userId}`).then(() => undefined),
+  accept: (tripId: number, messageId: number, day: number) =>
+    api.post<ChatMessage>(`/trips/${tripId}/suggestions/${messageId}/accept`, { day }).then((r) => r.data),
+  decline: (tripId: number, messageId: number) => api.post<ChatMessage>(`/trips/${tripId}/suggestions/${messageId}/decline`).then((r) => r.data),
+  /** Friends' trips you joined ("With friends") */
+  joined: () => api.get<Trip[]>('/me/trips/joined').then((r) => r.data),
+};
+
+export const chatApi = {
+  list: () => api.get<Conversation[]>('/conversations').then((r) => r.data),
+  /** The chat with a friend (made the first time either of you opens it) */
+  open: (userId: string) => api.post<Conversation>('/conversations/direct', { user_id: userId }).then((r) => r.data),
+  get: (id: number) => api.get<Conversation>(`/conversations/${id}`).then((r) => r.data),
+  messages: (id: number, params: { before?: number; after?: number; limit?: number } = {}) =>
+    api.get<MessagePage>(`/conversations/${id}/messages`, { params }).then((r) => r.data),
+  /**
+   * Text (`body`), or a card (`kind` and `payload`: only the ids it points at, the server
+   * builds the card). A retry with the same client_id returns the first message.
+   */
+  send: (
+    id: number,
+    message: ({ client_id: string; body: string } | { client_id: string; kind: CardKind; payload: Record<string, unknown> }) & { reply_to_id?: number },
+  ) =>
+    api.post<ChatMessage>(`/conversations/${id}/messages`, { kind: 'text', ...message }).then((r) => r.data),
+  /** Unsend your own message for everyone (within an hour) */
+  unsend: (id: number, messageId: number) => api.delete(`/conversations/${id}/messages/${messageId}`).then(() => undefined),
+  /** Your one reaction to a message (null takes it back) */
+  react: (id: number, messageId: number, reaction: ReactionKind | null) =>
+    (reaction
+      ? api.put<ChatMessage>(`/conversations/${id}/messages/${messageId}/reaction`, { reaction })
+      : api.delete<ChatMessage>(`/conversations/${id}/messages/${messageId}/reaction`)
+    ).then((r) => r.data),
+  /** Report someone else's message; reporting it again returns the first report */
+  report: (messageId: number, reason: ReportReason, note?: string) =>
+    api.post<{ id: number; status: string }>(`/messages/${messageId}/report`, { reason, note: note || null }).then((r) => r.data),
+  /** Live location in a trip room (step 8): start until a time, send the latest point, stop */
+  startLive: (id: number, body: { client_id: string; lat: number; lon: number; accuracy_m: number | null; date: string; until: string }) =>
+    api.post<ChatMessage>(`/conversations/${id}/live`, body).then((r) => r.data),
+  updateLive: (id: number, body: { lat: number; lon: number; accuracy_m: number | null; date: string }) =>
+    api.put<ChatMessage>(`/conversations/${id}/live`, body).then((r) => r.data),
+  stopLive: (id: number) => api.delete(`/conversations/${id}/live`).then(() => undefined),
+  /** "Delete all my chats": every chat cleared for you only */
+  clearAll: () => api.post<{ cleared: number }>('/me/chats/clear').then((r) => r.data),
+  /** Answer a poll or a trip idea (1 in, 2 maybe, 3 can't); [] takes the answer back */
+  vote: (id: number, messageId: number, optionIds: number[]) =>
+    api.put<ChatMessage>(`/conversations/${id}/messages/${messageId}/vote`, { option_ids: optionIds }).then((r) => r.data),
+  read: (id: number, messageId: number) => api.post(`/conversations/${id}/read`, { message_id: messageId }).then(() => undefined),
+  updateMe: (id: number, change: { muted_until?: string | null; cleared_up_to_id?: number }) =>
+    api.patch<Conversation>(`/conversations/${id}/me`, change).then((r) => r.data),
 };
 
 // ---------------------------------------------------------------------------
@@ -331,9 +415,13 @@ export const geoApi = {
   cities: (q: string, country?: string) => api.get<GeoCity[]>('/geo/cities', { params: { q, country } }).then((r) => r.data),
 };
 
+// Bump when scripts/geo/build.sh rebuilds the tiles: MapLibre caches them (the server
+// allows a day), so a new URL is what makes phones fetch the new data
+const TILES_VERSION = '2026-10-26';
+
 /** PMTiles archive URL for MapLibre (must be absolute). */
 export const tilesUrl = (name: 'regions' | 'cities') =>
-  `pmtiles://${process.env.EXPO_PUBLIC_TILES_URL ?? `${apiUrl()}/api/v1/geo/tiles`}/${name}.pmtiles`;
+  `pmtiles://${process.env.EXPO_PUBLIC_TILES_URL ?? `${apiUrl()}/api/v1/geo/tiles`}/${name}.pmtiles?v=${TILES_VERSION}`;
 
 // ---------------------------------------------------------------------------
 // Grounded explanations (Phase 8; returns 503 when no LLM is configured)

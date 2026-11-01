@@ -1,7 +1,7 @@
 /**
  * Vromon Mobile — Bottom tabs: Map · Trips · Friends · Settings (01-bottom-nav.jpg,
  * without Passport). Material icons, accent when active, selection haptic and a
- * small icon bounce on tab change. Friends shows a badge for incoming requests.
+ * small icon bounce on tab change. Friends shows a badge for incoming requests and unread chats.
  */
 
 import { MaterialIcons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMe } from '../../src/features/account/useMe';
+import { unreadChats, useConversations } from '../../src/features/chat/queries';
 import { useFriendRequests } from '../../src/features/friends/queries';
 import { haptics } from '../../src/ui/haptics';
 import { useTheme } from '../../src/ui/theme';
@@ -49,6 +50,14 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { data: me } = useMe();
   const incoming = useFriendRequests('in', !!me).data?.length ?? 0;
+  const unread = unreadChats(useConversations(!!me).data);
+  const badge = incoming + unread;
+  const badgeLabel = [
+    unread > 0 ? t('chat.unreadChats', { count: unread }) : null,
+    incoming > 0 ? t('friends.requestsBadge', { count: incoming }) : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   return (
     <Tabs
@@ -83,11 +92,11 @@ export default function TabLayout() {
           options={{
             title: t(tab.labelKey),
             // Without this, TalkBack also reads the icon font's glyph
-            tabBarAccessibilityLabel:
-              tab.name === 'friends' && incoming > 0 ? `${t(tab.labelKey)}, ${t('friends.requestsBadge', { count: incoming })}` : t(tab.labelKey),
+            tabBarAccessibilityLabel: tab.name === 'friends' && badge > 0 ? `${t(tab.labelKey)}, ${badgeLabel}` : t(tab.labelKey),
             tabBarButtonTestID: `tab-${tab.name}`,
-            ...(tab.name === 'friends' && incoming > 0
-              ? { tabBarBadge: incoming, tabBarBadgeStyle: { backgroundColor: theme.colors.accent, color: theme.colors.onAccent } }
+            // White on `accent` is 4.1:1, too little for the badge's small number
+            ...(tab.name === 'friends' && badge > 0
+              ? { tabBarBadge: badge, tabBarBadgeStyle: { backgroundColor: theme.colors.accentStrong, color: theme.colors.onAccent } }
               : {}),
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={tab.icon} color={color} focused={focused} size={theme.sizes.tabIcon} />

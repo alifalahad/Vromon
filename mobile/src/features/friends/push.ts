@@ -16,6 +16,8 @@ import { friendsApi } from '../../services/api';
 
 const TOKEN_KEY = 'vromon.pushToken';
 export const FRIENDS_CHANNEL = 'friends';
+/** Chats and trip rooms (friends-chat step 9): one notification per chat, replaced by the next */
+export const MESSAGES_CHANNEL = 'messages';
 
 export type PushResult = 'registered' | 'denied' | 'unavailable';
 
@@ -38,6 +40,10 @@ export async function registerForPush(ask: boolean): Promise<PushResult> {
       await Notifications.setNotificationChannelAsync(FRIENDS_CHANNEL, {
         name: 'Friends',
         importance: Notifications.AndroidImportance.DEFAULT,
+      });
+      await Notifications.setNotificationChannelAsync(MESSAGES_CHANNEL, {
+        name: 'Messages',
+        importance: Notifications.AndroidImportance.HIGH,
       });
     }
     let { status, canAskAgain } = await Notifications.getPermissionsAsync();

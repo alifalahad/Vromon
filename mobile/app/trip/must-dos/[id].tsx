@@ -2,6 +2,8 @@
  * Change a trip's must-dos: must-sees with their day and time, busy times,
  * places to skip, and the arrival and leaving times. Saving re-plans only the
  * days that need it (the server decides which); the trip screen says which.
+ * `add` (a place id, with `addName`) arrives from a place card's "Add to a trip":
+ * the place starts on the list as a must-see, kept once you save.
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -27,7 +29,7 @@ import { makeStyles, useTheme } from '../../../src/ui/theme';
 import { TimeSheet } from '../../../src/ui/TimeSheet';
 
 export default function MustDosScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, add, addName } = useLocalSearchParams<{ id: string; add?: string; addName?: string }>();
   const tripId = Number(id);
   const trip = useQuery({ queryKey: ['trip', tripId], queryFn: () => tripsApi.get(tripId), enabled: !!tripId });
   const styles = useStyles();
@@ -39,10 +41,10 @@ export default function MustDosScreen() {
       </View>
     );
   }
-  return <Editor trip={trip.data} />;
+  return <Editor trip={trip.data} add={add ? Number(add) : null} addName={addName ?? null} />;
 }
 
-function Editor({ trip }: { trip: Trip }) {
+function Editor({ trip, add, addName }: { trip: Trip; add: number | null; addName: string | null }) {
   const styles = useStyles();
   const { t } = useTranslation();
   const f = usePlanFormat();
@@ -52,11 +54,16 @@ function Editor({ trip }: { trip: Trip }) {
   const queryClient = useQueryClient();
   const cons = trip.constraints;
   const pref = trip.preference;
-  const [value, setValue] = useState<MustDos>({
-    mustSees: cons?.must_sees ?? [],
-    busy: cons?.busy ?? [],
-    skip: cons?.excluded_places ?? [],
-    avoidCrowds: cons?.avoid_crowded ?? false,
+  const already = add != null && (cons?.must_sees ?? []).some((m) => m.place_id === add);
+  const [value, setValue] = useState<MustDos>(() => {
+    const mustSees = cons?.must_sees ?? [];
+    return {
+      mustSees: add != null && !already ? [...mustSees, { place_id: add, day: null, when: null, at: null }] : mustSees,
+      busy: cons?.busy ?? [],
+      // A place you now want to see isn't one to skip
+      skip: (cons?.excluded_places ?? []).filter((p) => p !== add),
+      avoidCrowds: cons?.avoid_crowded ?? false,
+    };
   });
   const [arrive, setArrive] = useState<string | null>(pref?.arrive_time ?? null);
   const [leave, setLeave] = useState<string | null>(pref?.leave_time ?? null);
@@ -120,6 +127,11 @@ function Editor({ trip }: { trip: Trip }) {
           />
         </View>
         <View style={styles.gap} />
+        {add != null && addName ? (
+          <Text style={styles.added} accessibilityLiveRegion="polite" testID="md-added">
+            {already ? t('mustDos.alreadyAdded', { place: addName }) : t('mustDos.added', { place: addName })}
+          </Text>
+        ) : null}
         <MustDosEditor value={value} onChange={setValue} places={places.data ?? []} startDate={trip.start_date} days={days} showCrowds={false} />
         {error && (
           <Text style={styles.error} accessibilityLiveRegion="polite">
@@ -167,6 +179,7 @@ const useStyles = makeStyles((t) => ({
   content: { padding: t.spacing.lg, paddingBottom: t.spacing.xxl },
   h3: { ...t.type.headline, color: t.colors.textPrimary, marginBottom: t.spacing.sm },
   gap: { height: t.spacing.xl },
+  added: { ...t.type.callout, color: t.colors.success, marginBottom: t.spacing.md },
   group: { backgroundColor: t.colors.surface, borderRadius: 20, overflow: 'hidden' },
   divider: { height: 1, backgroundColor: t.colors.divider, marginLeft: 54 },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, paddingHorizontal: t.spacing.lg, minHeight: 60 },

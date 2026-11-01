@@ -73,6 +73,7 @@ export function RangeCalendar({ start, end, onChange, today = localToday() }: Pr
           accessibilityRole="button"
           accessibilityLabel={t('newTrip.prevMonth')}
           accessibilityState={{ disabled: !canGoBack }}
+          testID="cal-prev"
         >
           <MaterialCommunityIcons name="chevron-left" size={26} color={colors.textPrimary} />
         </PressableScale>
@@ -86,6 +87,7 @@ export function RangeCalendar({ start, end, onChange, today = localToday() }: Pr
           style={styles.arrow}
           accessibilityRole="button"
           accessibilityLabel={t('newTrip.nextMonth')}
+          testID="cal-next"
         >
           <MaterialCommunityIcons name="chevron-right" size={26} color={colors.textPrimary} />
         </PressableScale>

@@ -17,6 +17,8 @@ name: 07 A friend's trip opens read-only
 - tapOn:
     id: tab-friends
 - tapOn:
+    id: friends-segment-friends
+- tapOn:
     id: friend-${FRIEND_USERNAME}
 - scrollUntilVisible:
     element:

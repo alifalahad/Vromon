@@ -28,6 +28,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useMe } from '../src/features/account/useMe';
 import { signOut } from '../src/features/auth/actions';
 import { startAuthListener, useAuth } from '../src/features/auth/session';
+import { useLiveShareUpdates } from '../src/features/chat/liveShare';
+import { ChatBanner } from '../src/features/chat/ChatBanner';
+import { LiveShareBar } from '../src/features/chat/LiveShareBar';
+import { useLiveChat } from '../src/features/chat/useLiveChat';
 import { useFriendNotifications } from '../src/features/friends/useFriendNotifications';
 import { useReminderTaps } from '../src/features/trips/today/useReminderTaps';
 import { useServerConfigReady } from '../src/services/serverConfig';
@@ -37,6 +41,7 @@ import { initMonitoring, wrapRoot } from '../src/services/monitoring';
 import { persistOptions, queryClient, queryPersister } from '../src/services/queryClient';
 import { Button } from '../src/ui/Button';
 import { makeStyles, ThemeProvider, useTheme, type Theme } from '../src/ui/theme';
+import '../src/ui/icons'; // icons are skipped by screen readers (step 10)
 
 SplashScreen.preventAutoHideAsync();
 startAuthListener();
@@ -90,7 +95,11 @@ function useGate() {
 
   useSettingsSync(signedIn && me.data ? me.data.id : null);
   useFriendNotifications(signedIn && me.data && !me.data.needs_onboarding ? me.data.id : null);
+  // Live chat and the chat outbox, for the signed-in account
+  useLiveChat(signedIn && me.data && !me.data.needs_onboarding ? me.data.id : null);
   useReminderTaps(!!(signedIn && me.data && !me.data.needs_onboarding));
+  // Live location in a trip room (friends-chat step 8): a point a minute while it runs and Vromon is open
+  useLiveShareUpdates(client);
 
   const ready = status !== 'loading' && (!signedIn || !me.isPending);
   useEffect(() => {
@@ -129,6 +138,7 @@ function ThemedStack() {
   const { t } = useTranslation();
   const navTheme = useMemo(() => navigationTheme(theme), [theme]);
   const gate = useGate();
+  const myId = useMe(gate.inApp).data?.id;
 
   useEffect(() => {
     // Root view colour behind screens; avoids a white flash during transitions.
@@ -166,9 +176,20 @@ function ThemedStack() {
             <Stack.Screen name="settings/delete-account" options={{ title: t('deleteAccount.title') }} />
             <Stack.Screen name="map/add-place" options={{ title: t('map.addPlace'), presentation: 'modal' }} />
             <Stack.Screen name="map/theme" options={{ title: t('mapTheme.title') }} />
+            <Stack.Screen name="map/replay" options={{ headerShown: false }} />
             <Stack.Screen name="friends/add" options={{ title: t('friends.addFriend') }} />
             <Stack.Screen name="friends/[id]" options={{ title: '' }} />
             <Stack.Screen name="friends/compare/[id]" options={{ title: t('friends.compare') }} />
+            <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+            <Stack.Screen name="chat/new" options={{ title: t('chat.newMessage') }} />
+            <Stack.Screen name="chat/share/trip" options={{ title: t('chat.share.pickTrip') }} />
+            <Stack.Screen name="chat/share/place" options={{ headerShown: false, title: t('chat.share.pickPlace') }} />
+            <Stack.Screen name="chat/share/idea" options={{ title: t('chat.share.ideaTitle') }} />
+            <Stack.Screen name="chat/share/poll" options={{ title: t('chat.share.pollTitle') }} />
+            <Stack.Screen name="chat/report" options={{ title: t('chat.report.title') }} />
+            <Stack.Screen name="trip/invite/[id]" options={{ title: t('tripRoom.title') }} />
+            <Stack.Screen name="settings/chats" options={{ title: t('settings.chats.title') }} />
+            <Stack.Screen name="share/send" options={{ title: t('chat.share.sendTo') }} />
             <Stack.Screen name="add/[code]" options={{ title: t('friends.addFriend') }} />
             <Stack.Screen name="settings/blocked" options={{ title: t('friends.blockedUsers') }} />
           </Stack.Protected>
@@ -182,6 +203,10 @@ function ThemedStack() {
           <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
           <Stack.Screen name="auth/reset-password" options={{ title: '', headerTransparent: true }} />
         </Stack>
+        {/* While you share your live location, on every screen (the room shows its own) */}
+        {gate.inApp ? <LiveShareBar variant="floating" /> : null}
+        {/* A message in a chat that isn't open (step 9) */}
+        {gate.inApp && myId ? <ChatBanner me={myId} /> : null}
         {gate.loadFailed ? <AccountLoadError onRetry={gate.retry} /> : null}
       </BottomSheetModalProvider>
     </NavigationThemeProvider>

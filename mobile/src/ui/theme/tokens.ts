@@ -37,8 +37,30 @@ export type ThemeColors = {
   dangerBg: string;
   /** Overlay behind sheets and dialogs */
   scrim: string;
+  /** Floating controls over the map (capsule, round buttons, dock): translucent, see contrast.test.ts */
+  glass: string;
+  glassBorder: string;
+  /** Filled buttons with white text: `accent` is only 4.1:1 under white in dark mode */
+  accentStrong: string;
+  /** Chat: your own bubbles, with `onAccent` text (white on `accent` would fail AA at 16 px) */
+  bubbleMine: string;
+  /** Chat: other people's bubbles, with `textPrimary` text */
+  bubbleTheirs: string;
+  /** Chat: cards you sent (trip, place, idea, poll), with `textPrimary` and `cardMineText2` text */
+  cardMine: string;
+  cardMineText2: string;
+  /** The small capitals over a card you sent ("TRIP PLAN") */
+  cardEyebrowMine: string;
+  /** Buttons on a card you sent ("Open plan"), with `textPrimary` text */
+  cardButtonMine: string;
   shadow: string;
 };
+
+/** Names over other people's bubbles in a trip room, one per person; each 4.5:1 on `bubbleTheirs` (contrast.test.ts) */
+export const SENDER_NAMES = {
+  dark: ['#7FD6BE', '#D7A6F0', '#F2B13C', '#8AB4F8', '#F4978E', '#A5D67F'],
+  light: ['#0B6650', '#7A3B9C', '#7A5000', '#1F55B8', '#A8352A', '#3A6420'],
+} as const;
 
 export const darkColors: ThemeColors = {
   bg: '#262626',
@@ -63,6 +85,15 @@ export const darkColors: ThemeColors = {
   danger: '#F07A72',
   dangerBg: 'rgba(240, 122, 114, 0.16)',
   scrim: 'rgba(0, 0, 0, 0.6)',
+  glass: 'rgba(23, 27, 34, 0.9)', // 0.86 (mockups) lets link text drop to 4.3:1 over a white map
+  glassBorder: 'rgba(255, 255, 255, 0.08)',
+  accentStrong: '#2D6AE3',
+  bubbleMine: '#2D6AE3',
+  bubbleTheirs: '#333333',
+  cardMine: '#2B3B5C',
+  cardMineText2: '#C9D6EE',
+  cardEyebrowMine: '#A9C6FA',
+  cardButtonMine: 'rgba(255, 255, 255, 0.12)',
   shadow: '#000000',
 };
 
@@ -89,6 +120,16 @@ export const lightColors: ThemeColors = {
   danger: '#C62828',
   dangerBg: 'rgba(198, 40, 40, 0.10)',
   scrim: 'rgba(0, 0, 0, 0.45)',
+  glass: 'rgba(255, 255, 255, 0.92)',
+  glassBorder: 'rgba(0, 0, 0, 0.08)',
+  accentStrong: '#2563D9',
+  bubbleMine: '#2563D9',
+  // White bubbles would melt into the light background
+  bubbleTheirs: '#E8E8EA',
+  cardMine: '#E3EBFA',
+  cardMineText2: '#5C5C5C',
+  cardEyebrowMine: '#1F55C0',
+  cardButtonMine: '#FFFFFF',
   shadow: '#000000',
 };
 

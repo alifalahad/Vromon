@@ -2,7 +2,8 @@
 Vromon API v1 — other users' data, read-only.
 
 Every route depends on `require_viewer_can_see`: the owner and accepted friends
-see the data; anyone else gets 404.
+see the data; anyone else gets 404. Someone who hides their trips from friends
+(`share_trips_with_friends` off) shows friends no trips and no trip stats.
 """
 
 from __future__ import annotations
@@ -24,14 +25,17 @@ from app.schemas.schemas import TripStatsOut, TripSummaryOut
 from app.services.privacy import require_viewer_can_see
 from app.services.friends import friendship
 from app.services.stats import travel_stats, trip_stats, visits_with_country
-from app.services.stats.trips import viewer_today
+from app.services.on_the_road import shares_trips
+from app.services.stats.trips import summarize, viewer_today
 from app.services.stats.travel import VISITED
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.get("/{user_id}/trips", response_model=List[TripSummaryOut])
-def user_trips(owner: User = Depends(require_viewer_can_see), db: Session = Depends(get_db)):
+def user_trips(owner: User = Depends(require_viewer_can_see), viewer: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if owner.id != viewer.id and not shares_trips(db, owner.id):
+        return []  # they hide their trips from friends (C7)
     trips = db.scalars(
         select(Trip).where(Trip.user_id == owner.id).options(selectinload(Trip.stops)).order_by(Trip.created_at.desc())
     ).all()
@@ -39,8 +43,15 @@ def user_trips(owner: User = Depends(require_viewer_can_see), db: Session = Depe
 
 
 @router.get("/{user_id}/trips/stats", response_model=TripStatsOut)
-def user_trip_stats(today: Optional[date] = None, owner: User = Depends(require_viewer_can_see), db: Session = Depends(get_db)):
+def user_trip_stats(
+    today: Optional[date] = None,
+    owner: User = Depends(require_viewer_can_see),
+    viewer: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Completed trips only. `today` is the phone's local date (accepted within a day of the server's)."""
+    if owner.id != viewer.id and not shares_trips(db, owner.id):
+        return summarize([], viewer_today(today), {}).to_dict()  # they hide their trips from friends (C7)
     return trip_stats(db, owner.id, viewer_today(today)).to_dict()
 
 
@@ -61,7 +72,7 @@ def user_profile(owner: User = Depends(require_viewer_can_see), viewer: User = D
     return FriendProfileOut(
         id=owner.id, username=owner.username or "", display_name=owner.display_name,
         is_self=owner.id == viewer.id, friends_since=link.created_at if link else None,
-        home_country_iso2=owner.home_country_iso2,
+        home_country_iso2=owner.home_country_iso2, shares_trips=shares_trips(db, owner.id),
     )
 
 

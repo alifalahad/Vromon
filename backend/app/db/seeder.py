@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.models import Destination, Place, Restaurant, Hotel
@@ -28,6 +29,20 @@ REQUIRED_PLACE_FIELDS = ("estimated_cost", "opening_time", "closing_time")
 def missing_place_fields(record: dict) -> list[str]:
     """Required place fields absent (or null) in a seed record."""
     return [f for f in REQUIRED_PLACE_FIELDS if record.get(f) is None]
+
+
+def _sync_id_sequences(db: Session, tables: tuple[str, ...]) -> None:
+    """
+    The seed rows keep the ids from the seed file, and PostgreSQL's id sequences don't move
+    for rows inserted with an id: the next row added without one (load_destinations) would
+    get id 1 again and stop the server at its first start on a new database (friends-chat
+    step 10). Move each sequence past the largest id. SQLite has no sequences to move.
+    """
+    if db.get_bind().dialect.name != "postgresql":
+        return
+    for table in tables:
+        db.execute(text(f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), COALESCE((SELECT MAX(id) FROM {table}), 0) + 1, false)"))
+    db.commit()
 
 
 def seed_database(db: Session) -> None:
@@ -132,6 +147,7 @@ def seed_database(db: Session) -> None:
         db.add(hotel)
 
     db.commit()
+    _sync_id_sequences(db, ("destinations", "places", "restaurants", "hotels"))
     # The imported destinations (step 10)
     from app.db.destinations import load_destinations
     load_destinations(db)

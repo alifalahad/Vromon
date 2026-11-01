@@ -312,3 +312,67 @@ The plan is `docs/trip-planner-plan.md`; each step has a report in `docs/trip-pl
   - **The trip screen from the saved copy:** 232–330 ms (target under 1 s). The development build takes 1.3–1.5 s, from unoptimised JavaScript.
   - **Scrolling the plan and switching days:** 932 frames, 2.8% janky; 50th/90th/99th percentile 12/21/32 ms.
   - **Dragging a stop (6 drags):** 1,035 frames, 4.1% janky; 50th/90th/95th percentile 19/22/26 ms. That's about 50 fps while a card is held: usable, not perfectly smooth.
+
+### 29. Friends and chat, step 1: conversations and text messages (2026-10-27)
+
+Plan: `docs/friends-chat-plan.md`. Mockups: https://claude.ai/artifact/88qidwV6NKUSdmUofjXKg1.
+- **Schema** (migration `0015`):
+  - `conversations`: `kind` direct/trip; `direct_key` = the pair's ids in friendship order, unique, so a pair has one chat; `trip_id` unique, for step 7;
+  - `conversation_members`: `last_read_message_id`, `cleared_up_to_id`, `muted_until`, `role`;
+  - `messages`: one `id` orders everything and drives paging and unread counts; `client_id` is unique per sender, so a retry returns the first message; `kind`, `body`, JSON `payload` for the step-4 cards, `reply_to_id`, `deleted_at`;
+  - `message_reactions` and `poll_votes`, made now for steps 4–5;
+  - `user_settings.read_receipts` (`sa.true()` again: autogenerate wrote `'1'`).
+  - The migration was checked on SQLite and PostgreSQL 16 (`tests/test_migrations.py` with `TEST_POSTGRES_URL` set to a throwaway database).
+- **No reliance on `ON DELETE`:** SQLite doesn't enforce it (no `PRAGMA foreign_keys`), so `services.chat.delete_chat_data` deletes a user's messages, reactions, votes and memberships, and chats left with nobody in them, before the account goes.
+- **Privacy:** a chat is visible only to its members (others: 404). A member who blocked the other person gets 404 too. Without a friendship, a chat is read-only (403 on send) and says `not_friends`, which doesn't reveal a block.
+- **Send limit per user:** slowapi keyed on the user, not the address (`rate_limit.user_or_ip`). The send endpoint's dependency puts the user id on the request, and slowapi checks after FastAPI has resolved dependencies. 30 messages a minute.
+- **Times with an offset:** chat responses send `created_at` and `muted_until` as UTC with `+00:00`. Older endpoints send naive UTC times, which phones read as local time.
+
+### 30. Friends and chat, step 2: live updates over a WebSocket (2026-10-27)
+
+- **Transport:**
+  - FastAPI's WebSocket at `/api/v1/ws`, one per signed-in app. `uvicorn[standard]` already ships `websockets` 16.1.1.
+  - uvicorn sends protocol pings every 20 s by default. On top of that the server sends `{"type": "ping"}` every 25 s, which the app can watch to notice a dead connection.
+- **Signing in:**
+  - The token goes in the first message, within 5 s, never in the URL.
+  - A bad, missing or expired token closes the socket with **4401**. When Supabase's keys can't be fetched, it closes with **1013**, so the app retries instead of signing out.
+  - The socket also closes at the token's `exp`, and the app reconnects with the refreshed token. A revoked session therefore stops getting events within the token's lifetime.
+  - The check is a dependency (`ws_authenticator`) so tests can swap it, as `act_as` does for HTTP.
+- **Hub:**
+  - In memory: user id → open connections. Each connection has a bounded queue (256) and one writer task, so events arrive in order and a socket is never written to from two tasks at once.
+  - The chat endpoints are sync and run in worker threads, so `publish` hands each event to the connection's own event loop (`call_soon_threadsafe`).
+  - A socket that falls 256 events behind is closed with 1013; the app reconnects and catches up (it fetches each chat's newest page again and merges by id; `after=<id>` pages forward for any other client).
+- **No database session per socket:** the socket opens short sessions from the same `get_db` as the HTTP routes, only to sign in and to check typing. A pool connection held for each open app would run out with a few dozen users.
+- **Events:**
+  - Sent after the commit, and only to members who can see the chat (`chat.seat`): a blocker gets nothing from that chat.
+  - Each event is rendered per person: only the sender's apps get `client_id`.
+  - Read events follow the mutual read-receipts rule.
+  - Typing is ephemeral, at most one event every 3 s per person per chat, and only from someone who can write there.
+  - Friendship changes (accept, remove, block, unblock) and account deletion send `conversation.updated`, so open chats switch to writable or read-only at once.
+- **More than one server process (later):**
+  - The in-memory hub only reaches sockets on its own process. Render's load balancer spreads sockets across instances at random.
+  - With more than one instance, `Hub.publish` becomes a Postgres `NOTIFY` with a small payload (`kind`, `conversation_id`, `message_id`). Every instance `LISTEN`s, loads the row and delivers to its own sockets, so no sticky sessions are needed.
+  - Supabase's pooler in transaction mode doesn't support `LISTEN`, so the listener needs a direct or session-mode connection.
+- **Measured on this Mac:**
+  - 8–28 ms from B starting to send to the event on A's socket, using real Supabase tokens and the dev backend (`scripts/e2e/live_check.py`);
+  - 10 ms on a production-mode backend run as `scripts/share/start.sh` runs it.
+  - A silent socket got the server's pings at 25 s and 50 s, stayed open for 70 s, and then received a message. Cloudflare closes connections that are silent for about 100 s, so the 25 s ping keeps quiet chats open through the tunnel.
+- **Through the share's Cloudflare quick tunnel** (`scripts/share/start.sh`, production mode):
+  - 89–105 ms from B's send to A's event;
+  - a bad token closes with 4401;
+  - a socket silent for 130 s stayed open (pings at 25 … 125 s) and then received a message;
+  - the friends' APK loaded through it with every request 200.
+  - Run it again with `backend/venv/bin/python scripts/e2e/live_check.py https://<api tunnel address>`.
+
+### 31. Friends and chat, step 10: hardening (2026-10-29)
+
+- **One server instance, in memory.** The live hub stays in the server's memory, so production runs exactly one instance with one uvicorn worker, on a plan that doesn't sleep ([go-live.md](go-live.md), "Live chat on the host"). Render closes sockets on every deploy; the app reconnects and refetches, so nothing is lost. `LISTEN/NOTIFY` (decision 30) is the way out when one instance isn't enough.
+- **Limits, all on the server:**
+  - request bodies: 1 MB of JSON, a photo plus 64 KB of form (`app/core/body_limit.py`, a pure ASGI middleware: 413 from `Content-Length`, or as soon as a chunked body passes the cap);
+  - the socket: frames over 16 KB refused by uvicorn (`--ws-max-size 16384`), messages over 4,096 characters close it (1009), more than 30 messages in 10 s close it (1008), and a person's sixth socket closes their oldest (1013; the app reconnects);
+  - the per-user rate limits from steps 1–8 stay as they were (send 30 a minute, answers and reactions 60, live points 6, invites 20, reports 10).
+- **Secrets never in URLs.** The socket's token was already in its first message. The push token now goes in the body (`POST /me/devices/remove`); `DELETE /me/devices/{token}` is gone. No APK had a push token yet (no Firebase), so nothing breaks.
+- **Hidden trips stay hidden by id.** Trip ids count up, so `rooms.can_read_trip` checks "Show my trips to friends" itself: a friend reads a hidden trip only if its owner sent it to them in a chat (a trip card or an invite, not unsent). Before step 10 any friend could open one by its id.
+- **PostgreSQL in the tests.** `TEST_API_POSTGRES_URL` runs the whole API suite on an empty PostgreSQL database. It found three bugs SQLite hides, each fixed: the seed's fixed ids left the id sequences behind (the server couldn't start on a new database), deleting an account with a planned trip violated a foreign key (the ORM deleted the user first), and four lists had no `ORDER BY`.
+- **The chat list in a fixed number of queries.** `chat.seats` and `_conversations_out` load every chat's seat, settings, read state, trip and last message together: 26 queries for 104 chats instead of 941.
+- **The app redraws only what changed.** `buildRows` hands back the same bubble object while nothing about it changed (a `WeakMap` keyed by message; messages keep their identity through TanStack Query's structural sharing), so `React.memo` skips the rest of a long chat. Chat list rows are memoized the same way.

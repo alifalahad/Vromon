@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.services.budget import service as budget_service
 from app.services.photos import StorageError, delete_photos
 from app.services.photos.storage import PhotoStore, optional_photo_store
-from app.services.privacy import viewer_can_see
+from app.services import live, rooms
 from app.services.recommendation.recommendation_service import per_person_daily_budget
 from app.core.auth import get_current_user
 from app.db import get_db
@@ -195,8 +195,13 @@ def delete_trip(
     for p in photos:
         if p.place_type is not None:
             p.trip_id = None
+    room = rooms.room_of(db, trip.id)
+    room_id = room.id if room is not None else None
+    members = rooms.delete_room(db, trip.id)  # SQLite doesn't cascade
     db.delete(trip)
     db.commit()
+    if room_id is not None:
+        live.conversation_updated(members, room_id)  # gone for everyone in it
 
 
 # ---------------------------------------------------------------------------
@@ -238,16 +243,43 @@ def mark_visited(trip_id: int, payload: MarkVisitedIn, db: Session = Depends(get
 def duplicate_trip(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Create a copy of an existing trip with its preferences and constraints."""
     original = _load_trip(db, trip_id, user)
+    new_trip = _copy_trip(db, original, user)
+    db.commit()
+    db.refresh(new_trip)
+    return _trip_out(db, new_trip)
 
+
+@router.post("/{trip_id}/copy", response_model=TripOut, status_code=201)
+def copy_trip(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    "Copy to my trips" from a trip card (docs/friends-chat-plan.md, step 4): any trip
+    you can see (yours, or a friend's) becomes a new draft of your own, with its dates,
+    stops, preferences and must-dos. Not its plan (you build your own), photos,
+    feedback or members, and not a friend's busy times (their own schedule).
+    Someone who can't see the trip gets 404.
+    """
+    original = _load_trip(db, trip_id, user, friends_may_read=True)
+    new_trip = _copy_trip(db, original, user)
+    db.commit()
+    db.refresh(new_trip)
+    return _trip_out(db, new_trip)
+
+
+def _copy_trip(db: Session, original: Trip, owner: User) -> Trip:
+    """A new draft trip for `owner` like `original` (no plan yet). Doesn't commit."""
+    own = original.user_id == owner.id
     new_trip = Trip(
-        user_id=user.id,
+        user_id=owner.id,
         destination=original.destination,
         start_date=original.start_date,
         end_date=original.end_date,
         num_travelers=original.num_travelers,
         total_budget=original.total_budget,
-        title=f"{original.title or original.destination + ' Trip'} (Copy)",
+        # Your own copy says so; a friend's trip keeps its name in your list
+        title=f"{original.title or original.destination + ' Trip'} (Copy)" if own else original.title,
         status="draft",
+        # A copy of a trip that's already over isn't one you went on: don't ask to mark it visited
+        visited_prompt=None if own or original.end_date >= date.today() else "dismissed",
     )
     db.add(new_trip)
     db.flush()
@@ -275,7 +307,8 @@ def duplicate_trip(trip_id: int, db: Session = Depends(get_db), user: User = Dep
             avoid_high_activity=original.constraints.avoid_high_activity,
         )
         cons.must_sees = original.constraints.must_sees
-        cons.busy = original.constraints.busy
+        if own:
+            cons.busy = original.constraints.busy
         cons.excluded_places = original.constraints.excluded_places
         db.add(cons)
 
@@ -285,10 +318,7 @@ def duplicate_trip(trip_id: int, db: Session = Depends(get_db), user: User = Dep
                        arrive_on=st.arrive_on, depart_on=st.depart_on)
             for st in original.stops
         ])
-
-    db.commit()
-    db.refresh(new_trip)
-    return _trip_out(db, new_trip)
+    return new_trip
 
 
 # ---------------------------------------------------------------------------
@@ -1263,7 +1293,8 @@ def _edit_response(db: Session, trip_id: int, user: User, day: Itinerary, messag
 def _load_trip(db: Session, trip_id: int, owner: User, *, friends_may_read: bool = False) -> Trip:
     """
     The trip if `owner` owns it; otherwise 404 (never 403, so existence isn't confirmed).
-    With `friends_may_read` (GET routes only) the owner's accepted friends may read it too.
+    With `friends_may_read` (GET routes only) the owner's accepted friends, and the trip
+    room's joined members (step 7), may read it too; only the owner ever changes it.
     """
     trip = (
         db.query(Trip)
@@ -1282,8 +1313,7 @@ def _load_trip(db: Session, trip_id: int, owner: User, *, friends_may_read: bool
         .first()
     )
     if trip is not None and trip.user_id is not None and trip.user_id != owner.id and friends_may_read:
-        trip_owner = db.get(User, trip.user_id)
-        if trip_owner is not None and viewer_can_see(db, owner, trip_owner):
+        if rooms.can_read_trip(db, owner, trip):
             prepare_destination(db, trip.destination)
             return trip
     if trip is None or trip.user_id != owner.id:

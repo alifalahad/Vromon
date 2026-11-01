@@ -145,6 +145,15 @@ describe('resolving a selection', () => {
     }
   });
 
+  it('keeps Lived clearly darker than Visited in every preset (lightness, not hue alone)', () => {
+    for (const t of THEMES) {
+      for (const scheme of ['light', 'dark'] as const) {
+        const r = resolveMapTheme(selectTheme(t.id), scheme);
+        expect(contrast(r.status.visited, r.status.lived)).toBeGreaterThanOrEqual(1.8);
+      }
+    }
+  });
+
   it('renders Rustic "In common" as in 07 (about #AB898A)', () => {
     const r = resolveMapTheme(selectTheme('rustic'), 'light');
     expect(near(r.compare.inCommon, '#AB898A', 14)).toBe(true);

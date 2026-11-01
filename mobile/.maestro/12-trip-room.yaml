@@ -1,0 +1,86 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: 12 Trip room - join from the invite, suggest a place, the owner adds it to Day 1
+---
+# The friend plans a trip over the API and invites this account (USERNAME); it also
+# picks a place that isn't in its plan yet, for this account to suggest
+- runScript:
+    file: scripts/room-invite.js
+    env:
+      API_URL: ${API_URL}
+      FRIEND_TOKEN: ${FRIEND_TOKEN}
+      USERNAME: ${USERNAME}
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
+- tapOn:
+    id: tab-friends
+- tapOn:
+    id: chat-${FRIEND_USERNAME}
+# The invite card is the newest message in your chat with the friend: join, and the room opens
+- extendedWaitUntil:
+    visible:
+      id: card-join-${output.inviteId}
+    timeout: 15000
+- tapOn:
+    id: card-join-${output.inviteId}
+- extendedWaitUntil:
+    visible:
+      id: room-plan-bar
+    timeout: 15000
+# Members suggest; only the owner changes the plan (decision C1)
+- tapOn:
+    id: chat-share
+- tapOn:
+    id: share-place
+- extendedWaitUntil:
+    visible:
+      id: where-input
+    timeout: 10000
+- inputText: ${output.roomPlace}
+- tapOn:
+    id: where-hit-1
+- extendedWaitUntil:
+    visible: "Waiting for .*"
+    timeout: 15000
+# The owner adds it to Day 1 over the API, and the card changes live
+- runScript:
+    file: scripts/room-accept.js
+    env:
+      API_URL: ${API_URL}
+      FRIEND_TOKEN: ${FRIEND_TOKEN}
+      ROOM_TRIP_ID: ${output.roomTripId}
+- extendedWaitUntil:
+    visible: "Added to Day 1"
+    timeout: 15000
+# The pinned plan bar opens the trip, read-only for a member, with the place on Day 1
+- tapOn:
+    id: room-plan-bar
+- extendedWaitUntil:
+    visible:
+      id: trip-title
+    timeout: 20000
+- assertVisible: ".*viewing a friend.*"
+- assertNotVisible:
+    id: trip-menu
+- tapOn:
+    id: day-tab-1
+# Pull the plan up so the day's stops are on screen (the sheet opens half way), then find the place
+- swipe:
+    start: "50%,60%"
+    end: "50%,12%"
+    duration: 600
+- scrollUntilVisible:
+    element: ".*${output.roomPlace}.*"
+    direction: DOWN
+    timeout: 20000
+# Clean up: the friend deletes the trip, and its room goes with it
+- runScript:
+    file: scripts/room-cleanup.js
+    env:
+      API_URL: ${API_URL}
+      FRIEND_TOKEN: ${FRIEND_TOKEN}
+      ROOM_TRIP_ID: ${output.roomTripId}

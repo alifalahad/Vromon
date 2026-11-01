@@ -1,7 +1,9 @@
 # Vromon end-to-end suite (prompt §10). Run from mobile/:
-#   maestro test .maestro -e EMAIL=… -e PASSWORD=… -e FRIEND_CODE=… -e FRIEND_USERNAME=… \
+#   maestro test .maestro -e EMAIL=… -e PASSWORD=… -e USERNAME=… -e FRIEND_CODE=… -e FRIEND_USERNAME=… \
 #     -e FRIEND_TOKEN=… -e API_URL=http://127.0.0.1:8001
+# USERNAME: the signed-in test account's username (flow 12's invite).
 # FRIEND_*: a second test account (its friend code, username and an access token).
+# Add -e DEV_CLIENT=false when the preview app is on the same phone (see subflows/launch.yaml).
 # Use throwaway test accounts: the flows change the signed-in account's map, theme and trips.
 flows:
   - "*.yaml"
@@ -19,4 +21,7 @@ executionOrder:
     - 07 A friend's trip opens read-only
     - 08 Rearrange a plan from a stop's details and add a stop
     - 09 The whole journey - a trip from today, rearranged, its conditions, Today mode
+    - 10 Map home - story, divisions, press and hold to mark
+    - 11 Chat with a friend - send, a live reply, read ticks
+    - 12 Trip room - join from the invite, suggest a place, the owner adds it to Day 1
     - 99 Sign the test account out again

@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
+from typing import Optional
 
 import httpx
 from fastapi import BackgroundTasks
@@ -25,7 +26,8 @@ from app.models.models import Device, UserSettings
 logger = logging.getLogger("vromon.push")
 
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
-CHANNEL = "friends"  # Android channel, created by the app
+CHANNEL = "friends"  # Android channels, created by the app
+MESSAGES_CHANNEL = "messages"  # chats and trip rooms (friends-chat step 9)
 
 
 @dataclass(frozen=True)
@@ -36,6 +38,10 @@ class Push:
     url: str
     # UserSettings flag that must be on, e.g. "notify_friend_requests"
     preference: str
+    channel: str = CHANNEL
+    # One notification per chat: a new one replaces the one shown (Android `tag`) and
+    # coalesces with any still in transit (`collapseId`)
+    tag: Optional[str] = None
 
 
 def _send(messages: list[dict]) -> list[dict]:
@@ -61,8 +67,9 @@ def queue_push(background: BackgroundTasks, db: Session, user_id: uuid.UUID, pus
 
 def deliver(tokens: list[str], push: Push) -> None:
     """Send to the Expo Push API and forget tokens that no longer exist. Never raises."""
+    extra = {"tag": push.tag, "collapseId": push.tag} if push.tag else {}
     messages = [
-        {"to": t, "title": push.title, "body": push.body, "data": {"url": push.url}, "channelId": CHANNEL, "sound": "default"}
+        {"to": t, "title": push.title, "body": push.body, "data": {"url": push.url}, "channelId": push.channel, "sound": "default", **extra}
         for t in tokens
     ]
     try:

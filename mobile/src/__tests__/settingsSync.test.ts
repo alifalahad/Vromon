@@ -72,6 +72,41 @@ describe('settings sync', () => {
     expect(usePreferences.getState().unsyncedFor).toBeNull();
   });
 
+  it("applies the account's chat settings (Chats and privacy)", async () => {
+    getSettings.mockResolvedValue({
+      ...SERVER,
+      read_receipts: false,
+      notify_messages: false,
+      notify_trip_rooms: true,
+      notification_previews: false,
+      share_trips_with_friends: false,
+    });
+    await start('u1');
+    await flush();
+    expect(usePreferences.getState()).toEqual(
+      expect.objectContaining({ readReceipts: false, notifyMessages: false, notifyTripRooms: true, notificationPreviews: false, shareTrips: false }),
+    );
+  });
+
+  it('every push carries every chat setting, so changing the theme never turns read receipts back on', async () => {
+    getSettings.mockResolvedValue({ ...SERVER, read_receipts: false, notification_previews: false, share_trips_with_friends: false });
+    await start('u1');
+    await flush();
+    await act(async () => usePreferences.getState().setMapTheme(selectTheme('serenity')));
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(putSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        read_receipts: false,
+        notify_messages: true,
+        notify_trip_rooms: true,
+        notification_previews: false,
+        share_trips_with_friends: false,
+      }),
+    );
+  });
+
   it('a change that never reached the server (offline) is pushed on the next start instead of being overwritten', async () => {
     usePreferences.setState({ mapTheme: selectTheme('rustic'), unsyncedFor: 'u1' });
     await start('u1');

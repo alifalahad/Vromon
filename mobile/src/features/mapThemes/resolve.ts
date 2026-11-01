@@ -40,9 +40,13 @@ export type ResolvedMapTheme = {
   compare: { you: string; friend: string; inCommon: string };
 };
 
-/** Presets: Want to visit = the visited colour at 35% over land plus an outline; Lived = 20% darker. */
+/**
+ * Presets: Want to visit = the visited colour at 35% over land plus an outline;
+ * Lived = 40% darker. At 20% the two oranges were hard to tell apart on the phone
+ * (map home step 0); 40% keeps them at least 1.8:1 apart in lightness.
+ */
 export const WANT_FILL_OPACITY = 0.35;
-export const LIVED_DARKEN = 0.2;
+export const LIVED_DARKEN = 0.4;
 
 const preset = (id: string): MapThemePreset | undefined => THEMES.find((t) => t.id === id);
 const presetRef = (ref: string) => (ref.startsWith(THEME_REF) ? preset(ref.slice(THEME_REF.length)) : undefined);

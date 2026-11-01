@@ -29,7 +29,7 @@ export default function BlockedScreen() {
       ListEmptyComponent={blocks.isPending ? null : <Text style={styles.empty}>{t('friends.noBlocked')}</Text>}
       renderItem={({ item }) => (
         <View style={styles.row}>
-          <Avatar name={item.display_name ?? item.username} size={44} />
+          <Avatar name={item.display_name ?? item.username} id={item.id} size={44} />
           <View style={styles.text}>
             <Text style={styles.name}>{item.display_name ?? item.username}</Text>
             <Text style={styles.meta}>@{item.username}</Text>

@@ -10,9 +10,10 @@ import type { Unplaced } from '../types';
 
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
+let mockParams: Record<string, string> = {};
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace, back: mockBack, push: jest.fn() }),
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockParams,
 }));
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
 jest.mock('../ui/haptics', () => ({
@@ -20,6 +21,7 @@ jest.mock('../ui/haptics', () => ({
   haptics: { success: jest.fn(), error: jest.fn(), light: jest.fn(), warning: jest.fn(), selection: jest.fn(), medium: jest.fn() },
 }));
 jest.mock('../features/trips/CitySearch', () => ({ CitySearch: () => null }));
+jest.mock('../features/account/useMe', () => ({ useMe: () => ({ data: undefined }) }));
 jest.mock('../services/api', () => ({
   destinationsApi: { list: jest.fn(), hotels: jest.fn() },
   placesApi: { list: jest.fn() },
@@ -53,6 +55,12 @@ const UNPLACED: Unplaced = {
 /** Press, and let the screen settle */
 const press = (el: Parameters<typeof fireEvent.press>[0]) => act(async () => fireEvent.press(el));
 
+/** "Where to?": open the search and pick a destination from the full list */
+async function choose(id: number) {
+  await press(await screen.findByTestId('destination-search'));
+  await press(await screen.findByTestId(`where-all-${id}`));
+}
+
 async function renderScreen() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
   return render(
@@ -64,6 +72,7 @@ async function renderScreen() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockParams = {};
   // No waiting between the building checks
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
   dest.list.mockResolvedValue([{ id: 1, name: "Cox's Bazar", country: 'Bangladesh', place_count: 25 }]);
@@ -76,15 +85,87 @@ beforeEach(() => {
 });
 
 describe('choosing a destination', () => {
-  it('imported destinations say they are not checked yet, and where their places come from', async () => {
-    dest.list.mockResolvedValue([
-      { id: 1, name: "Cox's Bazar", country: 'Bangladesh', place_count: 25, checked: true },
-      { id: 2, name: 'Sylhet', country: 'Bangladesh', place_count: 15, checked: false, attribution: 'Wikivoyage' },
-    ]);
+  const TWO = [
+    { id: 1, name: "Cox's Bazar", country: 'Bangladesh', place_count: 25, checked: true, region_code: 'BD-B', latitude: 21.43, longitude: 92.0 },
+    { id: 2, name: 'Sylhet', country: 'Bangladesh', place_count: 15, checked: false, attribution: 'Wikivoyage', region_code: 'BD-G', latitude: 24.89, longitude: 91.87 },
+  ];
+
+  it('lists every destination by division before typing; imported ones say they are not checked yet', async () => {
+    dest.list.mockResolvedValue(TWO);
     await renderScreen();
-    expect(await screen.findByTestId('destination-2')).toHaveTextContent(/Sylhet15 placesNot checked yet/);
-    expect(screen.getByTestId('destination-1')).not.toHaveTextContent(/Not checked/);
+    await press(await screen.findByTestId('destination-search'));
+    expect(screen.getByText('All destinations (2)')).toBeTruthy();
+    // Under its division's heading, so the row doesn't repeat it
+    expect(screen.getAllByText('Sylhet')).toHaveLength(2);
+    expect(screen.getByTestId('where-all-2')).toHaveTextContent(/Sylhet15 placesNot checked yet$/);
+    expect(screen.getByTestId('where-all-1')).not.toHaveTextContent(/Not checked/);
+
+    // Picked: a card, and where its places come from
+    await press(screen.getByTestId('where-all-2'));
+    expect(screen.queryByTestId('where-search')).toBeNull();
+    expect(screen.getByTestId('destination-chosen')).toHaveTextContent(/Sylhet.*Not checked yet.*Change/);
     expect(screen.getByText(/come from Wikivoyage and Wikidata and haven't been checked yet/)).toBeTruthy();
+
+    // Changing it: the last pick comes first, marked as chosen
+    await press(screen.getByTestId('destination-chosen'));
+    expect(await screen.findByText('Recent')).toBeTruthy();
+    expect(screen.getByTestId('where-recent-2')).toHaveProp('accessibilityState', { selected: true });
+    await press(screen.getByTestId('where-clear-recent'));
+    expect(screen.queryByTestId('where-recent-2')).toBeNull();
+  });
+
+  it('finds a destination from another spelling, and from one of its attractions (which becomes a must-see)', async () => {
+    dest.list.mockResolvedValue(TWO);
+    await renderScreen();
+    await press(await screen.findByTestId('destination-search'));
+    await act(async () => fireEvent.changeText(screen.getByTestId('where-input'), 'coxs'));
+    expect(screen.getByTestId('where-hit-1')).toHaveTextContent(/Cox's Bazar/);
+
+    await act(async () => fireEvent.changeText(screen.getByTestId('where-input'), 'himchari'));
+    expect(screen.getByTestId('where-hit-1')).toHaveTextContent(/Himchari Hilltop Viewpoint.*Attraction in Cox's Bazar/);
+    await press(screen.getByTestId('where-hit-1'));
+    expect(screen.getByTestId('destination-chosen')).toHaveTextContent(/Cox's Bazar/);
+    expect(screen.getByText('Himchari Hilltop Viewpoint is on your must-see list')).toBeTruthy();
+
+    // ...and is there among the must-dos
+    await press(screen.getByTestId('new-next'));
+    await press(await screen.findByTestId('new-next'));
+    expect(await screen.findByText('Your must-dos')).toBeTruthy();
+    expect(await screen.findByText('1 must-see')).toBeTruthy();
+  });
+
+  it("from a place card's Add to a trip: starts there, with the attraction a must-see", async () => {
+    dest.list.mockResolvedValue(TWO);
+    mockParams = { destination: "Cox's Bazar", mustSee: String(HILL.id), mustSeeName: HILL.name };
+    await renderScreen();
+    expect(await screen.findByTestId('destination-chosen')).toHaveTextContent(/Cox's Bazar/);
+    expect(screen.getByText(`${HILL.name} is on your must-see list`)).toBeTruthy();
+    await press(screen.getByTestId('new-next'));
+    await press(await screen.findByTestId('new-next'));
+    expect(await screen.findByText('1 must-see')).toBeTruthy();
+  });
+
+  it('says what Vromon covers when nothing matches, and offers a close name', async () => {
+    dest.list.mockResolvedValue(TWO);
+    await renderScreen();
+    await press(await screen.findByTestId('destination-search'));
+    await act(async () => fireEvent.changeText(screen.getByTestId('where-input'), 'zzzz'));
+    expect(screen.getByTestId('where-empty')).toHaveTextContent(/Nothing matches “zzzz”.*Vromon can plan trips to 2 destinations so far/);
+    expect(screen.queryByTestId('where-count')).toBeNull();
+    await act(async () => fireEvent.changeText(screen.getByTestId('where-input'), 'silet'));
+    expect(screen.getByTestId('where-empty')).toBeTruthy();
+    await press(screen.getByTestId('where-did-you-mean'));
+    expect(screen.getByTestId('where-input').props.value).toBe('Sylhet');
+    expect(screen.getByTestId('where-hit-2')).toBeTruthy();
+  });
+
+  it('closes without choosing', async () => {
+    dest.list.mockResolvedValue(TWO);
+    await renderScreen();
+    await press(await screen.findByTestId('destination-search'));
+    await press(screen.getByTestId('where-close'));
+    expect(screen.queryByTestId('where-search')).toBeNull();
+    expect(screen.getByTestId('destination-search')).toBeTruthy();
   });
 });
 
@@ -105,7 +186,7 @@ describe('planning a new trip', () => {
     expect(await screen.findByText('Where to?')).toBeTruthy();
     await press(screen.getByTestId('new-next'));
     expect(screen.getByText("Choose where you're going.")).toBeTruthy();
-    await press(await screen.findByTestId('destination-1'));
+    await choose(1);
     await press(screen.getByTestId('travellers-more'));
     expect(screen.getByTestId('travellers-value')).toHaveTextContent('3');
     await press(screen.getByTestId('new-next'));
@@ -157,7 +238,7 @@ describe('planning a new trip', () => {
     trips.create.mockResolvedValue({ id: 78 });
     trips.generate.mockResolvedValue({ unplaced: [], itinerary: [] });
     await renderScreen();
-    await press(await screen.findByTestId('destination-1'));
+    await choose(1);
     await press(screen.getByTestId('new-next'));
     await press(await screen.findByTestId('build-now'));
     expect(await screen.findByTestId('see-plan', {}, { timeout: 3000 })).toBeTruthy();
@@ -168,7 +249,7 @@ describe('planning a new trip', () => {
     trips.create.mockResolvedValue({ id: 79 });
     trips.generate.mockRejectedValue(new Error('Server error'));
     await renderScreen();
-    await press(await screen.findByTestId('destination-1'));
+    await choose(1);
     await press(screen.getByTestId('new-next'));
     await press(await screen.findByTestId('build-now'));
     expect(await screen.findByText("The plan couldn't be built")).toBeTruthy();

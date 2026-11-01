@@ -31,6 +31,12 @@ type Paint = ExpressionSpecification | string;
 
 const shown = (on: boolean) => ({ visibility: on ? ('visible' as const) : ('none' as const) });
 
+/**
+ * Place fills fade from city zoom up, so a trip's route and stops stay readable
+ * close up instead of sitting on a solid status colour (map home step 7).
+ */
+export const CLOSE_UP_FADE = ['interpolate', ['linear'], ['zoom'], 7, 1, 11, 0.3] as never;
+
 /** Layer ids other layers anchor to. */
 export const LAYER = { countryFill: 'country-fill', glow: 'country-border-glow', border: 'country-border', label: 'country-label' } as const;
 
@@ -54,10 +60,13 @@ export function CountryLayers({
   fill,
   outlineCodes = [],
   outlineColor,
+  selectedCode,
   onPress,
 }: {
   base: ResolvedBase;
   fill: Paint;
+  /** A country to outline as selected (its sheet is open) */
+  selectedCode?: string | null;
   /** Countries drawn with a status outline (presets' Want to visit) */
   outlineCodes?: readonly string[];
   outlineColor?: string;
@@ -66,7 +75,7 @@ export function CountryLayers({
   const borderWidth = ['interpolate', ['linear'], ['zoom'], 1, 0.4, 6, 1.2] as never;
   return (
     <GeoJSONSource id="countries" data={COUNTRIES} onPress={onPress}>
-      <Layer id={LAYER.countryFill} type="fill" paint={{ 'fill-color': fill as never, 'fill-antialias': true }} />
+      <Layer id={LAYER.countryFill} type="fill" paint={{ 'fill-color': fill as never, 'fill-antialias': true, 'fill-opacity': CLOSE_UP_FADE }} />
       <Layer
         id={LAYER.glow}
         type="line"
@@ -80,6 +89,13 @@ export function CountryLayers({
         layout={shown(!!outlineColor && outlineCodes.length > 0)}
         filter={['in', ['get', 'iso2'], ['literal', [...outlineCodes]]] as never}
         paint={{ 'line-color': outlineColor ?? base.border, 'line-width': 1.5 }}
+      />
+      <Layer
+        id="country-selected"
+        type="line"
+        layout={{ ...shown(!!selectedCode), 'line-join': 'round' }}
+        filter={['==', ['get', 'iso2'], selectedCode ?? ''] as never}
+        paint={{ 'line-color': base.label, 'line-width': 2.5 }}
       />
     </GeoJSONSource>
   );

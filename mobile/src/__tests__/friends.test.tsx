@@ -37,6 +37,7 @@ jest.mock('../services/api', () => ({
     search: jest.fn(() => Promise.resolve([])),
     byCode: jest.fn(),
   },
+  chatApi: { list: jest.fn(() => Promise.resolve([])), open: jest.fn() },
 }));
 
 const api = friendsApi as unknown as Record<string, jest.Mock>;
@@ -104,6 +105,8 @@ describe('Friends tab', () => {
     api.list.mockResolvedValue([{ id: 'u3', username: 'cara', display_name: 'Cara', avatar_url: null, since: '', countries: 3, world_percent: 1.5 }]);
     api.respond.mockResolvedValue({ id: 7, status: 'accepted' });
     await renderWithQuery(<FriendsScreen />);
+    // Chats first: the request is one row there, which opens the Friends segment
+    await fireEvent.press(await screen.findByTestId('chats-requests'));
     expect(await screen.findByText('Requests')).toBeTruthy();
     expect(screen.getByText('3 countries · 1.5% of the world')).toBeTruthy();
     expect(screen.queryByTestId('friends-empty')).toBeNull();
@@ -112,7 +115,7 @@ describe('Friends tab', () => {
     expect(haptics.success).toHaveBeenCalled();
   });
 
-  it('shows the empty state from 12 when there is nobody yet', async () => {
+  it('shows the empty state (mockup 4) when there is nobody yet', async () => {
     api.requests.mockResolvedValue([]);
     api.list.mockResolvedValue([]);
     await renderWithQuery(<FriendsScreen />);

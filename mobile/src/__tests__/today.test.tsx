@@ -11,7 +11,8 @@ import { at, eveningBefore, replaceReminders, todayPath } from '../features/trip
 import { useTodaySettings } from '../features/trips/today/settings';
 import { directionsUrl, estimate, leaveBy, leaveTimes, todayState, usualTraffic, t2m } from '../features/trips/today/today';
 import i18n from '../i18n';
-import { tripsApi } from '../services/api';
+import { useChatOutbox } from '../features/chat/outbox';
+import { chatApi, tripsApi } from '../services/api';
 import type { Itinerary, ItineraryDay, ItineraryItem, LatePlan, Trip } from '../types';
 
 const mockParams: Record<string, string> = { id: '5', at: '10:30', date: '2026-10-19' };
@@ -28,9 +29,12 @@ jest.mock('../ui/haptics', () => ({
   haptics: { success: jest.fn(), error: jest.fn(), light: jest.fn(), warning: jest.fn(), selection: jest.fn(), medium: jest.fn() },
 }));
 jest.mock('../features/account/useMe', () => ({ ME_QUERY_KEY: ['me'], useMe: () => ({ data: { id: 'me' } }) }));
+let mockUuid = 0;
+jest.mock('expo-crypto', () => ({ randomUUID: () => `client-${++mockUuid}` }));
 jest.mock('../services/api', () => ({
   ApiError: class ApiError extends Error {},
   tripsApi: { get: jest.fn(), getItinerary: jest.fn(), conditions: jest.fn(), late: jest.fn(), applyLate: jest.fn(), undoLate: jest.fn() },
+  chatApi: { list: jest.fn(() => Promise.resolve([])), send: jest.fn(() => new Promise(() => {})) },
 }));
 
 const api = tripsApi as unknown as Record<string, jest.Mock>;
@@ -229,6 +233,27 @@ describe('Today screen', () => {
     expect(await screen.findByTestId('today-snackbar')).toHaveTextContent(/1 stop moved/);
     await act(async () => fireEvent.press(screen.getByTestId('today-snackbar-action')));
     expect(api.undoLate).toHaveBeenCalledWith(5, 11, { times: { '3': ['12:00', '13:00'] }, restore: [] });
+  });
+
+  it('running late tells the trip room too, when friends plan the trip with you (step 8)', async () => {
+    setUp();
+    useChatOutbox.setState({ userId: null, items: [] });
+    const chat = chatApi as unknown as Record<string, jest.Mock>;
+    chat.list.mockResolvedValue([{ id: 9, kind: 'trip', trip_id: 5, other: null, last_message: null, unread_count: 0 }]);
+    api.late.mockResolvedValue(PLAN);
+    api.applyLate.mockResolvedValue({ ...PLAN, success: true, message: '', day: DAY, validation: {}, undo: { times: {}, restore: [] } });
+    await renderWithQuery(<TodayScreen />);
+    fireEvent.press(await screen.findByTestId('today-late'));
+    expect((await screen.findByTestId('today-tell-room')).props.value).toBe(true);
+    await waitFor(() => expect(api.late).toHaveBeenCalled());
+    await act(async () => fireEvent.press(screen.getByTestId('today-late-apply')));
+    await waitFor(() =>
+      expect(chat.send).toHaveBeenCalledWith(9, {
+        client_id: expect.any(String),
+        kind: 'late',
+        payload: { minutes: 30, source: 'today', date: expect.any(String), time: expect.any(String) },
+      }),
+    );
   });
 
   it('location stays off when the permission is refused', async () => {

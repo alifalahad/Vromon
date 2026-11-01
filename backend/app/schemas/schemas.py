@@ -33,6 +33,9 @@ class DestinationOut(BaseModel):
     attribution: Optional[str] = None
     sources: List[Dict[str, Any]] = []
     checked: bool = True
+    # The country and region it lies in (ISO 3166-1 / 3166-2), for matching map places to destinations
+    country_iso2: Optional[str] = None
+    region_code: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -292,6 +295,9 @@ class TripStopOut(BaseModel):
     transport_mode: Optional[str] = None
     arrive_on: Optional[date] = None
     depart_on: Optional[date] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    region_code: Optional[str] = None
 
 
 class TripCreate(BaseModel):

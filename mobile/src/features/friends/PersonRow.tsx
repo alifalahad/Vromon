@@ -49,7 +49,7 @@ export function PersonRow({ person, onPress }: { person: Person; onPress?: () =>
   const name = person.display_name ?? person.username;
   return (
     <PressableScale pressEffect="opacity" haptic={onPress ? 'light' : 'none'} disabled={!onPress} onPress={onPress} style={styles.row} accessibilityLabel={`${name}, @${person.username}`}>
-      <Avatar name={name} size={44} />
+      <Avatar name={name} id={person.id} size={44} />
       <View style={styles.text}>
         <Text style={styles.name} numberOfLines={1}>
           {name}

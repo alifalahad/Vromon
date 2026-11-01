@@ -4,14 +4,17 @@
  * Lists the destination's places from the backend (GET /destinations/{id} and
  * /destinations/{id}/places) with a category filter, and starts trip planning there.
  * Opened from the wizard's "Where to?" step (`from=wizard`), it is browse-only:
- * going back returns to the wizard.
+ * going back returns to the wizard. "Send to a friend" shares it as a card (friends-chat step 4).
  */
 
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, FlatList, ScrollView, Text, View } from 'react-native';
 
+import { destinationCard } from '../../src/features/chat/share';
 import { filterByCategory, formatEntryCost, placeCategories } from '../../src/features/places';
 import { destinationsApi } from '../../src/services/api';
 import { PressableScale } from '../../src/ui/PressableScale';
@@ -24,6 +27,7 @@ export default function DestinationScreen() {
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const destinationId = Number(id);
   const router = useRouter();
+  const { t } = useTranslation();
   const [category, setCategory] = useState<string | null>(null);
 
   const destination = useQuery({
@@ -93,6 +97,17 @@ export default function DestinationScreen() {
                 <Text style={styles.planBtnText}>✈️  Plan a trip to {dest.name}</Text>
               </PressableScale>
             )}
+            <PressableScale
+              haptic="light"
+              style={styles.sendBtn}
+              onPress={() => router.push({ pathname: '/share/send', params: { card: JSON.stringify(destinationCard(dest)) } })}
+              accessibilityRole="button"
+              accessibilityLabel={t('chat.share.sendPlace', { place: dest.name })}
+              testID="destination-send"
+            >
+              <MaterialCommunityIcons name="send-outline" size={20} color={colors.textPrimary} />
+              <Text style={styles.sendBtnText}>{t('chat.share.sendToFriend')}</Text>
+            </PressableScale>
 
             <Text style={styles.sectionTitle}>
               {all.length} place{all.length === 1 ? '' : 's'}
@@ -169,6 +184,17 @@ const useStyles = makeStyles((t) => ({
   desc: { color: t.colors.textSecondary, fontSize: 13, lineHeight: 19 },
   planBtn: { backgroundColor: t.colors.accent, paddingVertical: 14, borderRadius: 999, alignItems: 'center', marginTop: 8 },
   planBtnText: { color: t.colors.onAccent, fontSize: 15, fontWeight: '700' },
+  sendBtn: {
+    minHeight: 48,
+    borderRadius: 24,
+    backgroundColor: t.colors.surfaceRaised,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  sendBtnText: { ...t.type.callout, fontWeight: '600', color: t.colors.textPrimary },
   sectionTitle: { color: t.colors.textPrimary, fontSize: 18, fontWeight: '700', marginTop: 12 },
   filters: { gap: 8, paddingVertical: 4 },
   filter: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: t.colors.border, backgroundColor: t.colors.surface },

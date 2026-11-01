@@ -1,24 +1,22 @@
 /**
  * Vromon Mobile — Settings tab (13-settings-rows.jpg).
  *
- * Profile, privacy & friends, preferences and notifications (synced to the
- * account), account, data and About.
+ * Profile, privacy & friends (with Chats and privacy: read receipts, notifications,
+ * blocked people), preferences (synced to the account), account, data and About.
  */
 
 import { useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
-import { File, Paths } from 'expo-file-system';
 import { useRouter, useScrollToTop } from 'expo-router';
-import * as Sharing from 'expo-sharing';
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
+import { exportMyData } from '../../src/features/account/exportData';
 import { ME_QUERY_KEY, useMe } from '../../src/features/account/useMe';
 import { signOut } from '../../src/features/auth/actions';
 import { authEnabled } from '../../src/features/auth/session';
 import { formatFriendCode } from '../../src/features/friends/friendCode';
-import { pushAvailable, registerForPush } from '../../src/features/friends/push';
 import { countryName } from '../../src/features/geo/countries';
 import { mapThemeName } from '../../src/features/mapThemes/resolve';
 
@@ -40,14 +38,6 @@ import { PressableScale } from '../../src/ui/PressableScale';
 import { SettingsRow, SettingsSection, SettingsSwitchRow } from '../../src/ui/SettingsRow';
 import { makeStyles } from '../../src/ui/theme';
 import { confirm, notify } from '../../src/utils/dialogs';
-
-async function exportMyData() {
-  const data = await meApi.export();
-  const file = new File(Paths.cache, `vromon-export-${new Date().toISOString().slice(0, 10)}.json`);
-  file.create({ overwrite: true });
-  file.write(JSON.stringify(data, null, 2));
-  await Sharing.shareAsync(file.uri, { mimeType: 'application/json', dialogTitle: 'Vromon data export' });
-}
 
 type Sheet = 'language' | 'appearance' | 'units' | null;
 
@@ -100,7 +90,7 @@ export default function SettingsScreen() {
             accessibilityLabel={`${me.display_name ?? me.username}, ${t('profile.edit')}`}
             testID="settings-profile"
           >
-            <Avatar name={me.display_name ?? me.username} size={56} />
+            <Avatar name={me.display_name ?? me.username} id={me.id} size={56} />
             <View style={styles.profileText}>
               <Text style={styles.profileName} numberOfLines={1}>
                 {me.display_name ?? me.username}
@@ -130,11 +120,11 @@ export default function SettingsScreen() {
               testID="settings-discoverable"
             />
             <SettingsRow
-              icon="account-cancel-outline"
-              title={t('friends.blockedUsers')}
-              onPress={() => router.push('/settings/blocked')}
+              icon="chat-processing-outline"
+              title={t('settings.chats.title')}
+              onPress={() => router.push('/settings/chats')}
               last
-              testID="settings-blocked"
+              testID="settings-chats"
             />
           </SettingsSection>
         ) : null}
@@ -178,32 +168,6 @@ export default function SettingsScreen() {
           />
         </SettingsSection>
 
-        {me ? (
-          <SettingsSection title={t('settings.sectionNotifications')}>
-            <SettingsSwitchRow
-              icon="account-plus-outline"
-              title={t('settings.notifyRequests')}
-              value={prefs.notifyFriendRequests}
-              onValueChange={(on) => {
-                prefs.setNotifyFriendRequests(on);
-                if (on) void registerForPush(true);
-              }}
-              testID="settings-notify-requests"
-            />
-            <SettingsSwitchRow
-              icon="account-check-outline"
-              title={t('settings.notifyAccepted')}
-              value={prefs.notifyFriendAccepted}
-              onValueChange={(on) => {
-                prefs.setNotifyFriendAccepted(on);
-                if (on) void registerForPush(true);
-              }}
-              last={pushAvailable()}
-              testID="settings-notify-accepted"
-            />
-            {pushAvailable() ? null : <SettingsRow icon="bell-off-outline" title={t('settings.pushUnavailable')} last />}
-          </SettingsSection>
-        ) : null}
 
         {me && authEnabled ? (
           <SettingsSection title={t('settings.sectionAccount')}>
@@ -251,7 +215,6 @@ export default function SettingsScreen() {
         selected={language}
         onSelect={prefs.setLanguage}
         onClose={() => setSheet(null)}
-        footnote={t('settings.bnNotice')}
       />
       <OptionSheet<Appearance>
         visible={sheet === 'appearance'}

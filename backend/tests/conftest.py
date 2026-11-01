@@ -35,7 +35,11 @@ from app.main import app
 
 TEST_DATABASE_URL = "sqlite://"  # in-memory, shared via connect_args
 
-_api_engine = create_engine(
+# TEST_API_POSTGRES_URL runs the API tests against an empty PostgreSQL database instead, as in
+# production (it enforces foreign keys and column lengths, which SQLite doesn't): step 10.
+# Its tables are made at the start and dropped at the end.
+_postgres_url = os.environ.get("TEST_API_POSTGRES_URL")
+_api_engine = create_engine(_postgres_url) if _postgres_url else create_engine(
     TEST_DATABASE_URL,
     connect_args={"check_same_thread": False},
     # Use StaticPool so all connections share the same in-memory database

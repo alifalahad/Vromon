@@ -1,18 +1,19 @@
 # Opens the app on the Map tab. A development build connects to Metro first.
+# -e DEV_CLIENT=false launches the app instead of opening Metro's link: for a phone where
+# another Vromon build also answers that link, so Android would ask which app to use.
 appId: ${APP_ID}
 env:
   APP_ID: com.vromon.app.dev
-  DEV_CLIENT: "true"
 ---
 - runFlow:
     when:
-      true: ${DEV_CLIENT == "true"}
+      true: ${typeof DEV_CLIENT === 'undefined' || DEV_CLIENT != "false"}
     commands:
       - stopApp
       - openLink: "exp+vromon://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081"
 - runFlow:
     when:
-      true: ${DEV_CLIENT != "true"}
+      true: ${typeof DEV_CLIENT !== 'undefined' && DEV_CLIENT == "false"}
     commands:
       - launchApp:
           stopApp: true

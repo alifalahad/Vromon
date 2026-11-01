@@ -28,6 +28,16 @@ export function useVisits(userId: string | undefined) {
   });
 }
 
+/** Counts from the server (`% of the world` needs its list of countries); refreshed after edits sync. */
+export function useTravelStats(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['travelStats', userId],
+    queryFn: () => visitsApi.stats(userId!),
+    enabled: !!userId,
+    staleTime: 60_000,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Outbox
 // ---------------------------------------------------------------------------
@@ -91,7 +101,10 @@ export function flushOutbox(currentUserId: string, queryClient?: QueryClient): P
       // By identity: a newer edit for the same place may have replaced it meanwhile
       useVisitOutbox.setState((s) => ({ ops: s.ops.filter((o) => o !== op) }));
     }
-    if (sent && queryClient) await queryClient.invalidateQueries({ queryKey: visitsKey(currentUserId) });
+    if (sent && queryClient) {
+      await queryClient.invalidateQueries({ queryKey: visitsKey(currentUserId) });
+      void queryClient.invalidateQueries({ queryKey: ['travelStats', currentUserId] });
+    }
   })().finally(() => {
     flushing = null;
   });

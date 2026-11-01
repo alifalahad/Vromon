@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from app.core.body_limit import FORM_OVERHEAD_BYTES, MAX_JSON_BYTES, BodySizeLimit
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.logging import setup_logging
@@ -24,6 +25,7 @@ from app.db.migrations import upgrade_to_head
 from app.db.seeder import seed_database
 from app.db.geo_seed import seed_geo
 from app.db.destinations import load_destinations
+from app.services.destination_places import fill_destination_places
 from app.api.v1.router import router as v1_router
 
 # Configure logging
@@ -52,6 +54,8 @@ async def lifespan(app: FastAPI):
         seed_geo(db)
         # The imported destinations (step 10): only files that changed since they were loaded
         load_destinations(db)
+        # Their country and region on the travel map (map home step 4)
+        fill_destination_places(db)
     finally:
         db.close()
 
@@ -92,6 +96,12 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Accept", "X-Admin-Token"],
+)
+# Request bodies: 1 MB of JSON, or a photo with its form (step 10)
+app.add_middleware(
+    BodySizeLimit,
+    max_bytes=MAX_JSON_BYTES,
+    max_upload_bytes=settings.photo_max_upload_mb * 1024 * 1024 + FORM_OVERHEAD_BYTES,
 )
 
 # Mount API v1

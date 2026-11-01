@@ -22,6 +22,9 @@ name: 04 Add a friend by code, the friend accepts, compare maps
       FRIEND_TOKEN: ${FRIEND_TOKEN}
 - tapOn:
     id: tab-friends
+# Chats is the first segment; adding a friend is on the Friends segment
+- tapOn:
+    id: friends-segment-friends
 - tapOn:
     id: add-friend-fab
 - tapOn:
@@ -52,6 +55,8 @@ name: 04 Add a friend by code, the friend accepts, compare maps
     id: tab-trips
 - tapOn:
     id: tab-friends
+- tapOn:
+    id: friends-segment-friends
 - extendedWaitUntil:
     visible:
       id: friend-${FRIEND_USERNAME}

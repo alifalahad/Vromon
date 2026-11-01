@@ -25,6 +25,11 @@ from app.core.auth import get_current_user
 from app.core.config import Settings, settings
 from app.core.rate_limit import limiter
 from app.main import app
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.db.base import Base
 from app.models.models import Trip, User, UserSettings
 from tests.conftest import _ApiTestSession
 
@@ -352,47 +357,55 @@ class TestExportAndDelete:
 # Decision D4: trips created before accounts
 # ---------------------------------------------------------------------------
 
+@pytest.fixture
+def empty_db():
+    """
+    A database of its own with no accounts yet. "The first account" can't be faked by
+    deleting every user from the shared test database: on PostgreSQL (TEST_API_POSTGRES_URL)
+    that fails while their trips have plans, and it would wipe other tests' data.
+    """
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    with sessionmaker(bind=engine)() as db:
+        yield db
+    engine.dispose()
+
+
 class TestPreAccountTrips:
-    def _ownerless_trip(self) -> int:
-        with _ApiTestSession() as db:
-            trip = Trip(destination="Cox's Bazar", start_date=date.today(), end_date=date.today(), total_budget=1000)
-            db.add(trip)
-            db.commit()
-            return trip.id
+    def _ownerless_trip(self, db) -> int:
+        trip = Trip(destination="Cox's Bazar", start_date=date.today(), end_date=date.today(), total_budget=1000)
+        db.add(trip)
+        db.commit()
+        return trip.id
 
-    def test_first_account_in_development_adopts_them(self):
-        trip_id = self._ownerless_trip()
-        with _ApiTestSession() as db:
-            db.query(User).delete()  # make the next account the first one
-            db.commit()
-            user = auth.get_or_create_user(db, f"first-{uuid.uuid4()}", None)
-            assert db.get(Trip, trip_id).user_id == user.id
+    def test_first_account_in_development_adopts_them(self, empty_db):
+        trip_id = self._ownerless_trip(empty_db)
+        user = auth.get_or_create_user(empty_db, f"first-{uuid.uuid4()}", None)
+        assert empty_db.get(Trip, trip_id).user_id == user.id
 
-    def test_first_real_account_inherits_the_dev_bypass_users_trips(self):
-        trip_id = self._ownerless_trip()
-        with _ApiTestSession() as db:
-            db.query(User).delete()
-            db.commit()
-            dev = auth.get_or_create_user(db, auth.DEV_BYPASS_SUBJECT, None)
-            assert db.get(Trip, trip_id).user_id == dev.id  # the stand-in adopts first
-            real = auth.get_or_create_user(db, f"real-{uuid.uuid4()}", "me@example.com")
-            db.expire_all()
-            assert db.get(Trip, trip_id).user_id == real.id  # then hands over to the real account
+    def test_first_real_account_inherits_the_dev_bypass_users_trips(self, empty_db):
+        db = empty_db
+        trip_id = self._ownerless_trip(db)
+        dev = auth.get_or_create_user(db, auth.DEV_BYPASS_SUBJECT, None)
+        assert db.get(Trip, trip_id).user_id == dev.id  # the stand-in adopts first
+        real = auth.get_or_create_user(db, f"real-{uuid.uuid4()}", "me@example.com")
+        db.expire_all()
+        assert db.get(Trip, trip_id).user_id == real.id  # then hands over to the real account
 
-    def test_later_accounts_and_production_do_not(self, monkeypatch):
-        with _ApiTestSession() as db:
-            auth.get_or_create_user(db, f"existing-{uuid.uuid4()}", None)  # not the first account
-            trip_id = self._ownerless_trip()
-            auth.get_or_create_user(db, f"second-{uuid.uuid4()}", None)
-            db.expire_all()
-            assert db.get(Trip, trip_id).user_id is None
+    def test_later_accounts_and_production_do_not(self, monkeypatch, empty_db):
+        db = empty_db
+        auth.get_or_create_user(db, f"existing-{uuid.uuid4()}", None)  # not the first account
+        trip_id = self._ownerless_trip(db)
+        auth.get_or_create_user(db, f"second-{uuid.uuid4()}", None)
+        db.expire_all()
+        assert db.get(Trip, trip_id).user_id is None
 
-            monkeypatch.setattr(settings, "app_env", "production")
-            db.query(User).delete()
-            db.commit()
-            auth.get_or_create_user(db, f"prod-first-{uuid.uuid4()}", None)
-            db.expire_all()
-            assert db.get(Trip, trip_id).user_id is None
+        monkeypatch.setattr(settings, "app_env", "production")
+        db.query(User).delete()  # its own database: nothing else is in it
+        db.commit()
+        auth.get_or_create_user(db, f"prod-first-{uuid.uuid4()}", None)
+        db.expire_all()
+        assert db.get(Trip, trip_id).user_id is None
 
 
 # ---------------------------------------------------------------------------

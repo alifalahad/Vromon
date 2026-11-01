@@ -19,6 +19,23 @@ export const STATUS_ORDER: VisitStatus[] = ['visited', 'want', 'lived'];
 const GLYPHS = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf';
 export const LABEL_FONT = ['Noto Sans Regular'];
 
+/**
+ * Zoomed in this far (about one division on screen), the map shows what a real map
+ * would: districts and town names instead of the division names.
+ */
+export const DISTRICTS_FROM = 7;
+
+/**
+ * One look for every place name at that zoom (districts, and the places Vromon can
+ * plan, which stay tappable): the map's label colour, regular weight. Shared so they
+ * never drift apart: mixed styles read as two kinds of place.
+ */
+export const PLACE_NAME_SIZE = ['interpolate', ['linear'], ['zoom'], DISTRICTS_FROM, 10.5, 11, 13] as unknown as ExpressionSpecification;
+
+export function placeNamePaint(base: { label: string; labelHalo: string }) {
+  return { 'text-color': base.label, 'text-opacity': 0.7, 'text-halo-color': base.labelHalo, 'text-halo-width': 1.2, 'text-halo-blur': 0.5 };
+}
+
 /** Glyphs only: sources and layers are React children of <Map>. */
 export const MAP_STYLE: StyleSpecification = { version: 8, glyphs: GLYPHS, sources: {}, layers: [] };
 

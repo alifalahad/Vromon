@@ -15,6 +15,8 @@ export type Appearance = 'system' | 'light' | 'dark';
 export type Language = 'en' | 'bn';
 export type DistanceUnits = 'km' | 'mi';
 export type MapView = 'countries' | 'regions' | 'cities';
+/** Optional map layers (map home: the Map sheet's "On the map") */
+export type MapLayer = 'trails' | 'plannable' | 'friends';
 
 export const APPEARANCES: readonly Appearance[] = ['system', 'light', 'dark'];
 export const LANGUAGES: readonly Language[] = ['en', 'bn'];
@@ -30,11 +32,25 @@ export type Preferences = {
   mapView: MapView;
   /** Offer to mark the country when a region or city in it is marked */
   askMarkCountry: boolean;
+  /** Which optional layers the map draws */
+  mapLayers: Record<MapLayer, boolean>;
+  /** The one-time "press and hold to mark" hint was shown */
+  markHintSeen: boolean;
+  /** Destinations chosen in the trip wizard's "Where to?" search, newest first (this device only) */
+  recentDestinations: string[];
   /** Map theme selection (synced to the account) */
   mapTheme: UserMapTheme;
   /** Push notifications (synced: the server decides whether to send) */
   notifyFriendRequests: boolean;
   notifyFriendAccepted: boolean;
+  /** Chat (Settings → Chats and privacy; synced). Read receipts are mutual */
+  readReceipts: boolean;
+  notifyMessages: boolean;
+  notifyTripRooms: boolean;
+  /** Off: a notification only says who wrote */
+  notificationPreviews: boolean;
+  /** Friends see your current and coming trips (On the road, the chat header, your profile) */
+  shareTrips: boolean;
   /**
    * Account whose settings changed here but haven't reached the server yet
    * (offline, or the app closed first). Sync pushes them before pulling.
@@ -49,10 +65,18 @@ type PreferencesState = Preferences & {
   setUnits: (v: DistanceUnits) => void;
   setMapView: (v: MapView) => void;
   setAskMarkCountry: (v: boolean) => void;
+  setMapLayer: (layer: MapLayer, on: boolean) => void;
+  setMarkHintSeen: () => void;
+  addRecentDestination: (name: string) => void;
+  clearRecentDestinations: () => void;
   setMapTheme: (v: UserMapTheme) => void;
   setNotifyFriendRequests: (v: boolean) => void;
   setNotifyFriendAccepted: (v: boolean) => void;
+  /** Chats and privacy: one or more of its switches */
+  setChat: (change: Partial<Pick<Preferences, 'readReceipts' | 'notifyMessages' | 'notifyTripRooms' | 'notificationPreviews' | 'shareTrips' | 'notifyFriendRequests' | 'notifyFriendAccepted'>>) => void;
 };
+
+const MAX_RECENT = 4;
 
 export const DEFAULT_PREFERENCES: Preferences = {
   appearance: 'system',
@@ -61,9 +85,17 @@ export const DEFAULT_PREFERENCES: Preferences = {
   units: 'km',
   mapView: 'countries',
   askMarkCountry: true,
+  mapLayers: { trails: true, plannable: true, friends: false },
+  markHintSeen: false,
+  recentDestinations: [],
   mapTheme: DEFAULT_USER_MAP_THEME,
   notifyFriendRequests: true,
   notifyFriendAccepted: true,
+  readReceipts: true,
+  notifyMessages: true,
+  notifyTripRooms: true,
+  notificationPreviews: true,
+  shareTrips: true,
   unsyncedFor: null,
 };
 
@@ -77,30 +109,63 @@ export const usePreferences = create<PreferencesState>()(
       setUnits: (units) => set({ units }),
       setMapView: (mapView) => set({ mapView }),
       setAskMarkCountry: (askMarkCountry) => set({ askMarkCountry }),
+      setMapLayer: (layer, on) => set((s) => ({ mapLayers: { ...s.mapLayers, [layer]: on } })),
+      setMarkHintSeen: () => set({ markHintSeen: true }),
+      addRecentDestination: (name) => set((s) => ({ recentDestinations: [name, ...s.recentDestinations.filter((n) => n !== name)].slice(0, MAX_RECENT) })),
+      clearRecentDestinations: () => set({ recentDestinations: [] }),
       setMapTheme: (mapTheme) => set({ mapTheme }),
       setNotifyFriendRequests: (notifyFriendRequests) => set({ notifyFriendRequests }),
       setNotifyFriendAccepted: (notifyFriendAccepted) => set({ notifyFriendAccepted }),
+      setChat: (change) => set(change),
     }),
     {
       name: 'vromon.preferences',
       version: 1,
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: ({ appearance, language, haptics, units, mapView, askMarkCountry, mapTheme, notifyFriendRequests, notifyFriendAccepted, unsyncedFor }) => ({
+      partialize: ({
         appearance,
         language,
         haptics,
         units,
         mapView,
         askMarkCountry,
+        mapLayers,
+        markHintSeen,
+        recentDestinations,
         mapTheme,
         notifyFriendRequests,
         notifyFriendAccepted,
+        readReceipts,
+        notifyMessages,
+        notifyTripRooms,
+        notificationPreviews,
+        shareTrips,
+        unsyncedFor,
+      }) => ({
+        appearance,
+        language,
+        haptics,
+        units,
+        mapView,
+        askMarkCountry,
+        mapLayers,
+        markHintSeen,
+        recentDestinations,
+        mapTheme,
+        notifyFriendRequests,
+        notifyFriendAccepted,
+        readReceipts,
+        notifyMessages,
+        notifyTripRooms,
+        notificationPreviews,
+        shareTrips,
         unsyncedFor,
       }),
       // A stored theme may name catalog items this version doesn't have
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<Preferences>;
-        return { ...current, ...p, mapTheme: normalizeUserMapTheme(p.mapTheme ?? current.mapTheme) };
+        // Layers added later get their default
+        return { ...current, ...p, mapLayers: { ...current.mapLayers, ...p.mapLayers }, mapTheme: normalizeUserMapTheme(p.mapTheme ?? current.mapTheme) };
       },
     },
   ),

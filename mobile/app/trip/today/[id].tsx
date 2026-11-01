@@ -18,6 +18,9 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMe } from '../../../src/features/account/useMe';
+import { lateCard } from '../../../src/features/chat/onTheTrip';
+import { useConversations } from '../../../src/features/chat/queries';
+import { sendCard } from '../../../src/features/chat/share';
 import { durationDays, localToday, parseDay } from '../../../src/features/trips/dates';
 import { MODE_ICON } from '../../../src/features/trips/plan/PlanRows';
 import { dayParts, stopTitle } from '../../../src/features/trips/plan/timeline';
@@ -43,7 +46,8 @@ const TICK_MS = 30_000;
 
 export default function TodayScreen() {
   // `at` and `date` set the clock for testing, in development builds only
-  const params = useLocalSearchParams<{ id: string; at?: string; date?: string }>();
+  // `late=1`: opened from the map's "Running late" (map home step 4)
+  const params = useLocalSearchParams<{ id: string; at?: string; date?: string; late?: string }>();
   const tripId = Number(params.id);
   const styles = useStyles();
   const theme = useTheme();
@@ -54,6 +58,9 @@ export default function TodayScreen() {
   const reduceMotion = useReduceMotion();
   const queryClient = useQueryClient();
   const me = useMe();
+  // The trip's room, if friends plan it with you: running late can tell them (friends-chat step 8)
+  const room = useConversations(!!me.data).data?.find((c) => c.kind === 'trip' && c.trip_id === tripId) ?? null;
+  const [tellRoom, setTellRoom] = useState(true);
   const settings = useTodaySettings();
 
   const [clock, setClock] = useState(() => new Date());
@@ -85,7 +92,7 @@ export default function TodayScreen() {
   const condDay = conditions.data?.days.find((d) => d.day_id === day?.id);
 
   // Running late
-  const [lateOpen, setLateOpen] = useState(false);
+  const [lateOpen, setLateOpen] = useState(params.late === '1');
   const [lateBy, setLateBy] = useState<number>(30);
   const [busy, setBusy] = useState(false);
   const [snack, setSnack] = useState<{ message: string; undo?: { dayId: number; undo: LateUndo } } | null>(null);
@@ -110,6 +117,7 @@ export default function TodayScreen() {
       landed(res.day);
       haptics.success();
       setLateOpen(false);
+      if (room && tellRoom && me.data) sendCard(queryClient, me.data.id, room.id, lateCard(lateBy, 'today'));
       const parts = [t('today.lateApplied', { count: res.moved.length, n: f.n(res.moved.length) })];
       if (res.dropped.length) parts.push(t('today.lateDroppedCount', { count: res.dropped.length, n: f.n(res.dropped.length) }));
       setSnack({ message: parts.join(' · '), undo: { dayId: day.id, undo: res.undo } });
@@ -287,6 +295,18 @@ export default function TodayScreen() {
                 <Text style={styles.lateEffect} accessibilityLiveRegion="polite" testID="today-late-effect">
                   {preview.data ? lateEffect(preview.data, t, f) : t('today.lateChecking')}
                 </Text>
+                {room ? (
+                  <View style={styles.tellRow}>
+                    <Text style={styles.tellText}>{t('today.tellRoom')}</Text>
+                    <Switch
+                      value={tellRoom}
+                      onValueChange={setTellRoom}
+                      trackColor={{ true: theme.colors.accentStrong, false: theme.colors.surfaceRaised }}
+                      accessibilityLabel={t('today.tellRoom')}
+                      testID="today-tell-room"
+                    />
+                  </View>
+                ) : null}
                 <View style={styles.chips}>
                   <PressableScale haptic="selection" style={[styles.smallButton, styles.buttonPrimary]} onPress={applyLate} disabled={busy || !preview.data} accessibilityRole="button" testID="today-late-apply">
                     {busy ? <ActivityIndicator size="small" color={theme.colors.onAccent} /> : <Text style={styles.buttonPrimaryText}>{t('today.apply')}</Text>}
@@ -358,7 +378,9 @@ export default function TodayScreen() {
                       <Text style={styles.restTime}>{f.time(item.start_time)}</Text>
                       <Text style={styles.restTitle} numberOfLines={2}>{stopTitle(item)}</Text>
                       {ws.length ? <Text style={styles.warnTag}>{t(`today.warn.${ws[0].code}`).toUpperCase()}</Text> : null}
-                      {done ? <MaterialCommunityIcons name="check" size={18} color={theme.colors.success} accessibilityLabel={t('today.done')} /> : null}
+                      {done ? (
+                        <MaterialCommunityIcons name="check" size={18} color={theme.colors.success} importantForAccessibility="yes" accessibilityElementsHidden={false} accessibilityLabel={t('today.done')} />
+                      ) : null}
                     </Animated.View>
                   );
                 })}
@@ -536,6 +558,8 @@ const useStyles = makeStyles((t) => ({
   chipText: { ...t.type.callout, fontWeight: '600', color: t.colors.textPrimary },
   chipTextOn: { color: t.colors.onAccent },
   lateEffect: { ...t.type.callout, fontSize: 14, lineHeight: 20, color: t.colors.textSecondary },
+  tellRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
+  tellText: { ...t.type.callout, fontSize: 15, color: t.colors.textPrimary, flex: 1 },
   smallButton: { minHeight: 44, paddingHorizontal: 18, borderRadius: 999, justifyContent: 'center', alignItems: 'center' },
   outline: { borderWidth: 1, borderColor: t.colors.divider },
   switches: { borderRadius: 20, backgroundColor: t.colors.surface, paddingHorizontal: t.spacing.lg },

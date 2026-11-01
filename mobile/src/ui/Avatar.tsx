@@ -13,17 +13,38 @@ export function initials(name: string | null | undefined): string {
   return (parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : (parts[0] ?? '?').slice(0, 2)).toUpperCase();
 }
 
-/** Initials in an accent circle (profile photos arrive in Phase 6). Decorative: the name is always shown beside it. */
-export function Avatar({ name, size = 48 }: { name: string | null | undefined; size?: number }) {
+/**
+ * One colour per person (from their id), so a list of chats is easy to scan.
+ * White initials are at least 4.5:1 on each (contrast.test.ts), in both appearances.
+ */
+export const AVATAR_COLORS = ['#1F6F5C', '#6A2E8F', '#8A4B14', '#A1365A', '#2D5DB3', '#7B3FA0', '#356B1F', '#B04A1F'] as const;
+
+export function avatarColor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+/**
+ * Initials in a circle (profile photos arrive later). With an `id` the circle has that
+ * person's colour; without one, the strong accent. Decorative: the name is always shown beside it.
+ */
+export function Avatar({ name, size = 48, id }: { name: string | null | undefined; size?: number; id?: string }) {
   const styles = useStyles();
   return (
-    <View style={[styles.circle, { width: size, height: size, borderRadius: size / 2 }]} importantForAccessibility="no-hide-descendants">
-      <Text style={[styles.text, { fontSize: size * 0.36 }]}>{initials(name)}</Text>
+    <View
+      style={[styles.circle, { width: size, height: size, borderRadius: size / 2 }, id ? { backgroundColor: avatarColor(id) } : null]}
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Text style={[styles.text, { fontSize: size * 0.36 }]} maxFontSizeMultiplier={1.2}>
+        {initials(name)}
+      </Text>
     </View>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  circle: { backgroundColor: t.colors.accent, alignItems: 'center', justifyContent: 'center' },
+  // White initials: `accent` is only 4.1:1, too little for 16 px text
+  circle: { backgroundColor: t.colors.accentStrong, alignItems: 'center', justifyContent: 'center' },
   text: { color: t.colors.onAccent, fontWeight: '700' },
 }));
