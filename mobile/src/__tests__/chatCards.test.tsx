@@ -6,6 +6,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { StyleSheet } from 'react-native';
 
 import ChatScreen from '../../app/chat/[id]';
 import { useChatOutbox } from '../features/chat/outbox';
@@ -224,6 +225,30 @@ describe('a poll', () => {
     expect(screen.getByTestId('card-option-2-40').props.accessibilityLabel).toBe('10–12 Dec, 1 vote');
     await fireEvent.press(screen.getByTestId('card-option-2-40'));
     expect(chat.vote).toHaveBeenLastCalledWith(1, 40, []);
+  });
+
+  it("keeps every answer's border while you change your answer, and clips nothing (step 10)", async () => {
+    // On Android a rounded row that clipped its children and lost its border stopped drawing
+    // them: after a few taps an answer's text was gone. The rows now keep one border width
+    // (only its colour shows the choice) and don't clip.
+    chat.vote.mockImplementation((_c: number, _m: number, ids: number[]) =>
+      Promise.resolve(card(41, 'me', 'poll', POLL, { votes: Object.fromEntries(ids.map((i) => [String(i), ['me']])) })),
+    );
+    await open([card(41, 'me', 'poll', POLL)]);
+    const row = (id: number) => StyleSheet.flatten(screen.getByTestId(`card-option-${id}-41`).props.style);
+    const check = () => {
+      for (const id of [1, 2]) {
+        expect(row(id).borderWidth).toBe(1.5);
+        expect(row(id).overflow).not.toBe('hidden');
+      }
+    };
+    await screen.findByTestId('card-option-1-41');
+    check();
+    for (const id of [1, 2, 1]) {
+      await fireEvent.press(screen.getByTestId(`card-option-${id}-41`));
+      await waitFor(() => expect(screen.getByTestId(`card-option-${id}-41`).props.accessibilityState.checked).toBe(true));
+      check();
+    }
   });
 
   it('several answers when the poll allows it', async () => {

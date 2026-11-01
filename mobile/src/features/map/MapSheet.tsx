@@ -175,11 +175,13 @@ const useStyles = makeStyles((t) => ({
     width: SWATCH,
     height: SWATCH,
     borderRadius: 18,
-    borderWidth: 2,
+    // One border width whether chosen or not: on Android a view that clips its children and
+    // changes its border width can stop drawing them (friends and chat step 10, the poll answers)
+    borderWidth: 2.5,
     borderColor: t.colors.border,
     overflow: 'hidden',
   },
-  swatchOn: { borderColor: t.colors.accent, borderWidth: 2.5 },
+  swatchOn: { borderColor: t.colors.accent },
   // A country-ish shape in the theme's Visited colour
   blob: { position: 'absolute', left: 14, top: 16, width: 30, height: 26, borderTopLeftRadius: 10, borderTopRightRadius: 14, borderBottomRightRadius: 8, borderBottomLeftRadius: 12 },
   themeName: { ...t.type.caption, fontWeight: '600', color: t.colors.textSecondary },

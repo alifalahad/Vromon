@@ -47,6 +47,12 @@ The causes: every bubble was rebuilt and drawn again on each page, minute and me
 - **Large text broke words:** "Banda/rban" in On the road and "Countrie/s" on a profile. Both fixed. The note fields clipped their hint; they now grow over several lines.
 - **Bangla:** the 33 missing strings are added, with a test that every English string has Bangla with the same placeholders. Friend counts now use Bangla digits, and the old "Bangla covers only some screens" note is gone.
 
+**Found by the owner after the step (2026-11-01): a poll answer's text vanished.** On their own poll, after tapping the answers a few times, an unchosen answer's row was drawn empty: the text was laid out but not drawn. A row took a border when chosen and lost it when not, and it clipped its children (`overflow: 'hidden'`, for the vote bar's rounded ends). On Android's new renderer, a clipping view whose border is removed can stop drawing its children. A row drawn fresh was fine, which is why other phones and the dev app showed the same poll correctly.
+
+- **Fix:** every answer keeps the same border (see-through unless chosen), and nothing clips: the vote bar has its own rounded ends.
+- **Same pattern elsewhere:** the map sheet's theme swatches changed their border width while clipping; their width is constant now too.
+- **Test:** the poll's rows keep their border and don't clip while you change your answer, and the test fails with the old style.
+
 ## How it was checked
 
 - **Backend:** `pytest -q` passes on SQLite and on PostgreSQL 16 (`TEST_API_POSTGRES_URL`). 708 passed, 9 skipped on both (last run 2026-11-01). A fresh PostgreSQL database starts and seeds (11 destinations, 33,940 cities).

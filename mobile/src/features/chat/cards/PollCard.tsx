@@ -70,7 +70,9 @@ export function PollCard({ data, mine, tail, footer, pending, messageId, convers
               accessibilityLabel={t('chat.cards.poll.option', { text: o.text, votes: t('chat.cards.poll.votes', { count: n, n: f.n(n) }) })}
               testID={`card-option-${o.id}-${testKey}`}
             >
-              <View style={[styles.bar, { width: `${(n / most) * 100}%` }, n === 0 && styles.barEmpty]} />
+              <View style={styles.track} pointerEvents="none">
+                <View style={[styles.bar, { width: `${(n / most) * 100}%` }]} />
+              </View>
               <MaterialCommunityIcons
                 name={data.multiple ? (on ? 'checkbox-marked' : 'checkbox-blank-outline') : on ? 'radiobox-marked' : 'radiobox-blank'}
                 size={20}
@@ -93,18 +95,22 @@ const useStyles = makeStyles((t) => ({
   option: {
     minHeight: 48,
     borderRadius: 14,
+    // Every row keeps its border (see-through unless chosen) and nothing clips: on Android a
+    // rounded row that clipped its children and then lost its border stopped drawing them,
+    // so after a few taps an answer's text was gone (step 10)
+    borderWidth: 1.5,
+    borderColor: 'transparent',
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    overflow: 'hidden',
   },
   optionTheirs: { backgroundColor: t.colors.surfaceRaised },
   optionMine: { backgroundColor: t.colors.cardButtonMine },
-  optionOn: { borderWidth: 1.5, borderColor: t.colors.onAccentSoft },
-  // How many chose it, behind the text
-  bar: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: t.colors.accentSoft },
-  barEmpty: { width: 0 },
+  optionOn: { borderColor: t.colors.onAccentSoft },
+  // How many chose it, behind the text: a bar across the whole row, rounded itself
+  track: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+  bar: { height: '100%', borderRadius: 12.5, backgroundColor: t.colors.accentSoft },
   optionText: { ...t.type.callout, flex: 1, fontSize: 15, color: t.colors.textPrimary },
   count: { ...t.type.callout, fontSize: 14, fontWeight: '600', color: t.colors.textPrimary },
 }));
