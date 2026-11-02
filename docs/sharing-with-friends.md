@@ -33,6 +33,19 @@ scripts/share/start.sh
 - If friends had the app open while the share was off, they close it fully and reopen it.
 - **A link that doesn't change:** upload `scripts/share/apk/vromon.apk` (106 MB) to Google Drive once and share that link ("Anyone with the link"). Friends need the APK only once; after that they just open the app.
 
+## From the Windows PC instead
+
+`scripts/share/start.ps1` and `stop.ps1` do the same as the `.sh` scripts:
+
+```powershell
+cd E:\Vromon
+scripts\share\start.ps1          # Ctrl+C stops everything; if the window was closed instead: scripts\share\stop.ps1
+```
+
+- Needs `cloudflared` once: `winget install --id Cloudflare.cloudflared`.
+- Share from **one machine at a time**. Whichever started last owns the published address. Each machine has its own `backend/vromon.db`, so to move friends' trips, friend links and chats, stop the backend on the old machine and copy its `backend/vromon.db` over the new one. Accounts and photos live in Supabase and need no copying.
+- The PC is kept awake while sharing, but closing a laptop's lid still sleeps it.
+
 ## Testing the friends' app on a phone
 
 - The Maestro flows set `APP_ID` in their own `env`, and with Maestro 2.11 that beats `-e`. So to test the preview app, run a copy of `.maestro` with `com.vromon.app.dev` replaced by `com.vromon.app.preview`, and pass `-e DEV_CLIENT=false`.

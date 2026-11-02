@@ -4,6 +4,7 @@
 .venv
 env/
 venv/
+venv-*/
 ENV/
 
 # Python
@@ -56,6 +57,13 @@ dist/
 data/geo/raw/
 data/geo/build/
 
-# Sharing from this Mac (scripts/share/start.sh)
+# Sharing from the Mac or Windows PC (scripts/share/start.sh, start.ps1)
 scripts/share/logs/
 scripts/share/apk/
+
+# App signing keys (release builds go through EAS, see docs/go-live.md)
+*.jks
+*.keystore
+
+# Claude Code personal settings
+.claude/settings.local.json
