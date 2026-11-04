@@ -81,6 +81,8 @@ _GENERIC = {
     "dargah", "mazar", "shrine", "museum", "park", "eco", "lake", "dighi", "pond", "beach", "sea", "falls", "fall",
     "waterfall", "jharna", "national", "forest", "reserve", "reserved", "wildlife", "sanctuary", "safari", "island",
     "mountain", "taung", "daung", "tlang", "haphong", "the", "of", "and",
+    "railway", "station", "junction", "rail", "bus", "terminal", "stand", "ghat", "launch", "airport", "international",
+    "রেলওয়ে", "রেল", "স্টেশন", "জংশন", "বাস", "টার্মিনাল", "ঘাট", "লঞ্চ", "বিমানবন্দর",
     "মসজিদ", "জামে", "শাহী", "মন্দির", "গির্জা", "প্যাগোডা", "বিহার", "দরগাহ", "মাজার", "জাদুঘর", "পার্ক", "ইকো", "লেক",
     "হ্রদ", "দিঘি", "দিঘী", "সমুদ্র", "সৈকত", "সমুদ্রসৈকত", "ঝর্ণা", "ঝরনা", "জলপ্রপাত", "জাতীয়", "উদ্যান", "বন",
     "সংরক্ষিত", "বন্যপ্রাণী", "অভয়ারণ্য", "সাফারি", "দ্বীপ", "পাহাড়", "পর্বত",

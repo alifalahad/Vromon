@@ -97,3 +97,53 @@ class SourceOut(BaseModel):
     attribution_text: Optional[str] = None
     reliability_class: str
     last_successful_fetch: Optional[datetime] = None
+
+
+class HubOut(BaseModel):
+    slug: str
+    hub_type: str
+    name_en: Optional[str] = None
+    name_bn: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    district_slug: Optional[str] = None
+    iata_code: Optional[str] = None
+    source: Optional[str] = None
+    reliability: Optional[str] = None
+
+
+class TrainServiceOut(BaseModel):
+    train_number: str
+    train_name_bn: Optional[str] = None
+    origin: Optional[str] = None
+    destination: Optional[str] = None
+    origin_hub_slug: Optional[str] = None
+    destination_hub_slug: Optional[str] = None
+    departure_time: Optional[str] = None
+    arrival_time: Optional[str] = None
+    arrives_next_day: Optional[bool] = None
+    off_day: Optional[str] = None
+    runs_daily: Optional[bool] = None
+    timetable: str
+    effective_from: Optional[str] = None
+    timezone: str = "Asia/Dhaka"
+    source_url: Optional[str] = None
+
+
+class FareOut(BaseModel):
+    """A fare with its kind (official, regulated, operator, estimated …) and when it was checked."""
+    mode: str
+    origin: str
+    destination: str
+    fare_class: str
+    fare_class_label: Optional[str] = None
+    amount: float
+    currency: str
+    base_amount: Optional[float] = None
+    vat_amount: Optional[float] = None
+    fare_type: str
+    official_distance_km: Optional[float] = None
+    effective_from: Optional[str] = None
+    last_checked_at: datetime
+    source_url: Optional[str] = None
+    notes: Optional[str] = None

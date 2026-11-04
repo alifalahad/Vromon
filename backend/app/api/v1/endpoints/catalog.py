@@ -7,6 +7,9 @@ GET /catalog/categories
 GET /catalog/attractions?district=&category=&q= published attractions only
 GET /catalog/attractions/{slug}                one attraction with the source of every field
 GET /catalog/sources                           licences and attribution to show in the app
+GET /catalog/hubs?type=&district=&q=           transport hubs (stations, terminals, airports, ghats)
+GET /catalog/trains?from=&to=&q=               published train services (one row per direction)
+GET /catalog/fares?mode=&from=&to=             published fares, each with its kind and checked date
 
 Every factual field carries where it came from and whether it was verified, so the app
 can tell verified, imported and unknown values apart (guideline §1.1, §6.2). Records a
@@ -24,10 +27,12 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.catalog import (
-    AdminAdjacency, AdminBoundary, AdminUnit, Attraction, AttractionCategory, AttractionMedia, DataSource,
+    AdminAdjacency, AdminBoundary, AdminUnit, Attraction, AttractionCategory, AttractionMedia, DataSource, FareProduct,
+    TimetableVersion, Train, TrainService, TransportHub,
 )
 from app.schemas.catalog import (
-    AdminUnitDetail, AdminUnitOut, AttractionDetail, AttractionOut, CategoryOut, FieldSource, PhotoOut, SourceOut,
+    AdminUnitDetail, AdminUnitOut, AttractionDetail, AttractionOut, CategoryOut, FareOut, FieldSource, HubOut, PhotoOut,
+    SourceOut, TrainServiceOut,
 )
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -162,3 +167,79 @@ def sources(response: Response, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = CACHE
     used = {"production", "enrichment"}
     return db.scalars(select(DataSource).where(DataSource.recommended_use.in_(used)).order_by(DataSource.source_name)).all()
+
+
+WEEKDAY_EN = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+@router.get("/hubs", response_model=List[HubOut])
+def hubs(type: Optional[str] = None, district: Optional[str] = None, q: Optional[str] = Query(None, min_length=2, max_length=100),
+         limit: int = Query(100, ge=1, le=500), db: Session = Depends(get_db)):
+    stmt = select(TransportHub).where(TransportHub.status == "published")
+    if type:
+        stmt = stmt.where(TransportHub.hub_type == type)
+    if district:
+        did = db.scalar(select(AdminUnit.id).where(AdminUnit.slug == district))
+        if did is None:
+            raise HTTPException(status_code=404, detail="Unknown district")
+        stmt = stmt.where(TransportHub.district_id == did)
+    if q:
+        stmt = stmt.where(or_(func.lower(TransportHub.name_en).like(f"%{q.strip().lower()}%"),
+                              TransportHub.name_bn.like(f"%{q.strip()}%")))
+    rows = db.scalars(stmt.order_by(TransportHub.name_en).limit(limit)).all()
+    slugs = _slugs(db, {h.district_id for h in rows})
+    sources = {s.source_id: s for s in db.scalars(select(DataSource))}
+    out = []
+    for h in rows:
+        src = sources.get((h.field_status or {}).get("latitude", {}).get("source_id"))
+        out.append(HubOut(slug=h.slug, hub_type=h.hub_type, name_en=h.name_en, name_bn=h.name_bn, latitude=h.latitude,
+                          longitude=h.longitude, district_slug=slugs.get(h.district_id), iata_code=h.iata_code,
+                          source=src.source_name if src else None, reliability=src.reliability_class if src else None))
+    return out
+
+
+@router.get("/trains", response_model=List[TrainServiceOut])
+def trains(from_: Optional[str] = Query(None, alias="from", description="Origin station as printed in the timetable"),
+           to: Optional[str] = None, q: Optional[str] = None, limit: int = Query(200, ge=1, le=500),
+           db: Session = Depends(get_db)):
+    stmt = (select(TrainService, Train, TimetableVersion)
+            .join(Train, Train.id == TrainService.train_id)
+            .join(TimetableVersion, TimetableVersion.id == TrainService.timetable_version_id)
+            .where(TrainService.status == "published", TimetableVersion.status == "published"))
+    if from_:
+        stmt = stmt.where(TrainService.origin_name == from_.strip())
+    if to:
+        stmt = stmt.where(TrainService.destination_name == to.strip())
+    if q:
+        stmt = stmt.where(or_(Train.train_number == q.strip(), Train.name_bn.like(f"%{q.strip()}%")))
+    hub_slugs = dict(db.execute(select(TransportHub.id, TransportHub.slug)).all())
+    out = []
+    for svc, train, version in db.execute(stmt.order_by(TrainService.departure_time).limit(limit)).all():
+        out.append(TrainServiceOut(
+            train_number=train.train_number, train_name_bn=train.name_bn, origin=svc.origin_name,
+            destination=svc.destination_name, origin_hub_slug=hub_slugs.get(svc.origin_hub_id),
+            destination_hub_slug=hub_slugs.get(svc.destination_hub_id), departure_time=svc.departure_time,
+            arrival_time=svc.arrival_time,
+            arrives_next_day=bool(svc.arrival_day_offset) if svc.arrival_day_offset is not None else None,
+            off_day=WEEKDAY_EN[svc.off_day] if svc.off_day is not None else None, runs_daily=svc.runs_daily,
+            timetable=version.name, effective_from=version.effective_from.isoformat() if version.effective_from else None,
+            timezone=version.timezone, source_url=version.source_url))
+    return out
+
+
+@router.get("/fares", response_model=List[FareOut])
+def fares(mode: Optional[str] = None, from_: Optional[str] = Query(None, alias="from"), to: Optional[str] = None,
+          limit: int = Query(200, ge=1, le=1000), db: Session = Depends(get_db)):
+    stmt = select(FareProduct).where(FareProduct.status == "published")
+    if mode:
+        stmt = stmt.where(FareProduct.mode == mode)
+    if from_:
+        stmt = stmt.where(FareProduct.origin_name == from_.strip())
+    if to:
+        stmt = stmt.where(FareProduct.destination_name == to.strip())
+    rows = db.scalars(stmt.order_by(FareProduct.origin_name, FareProduct.destination_name, FareProduct.amount).limit(limit)).all()
+    return [FareOut(mode=f.mode, origin=f.origin_name, destination=f.destination_name, fare_class=f.fare_class,
+                    fare_class_label=f.fare_class_label, amount=f.amount, currency=f.currency, base_amount=f.base_amount,
+                    vat_amount=f.vat_amount, fare_type=f.fare_type, official_distance_km=f.official_distance_km,
+                    effective_from=f.effective_from.isoformat() if f.effective_from else None,
+                    last_checked_at=f.last_checked_at, source_url=f.source_url, notes=f.notes) for f in rows]

@@ -120,3 +120,34 @@ def test_search_in_bangla_and_english(client):
 
 def test_unknown_level_is_rejected(client):
     assert client.get("/api/v1/catalog/admin-units", params={"level": "planet"}).status_code == 422
+
+
+def test_transport_endpoints_serve_published_records_only(client):
+    from app.models.catalog import FareProduct, TimetableVersion, Train, TrainService, TransportOperator
+    with _ApiTestSession() as db:
+        op = TransportOperator(slug="t-railway", operator_type="railway")
+        db.add(op)
+        db.flush()
+        v = TimetableVersion(operator_id=op.id, name="Time table no. 54", zone="t", status="published")
+        draft = TimetableVersion(operator_id=op.id, name="Draft", zone="t", status="needs_review")
+        t = Train(operator_id=op.id, train_number="t705", name_bn="একতা এক্সপ্রেস")
+        db.add_all([v, draft, t])
+        db.flush()
+        db.add_all([
+            TrainService(timetable_version_id=v.id, train_id=t.id, origin_name="ঢাকা", destination_name="পঞ্চগড়",
+                         departure_time="10:15", arrival_time="21:00", arrival_day_offset=0, runs_daily=True,
+                         status="published", field_status={}),
+            TrainService(timetable_version_id=draft.id, train_id=t.id, origin_name="ঢাকা", destination_name="পঞ্চগড়",
+                         status="needs_review", field_status={}),
+            FareProduct(mode="train", origin_name="ঢাকা", destination_name="পঞ্চগড়", fare_class="snigdha", amount=900,
+                        fare_type="official_operator", source_id="t_wikidata", last_checked_at=datetime.utcnow(),
+                        status="published"),
+            FareProduct(mode="train", origin_name="ঢাকা", destination_name="পঞ্চগড়", fare_class="ac_seat", amount=1000,
+                        fare_type="official_operator", source_id="t_wikidata", last_checked_at=datetime.utcnow(),
+                        status="needs_review"),
+        ])
+        db.commit()
+    rows = client.get("/api/v1/catalog/trains", params={"from": "ঢাকা"}).json()
+    assert [(r["train_number"], r["timetable"], r["runs_daily"]) for r in rows] == [("t705", "Time table no. 54", True)]
+    fares = client.get("/api/v1/catalog/fares", params={"mode": "train", "from": "ঢাকা"}).json()
+    assert [(f["fare_class"], f["fare_type"]) for f in fares] == [("snigdha", "official_operator")]

@@ -43,6 +43,18 @@ ENTITY_TYPES: dict[str, EntitySpec] = {
          "recommended_visit_duration"),
         _uuid_fields("division_id", "district_id", "subdistrict_id"),
     ),
+    "transport_hub": EntitySpec(
+        catalog.TransportHub,
+        ("name_en", "name_bn", "hub_type", "latitude", "longitude", "division_id", "district_id", "subdistrict_id",
+         "operator_name", "iata_code"),
+        _uuid_fields("division_id", "district_id", "subdistrict_id"),
+    ),
+    "train_service": EntitySpec(
+        catalog.TrainService,
+        ("origin_name", "destination_name", "origin_hub_id", "destination_hub_id", "departure_time", "arrival_time",
+         "arrival_day_offset", "off_day", "off_day_text", "runs_daily"),
+        _uuid_fields("origin_hub_id", "destination_hub_id"),
+    ),
 }
 
 
