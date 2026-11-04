@@ -162,6 +162,9 @@ class Connector:
     def after(self, ctx: Context, records: list[Record]) -> None:
         """Connector-specific work once claims exist (geometry, adjacency …)."""
 
+    def after_resolve(self, ctx: Context) -> None:
+        """Work that needs the curated values the claims resolve to (duplicate checks …)."""
+
     def report(self, ctx: Context) -> dict[str, Any]:
         return dict(ctx.counts)
 
@@ -330,6 +333,7 @@ def run(connector: Connector, session: Session, *, dry_run: bool = False, params
         for etype, eid in touched:
             if claims.resolve(session, etype, eid):
                 ctx.count("entities_changed")
+        connector.after_resolve(ctx)
         report = connector.report(ctx)
         if dry_run:
             session.rollback()

@@ -180,3 +180,23 @@ class FoodOut(BaseModel):
     gi_application_date: Optional[str] = None
     district_evidence: Optional[str] = None
     source_url: Optional[str] = None
+
+
+class ServicePlaceOut(BaseModel):
+    """A hotel or restaurant. `official_star_rating` comes from the ministry's list; `trust` says what the
+    rest is: a business listing (not checked by Vromon) or an official record."""
+    slug: str
+    kind: str
+    category: Optional[str] = None
+    name_en: Optional[str] = None
+    name_bn: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    district_slug: Optional[str] = None
+    address: Optional[str] = None
+    website: Optional[str] = None
+    phone: Optional[str] = None
+    official_star_rating: Optional[int] = None
+    trust: str                       # official / business_listing
+    source: Optional[str] = None
+    price: Optional[str] = None      # always None until a source states it: shown as "Price not known"

@@ -13,7 +13,7 @@ from app.models.catalog import (  # data platform (docs/DATASET_IMPLEMENTATION_P
     AdminUnit, AdminBoundary, AdminAdjacency,
     AttractionCategory, Attraction, AttractionMedia,
     TransportOperator, TransportHub, TimetableVersion, Train, TrainService, ServiceStop, FareProduct,
-    JourneyCalculation, LocalFood, MapExport,
+    JourneyCalculation, LocalFood, MapExport, ServicePlace,
 )
 
 __all__ = [
@@ -29,5 +29,5 @@ __all__ = [
     "AdminUnit", "AdminBoundary", "AdminAdjacency",
     "AttractionCategory", "Attraction", "AttractionMedia",
     "TransportOperator", "TransportHub", "TimetableVersion", "Train", "TrainService", "ServiceStop", "FareProduct",
-    "JourneyCalculation", "LocalFood", "MapExport",
+    "JourneyCalculation", "LocalFood", "MapExport", "ServicePlace",
 ]
