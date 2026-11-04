@@ -14,6 +14,7 @@ def all_connectors() -> dict[str, type]:
     from vromon_data.connectors.railway_fares import RailwayFaresEast
     from vromon_data.connectors.journeys import DistrictJourneys
     from vromon_data.connectors.transcribed_fares import TranscribedFares
+    from vromon_data.connectors.gi_register import GiRegister
     return {c.name: c for c in (GeoBoundariesBGD, CuratedAdminNames, PortalNames, WikidataAttractions, CommonsMedia,
                                 OurAirportsBD, OsmHubsBD, RailwayTimetable, RailwayFaresEast, DistrictJourneys,
-                                TranscribedFares)}
+                                TranscribedFares, GiRegister)}

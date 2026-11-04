@@ -1,0 +1,21 @@
+# When each connector should run again (guideline §6.5 freshness policy), in days since its last
+# successful run. `python -m vromon_data ops due` lists what is due; `ops run-due` runs it.
+# Order matters: geography first, then what depends on it.
+connectors:
+  - {name: geoboundaries_bgd,      every_days: 90,  why: "boundaries change only on official revision"}
+  - {name: vromon_admin_names,     every_days: 90,  why: "curated table; re-run after editing it"}
+  - {name: bd_portal_names,        every_days: 90,  why: "official portal titles"}
+  - {name: ourairports_bd,         every_days: 30,  why: "airports"}
+  - {name: osm_hubs_bd,            every_days: 30,  why: "OSM changes daily; hubs change slowly"}
+  - {name: wikidata_attractions,   every_days: 14,  why: "new and corrected attraction records"}
+  - {name: commons_media,          every_days: 30,  why: "photo licences"}
+  - {name: bd_railway_timetable,   every_days: 7,   why: "timetable revisions and notices"}
+  - {name: bd_railway_fares_east,  every_days: 30,  why: "fare charts"}
+  - {name: dpdt_gi_register,       every_days: 30,  why: "new GI registrations"}
+  - {name: district_journeys_ors,  every_days: 90,  why: "road network changes; uses API quota"}
+
+# How long a published record may go without being checked before it is marked stale and no
+# longer served as current (guideline §6.5: never show a stale fare or timetable as current)
+stale_after_days:
+  fare_products: 120
+  timetable_versions: 365

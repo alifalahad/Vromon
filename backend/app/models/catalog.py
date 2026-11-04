@@ -555,3 +555,49 @@ class JourneyCalculation(Base):
     network_version: Mapped[str] = mapped_column(String(80), nullable=False)
     is_estimate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     calculated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# Local foods and products (guideline §3.7) and map exports (§7.5)
+# ---------------------------------------------------------------------------
+
+class LocalFood(Base):
+    """A district speciality with official evidence: a registered Geographical Indication (DPDT)."""
+    __tablename__ = "local_foods"
+    __table_args__ = (UniqueConstraint("slug", name="uq_local_foods_slug"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    slug: Mapped[str] = mapped_column(String(200), nullable=False)
+    name_bn: Mapped[str] = mapped_column(String(300), nullable=False)
+    name_en: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    is_food: Mapped[bool] = mapped_column(Boolean, nullable=False)  # food or agricultural product (Nice 29-32; 31 includes seeds, jute)
+    nice_classes: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    district_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("admin_units.id"), nullable=True)  # None: national
+    district_evidence: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)  # product_name / applicant / national
+    gi_application_no: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    gi_registration_no: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    gi_application_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    applicant: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    artifact_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("source_artifacts.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="needs_review")
+    last_checked_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    job_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+
+
+class MapExport(Base):
+    """One generated district map, with every input version (guideline §7.4 step 17)."""
+    __tablename__ = "map_exports"
+    __table_args__ = (UniqueConstraint("district_id", "language", "variant", "sha256", name="uq_map_exports"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    district_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("admin_units.id"), nullable=False, index=True)
+    language: Mapped[str] = mapped_column(String(5), nullable=False)
+    variant: Mapped[str] = mapped_column(String(20), nullable=False)               # final / draft
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    template_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    credits: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="needs_review")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

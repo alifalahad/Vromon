@@ -54,3 +54,31 @@ This file grows with each phase.
   - ADM1 (CC0): membership and ISO codes only, because its 2015 outlines don't match the 2020 districts.
 - **Division outlines** are the union of each division's districts.
 - **Names:** official spellings and Bangla from `vromon_curated`, with the Bangla checked against 72 `.gov.bd` portal titles.
+
+## Attractions (Phase 2)
+
+| Table | Notes |
+|---|---|
+| `attraction_categories` | 19 Vromon categories; `app_category` maps each to the trip planner's interest (Nature, History …) |
+| `attractions` | The guideline §3.2 fields. `status`: `needs_review` → `published` only after a person approves the `new_entity` task. Curated columns stay empty until claims are accepted. |
+| `attraction_media` | A Commons photo with its licence, author and attribution. `approval_status` is `auto_approved` only for open licences with an author. |
+
+## Transport (Phases 4–6)
+
+| Table | Notes |
+|---|---|
+| `transport_operators` | Railway, bus, airline … |
+| `transport_hubs` | `hub_type`: railway_station, railway_halt, bus_terminal, ferry_terminal, airport. Source and reliability are in `field_status`. |
+| `timetable_versions` | One per published timetable and zone, with its effective date. Never overwritten. `published` only after the sample check. |
+| `trains`, `train_services` | One service per train and direction per version. Times are HH:MM Asia/Dhaka. `arrival_day_offset` 1 means the next day. `off_day` is 0 (Mon) to 6 (Sun); `runs_daily` is None when the table has no off-day column. |
+| `service_stops` | Ordered stops (from station pages; not filled yet) |
+| `fare_products` | One fare for one class between two points. `fare_type`: official_operator, regulated, operator_published, platform_displayed, human_confirmed, historical, estimated. `official_distance_km` is the chart's own distance. `stale` once past the check window. |
+| `journey_calculations` | A calculated road journey with engine, profile, network version and date. `is_estimate` is always true. |
+
+## Foods, maps, RAG (Phases 7–9)
+
+| Table | Notes |
+|---|---|
+| `local_foods` | Registered GIs (DPDT). `district_evidence`: product_name (published), applicant (review) or national. `is_food` covers Nice classes 29–32 (31 includes seeds and jute). |
+| `map_exports` | One generated map: file, sha256, template version and credits (all input versions). `needs_review` until the pilot is approved. |
+| `source_documents` (existing, new columns) | `data_source_id`, `publisher`, `published_at`, `retrieved_at`, `license`, `language`, `doc_version` |

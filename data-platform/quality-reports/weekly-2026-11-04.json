@@ -1,0 +1,30 @@
+{
+  "week_ending": "2026-11-04",
+  "jobs": {},
+  "failed_jobs": [],
+  "open_reviews": {},
+  "catalog": {
+    "admin_units_published": 0,
+    "attractions": {},
+    "hubs_published": 0,
+    "train_services": {},
+    "fares": {},
+    "gi_products_published": 0,
+    "maps": {}
+  },
+  "districts_without_published_attractions": 0,
+  "sources_never_fetched": [],
+  "due_connectors": [
+    "geoboundaries_bgd",
+    "vromon_admin_names",
+    "bd_portal_names",
+    "ourairports_bd",
+    "osm_hubs_bd",
+    "wikidata_attractions",
+    "commons_media",
+    "bd_railway_timetable",
+    "bd_railway_fares_east",
+    "dpdt_gi_register",
+    "district_journeys_ors"
+  ]
+}

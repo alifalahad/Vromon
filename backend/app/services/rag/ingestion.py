@@ -10,6 +10,7 @@ embedded with a different model than the currently configured provider.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -36,6 +37,26 @@ def _is_embedded_with(source_id: int, model_name: str, db: "Session") -> bool:
     return bool(chunks) and all(
         c.embedding_model == model_name and c.embedding_json is not None for c in chunks
     )
+
+
+def _provenance(data: dict) -> dict:
+    """Publisher, licence, retrieval date and version of a seed file, for every document from it
+    (guideline §11). Unknown stays None; demo data says so."""
+    from datetime import date, datetime
+
+    sources = data.get("sources") or []
+    first = sources[0] if sources else {}
+    fetched = data.get("fetched_on")
+    known_ids = {"wikivoyage": "wikivoyage", "wikidata": "wikidata"}
+    return {
+        "publisher": "; ".join(s.get("name", "") for s in sources if s.get("name")) or
+                     ("Vromon demo (illustrative)" if "illustrative" in str(data.get("source", "")) else None),
+        "license": "; ".join(s.get("license", "") for s in sources if s.get("license")) or None,
+        "data_source_id": known_ids.get(str(first.get("name", "")).lower()),
+        "retrieved_at": datetime.combine(date.fromisoformat(fetched), datetime.min.time()) if fetched else None,
+        "language": "en",
+        "doc_version": hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16],
+    }
 
 
 def ingest_file(path: Path, db: "Session") -> dict:
@@ -72,6 +93,7 @@ def ingest_file(path: Path, db: "Session") -> dict:
                 destination_name=raw.destination,
                 content_hash=raw.content_hash,
                 url=raw.url,
+                **_provenance(data),
             )
             db.add(doc)
             db.flush()
