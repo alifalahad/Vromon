@@ -18,13 +18,17 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import uuid
+from datetime import datetime, timedelta
 from typing import Any, Iterable
+
+import httpx
 
 from sqlalchemy import select
 
 from app.models.catalog import AdminBoundary, Attraction, ReviewTask
-from vromon_data import categories, dedup, http
+from vromon_data import artifacts, categories, dedup, http
 from vromon_data.admin_lookup import AdminLookup
 from vromon_data.connectors.portal_names import load_portals
 from vromon_data.pipeline import Connector, Context, Record
@@ -92,14 +96,41 @@ class WikidataAttractions(Connector):
                     art = ctx.store_artifact(uri=f"test://wikidata/{slug}", content=json.dumps(data).encode(),
                                              content_type="application/sparql-results+json", filename_hint=f"{slug}.json")
                 else:
-                    r = http.get(c, SPARQL, params={"query": q, "format": "json"}, check_robots=False)
-                    r.raise_for_status()
-                    art = ctx.store_artifact(uri=f"{SPARQL}#district={slug}", content=r.content,
-                                             content_type=r.headers.get("content-type"), filename_hint=f"{slug}.json")
-                    data = r.json()
+                    uri = f"{SPARQL}#district={slug}"
+                    art = artifacts.find_by_uri(ctx.session, self.source_id, uri)
+                    max_age = timedelta(hours=float(ctx.params.get("max_age_hours", 24)))
+                    if art is not None and datetime.utcnow() - art.fetched_at < max_age:
+                        ctx.count("artifacts_reused")
+                        data = json.loads(artifacts.raw_path(art).read_bytes())
+                    else:
+                        data = self._query(c, (b.min_lon - pad, b.min_lat - pad, b.max_lon + pad, b.max_lat + pad), classes)
+                        art = ctx.store_artifact(uri=uri, content=json.dumps(data).encode(),
+                                                 content_type="application/sparql-results+json", filename_hint=f"{slug}.json")
                 self.responses.append((slug, art, data))
                 self.portal_names[slug] = self._portal_spots(ctx, c, slug, portals)
         return [a for _, a, _ in self.responses]
+
+    def _query(self, c, bbox: tuple, classes: str, depth: int = 0) -> dict:
+        """One box; on a timeout the box is split in four (dense areas like Dhaka are too big for one query)."""
+        w, s_, e, n = bbox
+        q = QUERY.format(w=w, s=s_, e=e, n=n, classes=classes)
+        for attempt in range(3):
+            try:
+                r = http.get(c, SPARQL, params={"query": q, "format": "json"}, check_robots=False)
+            except httpx.TimeoutException:
+                r = None
+            if r is not None and r.status_code == 200:
+                return r.json()
+            if r is not None and r.status_code == 429:
+                time.sleep(int(r.headers.get("retry-after", "30")))
+                continue
+            if depth < 2:  # 5xx or timeout: smaller boxes
+                mx, my = (w + e) / 2, (s_ + n) / 2
+                parts = [self._query(c, box, classes, depth + 1)
+                         for box in ((w, s_, mx, my), (mx, s_, e, my), (w, my, mx, n), (mx, my, e, n))]
+                return {"results": {"bindings": [b for p in parts for b in p["results"]["bindings"]]}}
+            time.sleep(10 * (attempt + 1))
+        raise RuntimeError(f"Wikidata query failed for box {bbox}")
 
     def _portal_spots(self, ctx: Context, c, slug: str, portals: dict) -> list[str]:
         """Names on the district portal's tourist-spot table (facts only; used as review evidence)."""

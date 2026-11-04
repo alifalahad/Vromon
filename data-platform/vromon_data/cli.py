@@ -144,12 +144,17 @@ def _maps(args) -> int:
             slugs = list(s.scalars(select(AdminUnit.slug).where(AdminUnit.level == "district").order_by(AdminUnit.slug)))
         else:
             slugs = [x if x.startswith("bd-district-") else f"bd-district-{x}" for x in (args.districts or "").split(",") if x]
+        from vromon_data.paths import EXPORTS_DIR
         for slug in slugs:
             for lang in args.lang.split(","):
+                png = EXPORTS_DIR / "maps" / f"{slug}-{lang}{'-draft' if args.draft else ''}.png"
+                if args.missing and png.exists():
+                    continue
                 try:
                     print(render_district(s, slug, lang, draft=args.draft), flush=True)
                 except Exception as e:  # one district's failure must not stop the batch
-                    print(f"FAILED {slug} {lang}: {type(e).__name__}: {e}", flush=True)
+                    s.rollback()           # and must not poison the session for the next one
+                    print(f"FAILED {slug} {lang}: {type(e).__name__}: {str(e)[:200]}", flush=True)
     return 0
 
 
@@ -251,6 +256,7 @@ def build_parser() -> argparse.ArgumentParser:
     mp.add_argument("--districts")
     mp.add_argument("--all", action="store_true")
     mp.add_argument("--draft", action="store_true")
+    mp.add_argument("--missing", action="store_true", help="only maps that don't exist yet")
     mp.add_argument("--lang", default="en,bn")
     mp.set_defaults(func=_maps)
 
