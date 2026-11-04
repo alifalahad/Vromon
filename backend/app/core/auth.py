@@ -64,6 +64,9 @@ def _unauthorized(detail: str) -> HTTPException:
     return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail, headers={"WWW-Authenticate": "Bearer"})
 
 
+CLOCK_SKEW_S = 60
+
+
 def verify_access_token(token: str) -> dict:
     """Return the verified claims of a Supabase access token, or raise 401."""
     if not settings.auth_configured:
@@ -77,6 +80,9 @@ def verify_access_token(token: str) -> dict:
             audience=settings.supabase_jwt_audience,
             issuer=settings.supabase_issuer,
             options={"require": ["exp", "sub", "iss", "aud"]},
+            # The server's clock and Supabase's can differ by a few seconds: a token issued "just now"
+            # by a clock slightly ahead would otherwise be rejected as not valid yet
+            leeway=CLOCK_SKEW_S,
         )
     except jwt.ExpiredSignatureError:
         raise _unauthorized("Session expired")
