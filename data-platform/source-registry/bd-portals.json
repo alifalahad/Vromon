@@ -1,0 +1,290 @@
+{
+ "BD-A": {
+  "domain": "barisaldiv",
+  "level": "division"
+ },
+ "BD-B": {
+  "domain": "chittagongdiv",
+  "level": "division"
+ },
+ "BD-C": {
+  "domain": "dhakadiv",
+  "level": "division"
+ },
+ "BD-D": {
+  "domain": "khulnadiv",
+  "level": "division"
+ },
+ "BD-E": {
+  "domain": "rajshahidiv",
+  "level": "division"
+ },
+ "BD-F": {
+  "domain": "rangpurdiv",
+  "level": "division"
+ },
+ "BD-G": {
+  "domain": "sylhetdiv",
+  "level": "division"
+ },
+ "BD-H": {
+  "domain": "mymensinghdiv",
+  "level": "division"
+ },
+ "Bagerhat": {
+  "domain": "bagerhat",
+  "level": "district"
+ },
+ "Bandarban": {
+  "domain": "bandarban",
+  "level": "district"
+ },
+ "Barguna": {
+  "domain": "barguna",
+  "level": "district"
+ },
+ "Barisal": {
+  "domain": "barisal",
+  "level": "district"
+ },
+ "Bhola": {
+  "domain": "bhola",
+  "level": "district"
+ },
+ "Bogra": {
+  "domain": "bogra",
+  "level": "district"
+ },
+ "Brahamanbaria": {
+  "domain": "brahmanbaria",
+  "level": "district"
+ },
+ "Chandpur": {
+  "domain": "chandpur",
+  "level": "district"
+ },
+ "Chittagong": {
+  "domain": "chittagong",
+  "level": "district"
+ },
+ "Chuadanga": {
+  "domain": "chuadanga",
+  "level": "district"
+ },
+ "Comilla": {
+  "domain": "comilla",
+  "level": "district"
+ },
+ "Cox's Bazar": {
+  "domain": "coxsbazar",
+  "level": "district"
+ },
+ "Dhaka": {
+  "domain": "dhaka",
+  "level": "district"
+ },
+ "Dinajpur": {
+  "domain": "dinajpur",
+  "level": "district"
+ },
+ "Faridpur": {
+  "domain": "faridpur",
+  "level": "district"
+ },
+ "Feni": {
+  "domain": "feni",
+  "level": "district"
+ },
+ "Gaibandha": {
+  "domain": "gaibandha",
+  "level": "district"
+ },
+ "Gazipur": {
+  "domain": "gazipur",
+  "level": "district"
+ },
+ "Gopalganj": {
+  "domain": "gopalganj",
+  "level": "district"
+ },
+ "Habiganj": {
+  "domain": "habiganj",
+  "level": "district"
+ },
+ "Jamalpur": {
+  "domain": "jamalpur",
+  "level": "district"
+ },
+ "Jessore": {
+  "domain": "jessore",
+  "level": "district"
+ },
+ "Jhalokati": {
+  "domain": "jhalakathi",
+  "level": "district"
+ },
+ "Jhenaidah": {
+  "domain": "jhenaidah",
+  "level": "district"
+ },
+ "Joypurhat": {
+  "domain": "joypurhat",
+  "level": "district"
+ },
+ "Khagrachhari": {
+  "domain": "khagrachhari",
+  "level": "district"
+ },
+ "Khulna": {
+  "domain": "khulna",
+  "level": "district"
+ },
+ "Kishoreganj": {
+  "domain": "kishoreganj",
+  "level": "district"
+ },
+ "Kurigram": {
+  "domain": "kurigram",
+  "level": "district"
+ },
+ "Kushtia": {
+  "domain": "kushtia",
+  "level": "district"
+ },
+ "Lakshmipur": {
+  "domain": "lakshmipur",
+  "level": "district"
+ },
+ "Lalmonirhat": {
+  "domain": "lalmonirhat",
+  "level": "district"
+ },
+ "Madaripur": {
+  "domain": "madaripur",
+  "level": "district"
+ },
+ "Magura": {
+  "domain": "magura",
+  "level": "district"
+ },
+ "Manikganj": {
+  "domain": "manikganj",
+  "level": "district"
+ },
+ "Maulvibazar": {
+  "domain": "moulvibazar",
+  "level": "district"
+ },
+ "Meherpur": {
+  "domain": "meherpur",
+  "level": "district"
+ },
+ "Munshiganj": {
+  "domain": "munshiganj",
+  "level": "district"
+ },
+ "Mymensingh": {
+  "domain": "mymensingh",
+  "level": "district"
+ },
+ "Naogaon": {
+  "domain": "naogaon",
+  "level": "district"
+ },
+ "Narail": {
+  "domain": "narail",
+  "level": "district"
+ },
+ "Narayanganj": {
+  "domain": "narayanganj",
+  "level": "district"
+ },
+ "Narsingdi": {
+  "domain": "narsingdi",
+  "level": "district"
+ },
+ "Natore": {
+  "domain": "natore",
+  "level": "district"
+ },
+ "Nawabganj": {
+  "domain": "chapainawabganj",
+  "level": "district"
+ },
+ "Netrakona": {
+  "domain": "netrokona",
+  "level": "district"
+ },
+ "Nilphamari": {
+  "domain": "nilphamari",
+  "level": "district"
+ },
+ "Noakhali": {
+  "domain": "noakhali",
+  "level": "district"
+ },
+ "Pabna": {
+  "domain": "pabna",
+  "level": "district"
+ },
+ "Panchagarh": {
+  "domain": "panchagarh",
+  "level": "district"
+ },
+ "Patuakhali": {
+  "domain": "patuakhali",
+  "level": "district"
+ },
+ "Pirojpur": {
+  "domain": "pirojpur",
+  "level": "district"
+ },
+ "Rajbari": {
+  "domain": "rajbari",
+  "level": "district"
+ },
+ "Rajshahi": {
+  "domain": "rajshahi",
+  "level": "district"
+ },
+ "Rangamati": {
+  "domain": "rangamati",
+  "level": "district"
+ },
+ "Rangpur": {
+  "domain": "rangpur",
+  "level": "district"
+ },
+ "Satkhira": {
+  "domain": "satkhira",
+  "level": "district"
+ },
+ "Shariatpur": {
+  "domain": "shariatpur",
+  "level": "district"
+ },
+ "Sherpur": {
+  "domain": "sherpur",
+  "level": "district"
+ },
+ "Sirajganj": {
+  "domain": "sirajganj",
+  "level": "district"
+ },
+ "Sunamganj": {
+  "domain": "sunamganj",
+  "level": "district"
+ },
+ "Sylhet": {
+  "domain": "sylhet",
+  "level": "district"
+ },
+ "Tangail": {
+  "domain": "tangail",
+  "level": "district"
+ },
+ "Thakurgaon": {
+  "domain": "thakurgaon",
+  "level": "district"
+ }
+}

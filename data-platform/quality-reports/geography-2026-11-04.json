@@ -1,0 +1,112 @@
+{
+  "summary": {
+    "generated_at": "2026-11-04T16:21:19",
+    "units": {
+      "district": 64,
+      "division": 8,
+      "subdistrict": 544
+    },
+    "status": {
+      "district:published": 64,
+      "division:published": 8,
+      "subdistrict:published": 544
+    },
+    "subdistricts_with_bangla_name": 0,
+    "adjacency_pairs": 328,
+    "district_overlap_km2": 0.0,
+    "gap_km2": 0.0,
+    "checks_failed": [
+      "every district's Bangla name is verified against its portal"
+    ],
+    "passed": false
+  },
+  "checks": [
+    {
+      "check": "division count is 8",
+      "passed": true,
+      "detail": 8
+    },
+    {
+      "check": "district count is 64",
+      "passed": true,
+      "detail": 64
+    },
+    {
+      "check": "every district has a division parent",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "every subdistrict has a district parent",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "every unit has an English name",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "every division has a Bangla name",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "every division's Bangla name is verified against its portal",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "every district has a Bangla name",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "every district's Bangla name is verified against its portal",
+      "passed": false,
+      "detail": [
+        "bd-district-rangamati"
+      ]
+    },
+    {
+      "check": "every unit has a current boundary",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "every app region (BD-A…BD-H) is linked to a division",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "adjacency is symmetric",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "every district has at least one neighbour",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "district overlaps under 1.0 km² in total",
+      "passed": true,
+      "detail": 0.0
+    },
+    {
+      "check": "area inside divisions but in no district under 5.0 km²",
+      "passed": true,
+      "detail": 0.0
+    },
+    {
+      "check": "subdistrict overlaps under 1.0 km² in total",
+      "passed": true,
+      "detail": 0.0
+    },
+    {
+      "check": "area inside districts but in no subdistrict under 5.0 km²",
+      "passed": true,
+      "detail": 0.0
+    }
+  ]
+}

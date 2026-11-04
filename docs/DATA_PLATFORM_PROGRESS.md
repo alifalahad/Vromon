@@ -1,0 +1,106 @@
+# Data Platform Progress
+
+Phase reports in the guideline's format (§17). The plan is in `docs/DATASET_IMPLEMENTATION_PLAN.md`; the tables are described in `docs/DATA_DICTIONARY.md`.
+
+---
+
+## Phase 0: audit and source discovery (2026-11-04) ✅
+
+Deliverables:
+- `docs/REPOSITORY_AUDIT.md`
+- `docs/SOURCE_CATALOG.md`
+- `docs/DATA_GAP_ANALYSIS.md`
+- `docs/PHASE_1_PLAN.md`
+- `data-platform/source-registry/sources.yaml`: 31 sources
+- `probe-results.json`: 33 of 37 URLs reachable; every source's status is backed by a live probe
+
+Findings:
+- **Bangladesh Railway** publishes timetable no. 54 (in effect since 10 Mar 2025) and fare charts as PDFs.
+- **BRTA** published its fare chart as PDFs in Aug 2026.
+- **All 64 district portals** list tourist spots, but they are all rights reserved.
+- **HDX** downloads sit behind a bot challenge, which the pipeline doesn't bypass.
+- **Wikimedia** requires contact details in the User-Agent; this was set up with the owner's consent.
+
+## Phase 1: foundation and administrative geography (2026-11-04) ✅
+
+**Implemented:**
+- The `data-platform/` package with:
+  - a connector contract
+  - a job runner: dry run, change detection, removed records sent to review, failed runs rolled back
+  - raw snapshots with sha256 manifests
+  - source claims and claim resolution
+  - rollback, review queue and audit log
+  - quality report and CLI
+- Migration `0020`, which adds 13 new tables and changes no existing ones.
+
+**Sources accessed:**
+- geoBoundaries API and files (release `9469f09`)
+- the repo's curated name tables
+- 72 `.gov.bd` portal home pages, used for their titles only
+
+**Counts:**
+
+| | Fetched | Accepted | Rejected | Review |
+|---|---|---|---|---|
+| Divisions | 8 | 8 | 0 | 0 |
+| Districts | 64 | 64 | 0 | 0 (25 geometry questions resolved, see below) |
+| Sub-districts | 544 | 544 | 0 | 0 |
+| Bangla names (divisions + districts) | 72 | 71 verified | 0 | 1 (Rangamati: portal says "রাঙ্গামাটি পার্বত্য") |
+
+**Geometry checks:** 0 km² of overlaps and 0 km² of gaps for districts against divisions and for sub-districts against districts. The neighbour relation is symmetric (328 pairs) and every district has a neighbour. The full report is at `data-platform/quality-reports/geography-2026-11-04.*`.
+
+**Finding and fix:** geoBoundaries ADM1 (2015, Wikimedia Commons) doesn't line up with ADM2 (2020, BBS/OCHA). 25 districts sat only 69–95% inside their division, and 4,748 km² inside the divisions belonged to no district.
+- All 64 division memberships were checked by name (Barishal 6, Chattogram 11, Dhaka 13, Khulna 10, Mymensingh 4, Rajshahi 8, Rangpur 8, Sylhet 4).
+- Division outlines are now the union of their districts.
+
+**Still unavailable:**
+- Bangla names for the 544 sub-districts.
+- Whether each sub-district is an upazila or a city thana; geoBoundaries doesn't say. HDX COD-AB has this, but its download needs a person (`vromon_data artifact add`).
+
+**Tests:** 26 data-platform tests and 6 catalog API tests. Backend suite: **713 passed, 10 skipped** (baseline 707).
+
+## Phase 2: attraction pilot (2026-11-04) ✅ (awaiting review)
+
+**Implemented:**
+- Attraction catalog: migration `0021` (`attraction_categories`, `attractions`, `attraction_media`).
+- Connectors:
+  - `wikidata_attractions`: per-district SPARQL; district and sub-district set by point-in-polygon; gazetteer noise filtered out.
+  - `commons_media`: Commons photos with their licences.
+- Name matching across scripts and spellings: Bangla↔Latin transliteration, generic place words, place types, location suffixes.
+- Duplicate detection, which opens review tasks and never merges.
+- Spreadsheet review (`review export` / `review import`).
+- Publish adapter into `places`. Loader rows are protected, Cox's Bazar's demo places are hidden once replacements are approved, and a place is hidden when its attraction is unpublished.
+- Attraction quality report.
+- Read-only API `/api/v1/catalog/*`, which serves only published records and gives the source of every field.
+
+**Sources accessed:**
+- Wikidata SPARQL (4 districts)
+- Commons API
+- the four pilot districts' portal tourist-spot lists, all pages, used for names as review evidence
+
+**Counts (pilot: Bandarban, Cox's Bazar, Barishal, Rajshahi):**
+
+| | Bandarban | Cox's Bazar | Barishal | Rajshahi | Total |
+|---|---|---|---|---|---|
+| Candidates awaiting review | 59 | 41 | 15 | 27 | **142** |
+| Licensed photos | 21 | 18 | 11 | 21 | 71 |
+| No Bangla name | 33 | 12 | 2 | 3 | 50 |
+| Official portal spots | 17 | 15 | 24 | 9 | 65 |
+
+- **Skipped:** 48 Wikidata items with no English or Bangla name, and 2 unnamed gazetteer peaks.
+- **Review tasks: 189 open.** 142 new attractions, 39 points near a district border, 7 possible duplicates, and 1 name conflict.
+- **Published: 0.** Every record waits for a person, as the guideline requires.
+
+**Coverage gap:** many official portal spots are missing from Wikidata or spelled differently, for example Nilachal, Nilgiri, Boga Lake / Bagakain Lake, and several Barishal zamindar houses and temples. They're listed per district in `quality-reports/attractions-2026-11-04.md` for a person to add or match.
+
+**Licence notes:**
+- Portal text and photos are not copied; only names are compared.
+- Wikidata facts are CC0.
+- Photos are linked to Commons with their own licence and credit.
+
+**Next step for the owner:** review `data-platform/exports/pilot-review-2026-11-04.csv` (fill in `decision` and `reason`), then:
+
+```
+python -m vromon_data review import exports/pilot-review-2026-11-04.csv --reviewer "<name>"
+python -m vromon_data publish places
+```
