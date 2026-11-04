@@ -162,3 +162,26 @@ def test_duplicates_go_to_review_not_merged(session, layers):
     report = pipeline.run(WikidataAttractions(), session, params={"districts": ["bd-district-barishal"],
                                                                   "responses": responses, "portal_spots": {}})
     assert report.get("review_duplicate", 0) == 0                                 # not opened twice
+
+
+def test_official_list_links_or_proposes_without_guessing_a_location(session, layers):
+    from vromon_data.connectors.portal_spots import PortalTouristSpots
+    import json as _json
+    from vromon_data.connectors import portal_names
+    _setup(session, layers)
+    _run(session)
+    portal_names.PORTALS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    pages = {"bd-district-barishal": {1: '<td class="table-td" data-column="title"> গুঠিয়া মসজিদ, উজিরপুর </td>'
+                                         '<td class="table-td" data-column="title"> সাতলা বিল </td>'}}
+    import pytest
+    mp = pytest.MonkeyPatch()
+    mp.setattr(portal_names, "load_portals", lambda: {"Barisal": {"level": "district", "domain": "barisal"}})
+    from vromon_data.connectors import portal_spots
+    mp.setattr(portal_spots, "load_portals", lambda: {"Barisal": {"level": "district", "domain": "barisal"}})
+    report = pipeline.run(PortalTouristSpots(), session, params={"pages": pages, "districts": ["bd-district-barishal"]})
+    mp.undo()
+    assert report["status"] == "succeeded", report
+    assert report["matched_existing"] == 1 and report["new_without_location"] == 1
+    new = session.scalar(select(Attraction).where(Attraction.slug.like("barishal-satola%")))
+    assert new is not None and new.latitude is None and new.status == "needs_review"
+    assert session.scalar(select(func.count()).select_from(ReviewTask).where(ReviewTask.task_type == "location_needed")) == 1

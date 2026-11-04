@@ -53,3 +53,11 @@ A source is listed as **available** only when the probe reached it or official d
 ## 3. Reference products (not sources)
 
 unseenbd.com and unseenbangladesh.com were reviewed for which fields to model (plan §2a). Nothing is copied from them.
+
+## 4. Follow-up checks (2026-11-05)
+
+| Source | What was checked | Finding | Next step |
+|---|---|---|---|
+| **BIWTA** (biwta.gov.bd) | All notice, circular, press-release and route-permit pages; 23 documents whose titles mention fares, launches, routes or schedules | No launch timetable or per-route fare chart is published. The relevant documents are the **"নৌরুট পারমিট, সময়সূচী ও ভাড়া নির্ধারণ বিধিমালা ২০১৯"** (the rules for how routes, schedules and fares are set) and 2019 meeting notices about them; also a 2018 cyclone suspension notice. | Ask BIWTA for the current route-wise fare chart and schedules; import with `transcribed_fares` |
+| **RHD Distance Matrix Tool** | The page's own HTML | It calculates routes on **RHD's own road network** (an ArcGIS Network Analyst route service on gis.rhd.gov.bd), not OpenStreetMap. That makes its distances worth having, but the service is the tool's back end, not a published dataset. Bulk use without permission isn't done (guideline §2.3), and an automated check of the service was refused by this environment's safety controls. | Ask RHD for the district distance table, or written permission to query the route service at a low rate |
+| **District portals, tourist spots** | All 64 districts, all pages (`bd_portal_tourist_spots`) | Facts only (that a named place is on the district's official list) are used to confirm or propose attractions. Descriptions, directions and photos are not copied. | Letter to a2i only if their text and photos are wanted |
