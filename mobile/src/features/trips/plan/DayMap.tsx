@@ -9,13 +9,14 @@
 import { Camera, GeoJSONSource, Layer, Map, type CameraRef } from '@maplibre/maplibre-react-native';
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { boundsFor } from '../../../components/TripMap';
+import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
 import { useReduceMotion } from '../../../ui/useReduceMotion';
 import { planColors } from './colors';
-import { useStreetStyle } from './mapStyle';
+import { ESRI_CREDIT, HAS_ESRI, useStreetStyle } from './mapStyle';
 import { localDigits } from './usePlanFormat';
 import type { Coord, StopKind } from './timeline';
 
@@ -31,6 +32,7 @@ export function DayMap({
   onSelect,
   fitKey,
   roadLines = {},
+  crossings = {},
   topPadding,
   bottomPadding,
   accessibilityLabel,
@@ -42,6 +44,8 @@ export function DayMap({
   fitKey: string;
   /** Road lines ([lon, lat] pairs) by "fromId>toId" */
   roadLines?: Record<string, number[][]>;
+  /** Legs with no road, by "fromId>toId": road to the ghat, across the water, road on */
+  crossings?: Record<string, { mode: 'road' | 'water'; line: number[][]; estimate: boolean }[]>;
   topPadding: number;
   bottomPadding: number;
   accessibilityLabel: string;
@@ -53,7 +57,9 @@ export function DayMap({
   const { i18n } = useTranslation();
   const lang = i18n.language;
   const camera = useRef<CameraRef>(null);
-  const mapStyle = useStreetStyle(theme.scheme);
+  const { t } = useTranslation();
+  const [satellite, setSatellite] = React.useState(false);
+  const mapStyle = useStreetStyle(theme.scheme, satellite, lang);
   const padding = useMemo(() => ({ top: topPadding + 24, right: 48, bottom: bottomPadding + 24, left: 48 }), [topPadding, bottomPadding]);
   const bounds = useMemo(() => boundsFor(pins.map((p) => p.coord)), [pins]);
 
@@ -70,13 +76,25 @@ export function DayMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the selection changes
   }, [selectedId]);
 
-  // Each leg: the road line when we have it, otherwise a straight segment (drawn dashed)
-  const [roads, line] = useMemo<[GeoJSON.FeatureCollection, GeoJSON.FeatureCollection]>(() => {
+  // Each leg: the road line when we have it; a boat crossing where no road goes; otherwise a straight segment (dashed)
+  const [roads, line, water] = useMemo<[GeoJSON.FeatureCollection, GeoJSON.FeatureCollection, GeoJSON.FeatureCollection]>(() => {
     const road: GeoJSON.Feature[] = [];
     const straight: GeoJSON.Feature[] = [];
+    const boat: GeoJSON.Feature[] = [];
     pins.forEach((p, i) => {
       const next = pins[i + 1];
       if (!next) return;
+      const parts = crossings[`${p.id}>${next.id}`];
+      if (parts) {
+        parts.forEach((s) => {
+          const feature: GeoJSON.Feature = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: s.line } };
+          if (s.mode === 'water') {
+            boat.push(feature);
+            s.line.forEach((c) => boat.push({ type: 'Feature', properties: { ghat: 1 }, geometry: { type: 'Point', coordinates: c } }));
+          } else (s.estimate ? straight : road).push(feature);
+        });
+        return;
+      }
       const known = roadLines[`${p.id}>${next.id}`];
       const coordinates = known ?? [
         [p.coord.longitude, p.coord.latitude],
@@ -87,8 +105,9 @@ export function DayMap({
     return [
       { type: 'FeatureCollection', features: road },
       { type: 'FeatureCollection', features: straight },
+      { type: 'FeatureCollection', features: boat },
     ];
-  }, [pins, roadLines]);
+  }, [pins, roadLines, crossings]);
   const points = useMemo<GeoJSON.FeatureCollection>(
     () => ({
       type: 'FeatureCollection',
@@ -128,6 +147,22 @@ export function DayMap({
             type="line"
             paint={{ 'line-color': colors.visit, 'line-width': 4.5 }}
             layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+          />
+        </GeoJSONSource>
+        {/* Crossings by boat or ferry: a blue dashed line between the two ghats */}
+        <GeoJSONSource id="day-water" data={water}>
+          <Layer
+            id="day-water"
+            type="line"
+            filter={['==', ['geometry-type'], 'LineString']}
+            paint={{ 'line-color': '#1E88E5', 'line-width': 3.5, 'line-dasharray': [1.2, 1.2] }}
+            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+          />
+          <Layer
+            id="day-ghat"
+            type="circle"
+            filter={['==', ['geometry-type'], 'Point']}
+            paint={{ 'circle-radius': 5, 'circle-color': '#FFFFFF', 'circle-stroke-color': '#1E88E5', 'circle-stroke-width': 2.5 }}
           />
         </GeoJSONSource>
         {/* Legs without road data: faint dots, so they can't be mistaken for a road */}
@@ -186,6 +221,26 @@ export function DayMap({
           />
         </GeoJSONSource>
       </Map>
+      {HAS_ESRI ? (
+        <>
+          <PressableScale
+            pressEffect="opacity"
+            haptic="selection"
+            onPress={() => setSatellite((s) => !s)}
+            style={[styles.toggle, { top: topPadding + 8 }]}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: satellite }}
+            accessibilityLabel={t('plan.mapSatellite')}
+            hitSlop={8}
+            testID="map-satellite-toggle"
+          >
+            <Text style={styles.toggleText}>{satellite ? t('plan.mapStreets') : t('plan.mapSatellite')}</Text>
+          </PressableScale>
+          <Text style={[styles.credit, { bottom: bottomPadding + 4 }]} accessibilityElementsHidden importantForAccessibility="no">
+            {ESRI_CREDIT}
+          </Text>
+        </>
+      ) : null}
     </View>
   );
 }
@@ -193,4 +248,16 @@ export function DayMap({
 const useStyles = makeStyles((t) => ({
   wrap: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: t.colors.surfaceInset },
   map: { flex: 1 },
+  toggle: {
+    position: 'absolute',
+    left: 12,
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 24,
+    backgroundColor: t.colors.surface,
+    elevation: 3,
+  },
+  toggleText: { color: t.colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  credit: { position: 'absolute', left: 8, fontSize: 10, color: '#333333', backgroundColor: 'rgba(255,255,255,0.7)', paddingHorizontal: 4 },
 }));

@@ -363,6 +363,8 @@ class ItineraryItemOut(BaseModel):
     travel_mode: Optional[str] = None
     travel_mode_chosen: bool = False
     travel_source: Optional[Literal["road", "estimate"]] = None
+    # No road at all: by boat or ferry between two ghats (estimates; check the local schedule)
+    travel_crossing: Optional[Dict[str, Any]] = None
     travel_fare: Optional[float] = None
     place: Optional[PlaceOut] = None
     restaurant: Optional[RestaurantOut] = None

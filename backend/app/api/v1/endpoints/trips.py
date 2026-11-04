@@ -742,7 +742,9 @@ def keep_despite_warning(trip_id: int, item_id: int, payload: KeepRequest, db: S
 def day_route(trip_id: int, day_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """
     The road line between consecutive stops of the day, for the map. A leg without one
-    (no road data) has `line: null` and is drawn straight. Owner, or a friend read-only.
+    (no road data) has `line: null` and is drawn straight; a leg with no road at all that a
+    boat or ferry can do has `crossing` (the two ghats, estimates) and `segments`
+    (road, water, road). Owner, or a friend read-only.
     """
     trip = _load_trip(db, trip_id, user, friends_may_read=True)
     day = _load_day(trip, day_id)
@@ -752,14 +754,28 @@ def day_route(trip_id: int, day_id: int, db: Session = Depends(get_db), user: Us
     ]
     points = [point_of(i.place if i.item_type == "activity" else i.restaurant) for i in stops]
     lines = ROADS.lines(db, points) if len(points) > 1 else []
-    return {
-        "day_id": day.id,
-        "provider": ROADS.provider_name,
-        "legs": [
-            {"from_item_id": a.id, "to_item_id": b.id, "line": line}
-            for a, b, line in zip(stops, stops[1:], lines)
-        ],
-    }
+    legs = []
+    for a, b, pa, pb, line in zip(stops, stops[1:], points, points[1:], lines):
+        leg: dict[str, Any] = {"from_item_id": a.id, "to_item_id": b.id, "line": line}
+        crossing = ROADS.crossing(pa, pb) if line is None else None
+        if crossing is not None:
+            ga, gb = (crossing.start.lat, crossing.start.lon), (crossing.end.lat, crossing.end.lon)
+            before, after = ROADS.lines(db, [pa, ga])[0], ROADS.lines(db, [gb, pb])[0]
+            leg["crossing"] = {
+                "from_ghat": {"name": crossing.start.name, "lat": ga[0], "lon": ga[1]},
+                "to_ghat": {"name": crossing.end.name, "lat": gb[0], "lon": gb[1]},
+                "water_km": crossing.water_km,
+                "minutes": crossing.minutes,
+                "estimate": True,
+                "note": "By boat or ferry between the two ghats. Times are estimates: check the local schedule.",
+            }
+            leg["segments"] = [
+                {"mode": "road", "line": before or [[pa[1], pa[0]], [ga[1], ga[0]]], "estimate": before is None},
+                {"mode": "water", "line": [[ga[1], ga[0]], [gb[1], gb[0]]], "estimate": True},
+                {"mode": "road", "line": after or [[gb[1], gb[0]], [pb[1], pb[0]]], "estimate": after is None},
+            ]
+        legs.append(leg)
+    return {"day_id": day.id, "provider": ROADS.provider_name, "legs": legs}
 
 
 @router.patch("/{trip_id}/items/{item_id}")
@@ -1421,6 +1437,10 @@ def _day_out(db: Session, day: Itinerary) -> dict:
         row["travel_mode_chosen"] = item.travel_mode is not None
         row["travel_source"] = road.source
         row["travel_fare"] = travel_modes.fare(mode, road.km) if mode else None
+        crossing = ROADS.crossing(point_of(item.place), point_of(nxt.place)) if road.source == "estimate" else None
+        if crossing is not None:
+            row["travel_crossing"] = {"from_ghat": crossing.start.name, "to_ghat": crossing.end.name,
+                                      "water_km": crossing.water_km, "minutes": crossing.minutes, "estimate": True}
     return {
         "id": day.id,
         "trip_id": day.trip_id,

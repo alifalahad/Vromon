@@ -27,7 +27,10 @@ def open_tasks(session: Session, task_type: str | None = None, limit: int = 50) 
     return list(session.scalars(q.order_by(ReviewTask.priority, ReviewTask.created_at).limit(limit)))
 
 
-def decide(session: Session, task_id: uuid.UUID, decision: str, *, reviewer: str | None, reason: str | None) -> ReviewTask:
+def decide(session: Session, task_id: uuid.UUID, decision: str, *, reviewer: str | None, reason: str | None,
+           method: str = "human_review") -> ReviewTask:
+    """`method`: how the decision was made, kept on every claim it accepts (human_review, or
+    ai_review_delegated when the owner asked the assistant to review on their behalf)."""
     if not reviewer or not reason:
         raise ValueError("a decision needs a reviewer and a reason")
     task = session.get(ReviewTask, task_id)
@@ -49,7 +52,7 @@ def decide(session: Session, task_id: uuid.UUID, decision: str, *, reviewer: str
             c.status = new_status
             if decision == "approve":
                 c.verified_at = c.verified_at or datetime.utcnow()
-                c.verification_method = c.verification_method or "human_review"
+                c.verification_method = method
         entity = session.get(ENTITY_TYPES[task.entity_type].model, task.entity_id)
         if entity is not None:
             entity.status = "published" if decision == "approve" else "rejected"
@@ -65,7 +68,7 @@ def decide(session: Session, task_id: uuid.UUID, decision: str, *, reviewer: str
             svc.status = "published"
         task.decision["services"] = len(services)
     if task.entity_type and task.entity_id:
-        session.add(VerificationEvent(entity_type=task.entity_type, entity_id=task.entity_id, method="review",
+        session.add(VerificationEvent(entity_type=task.entity_type, entity_id=task.entity_id, method=method,
                                       reviewer=reviewer, reason=f"{task.task_type}: {decision}: {reason}"))
     session.commit()
     return task
