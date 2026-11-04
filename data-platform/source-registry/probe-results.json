@@ -1,0 +1,605 @@
+{
+  "probed_at": "2026-11-04T15:57:46+00:00",
+  "user_agent": "VromonDataBot/0.1 (Bangladesh travel data pipeline; <contact>) httpx/0.28.1",
+  "results": [
+    {
+      "source_id": "geoboundaries_bgd",
+      "url": "https://www.geoboundaries.org/api/current/gbOpen/BGD/ADM1/",
+      "fetch_policy": "usage_policy",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://www.geoboundaries.org/api/current/gbOpen/BGD/ADM1/",
+      "content_type": "application/json",
+      "bytes": 1713,
+      "last_modified": "Sat, 24 Feb 2024 10:30:56 GMT",
+      "result": "ok",
+      "facts": {
+        "boundaryID": "BGD-ADM1-32408957",
+        "boundaryType": "ADM1",
+        "boundaryLicense": "CC0 1.0 Universal (CC0 1.0) Public Domain Dedication",
+        "licenseDetail": "nan",
+        "boundarySource": "geoBoundaries, Wikimedia Commons",
+        "boundaryYearRepresented": "2015",
+        "sourceDataUpdateDate": "Thu Jan 19 07:31:04 2023",
+        "buildDate": "Dec 12, 2023",
+        "admUnitCount": "8",
+        "gjDownloadURL": "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/BGD/ADM1/geoBoundaries-BGD-ADM1.geojson"
+      }
+    },
+    {
+      "source_id": "geoboundaries_bgd",
+      "url": "https://www.geoboundaries.org/api/current/gbOpen/BGD/ADM2/",
+      "fetch_policy": "usage_policy",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://www.geoboundaries.org/api/current/gbOpen/BGD/ADM2/",
+      "content_type": "application/json",
+      "bytes": 1850,
+      "last_modified": "Sat, 24 Feb 2024 10:30:56 GMT",
+      "result": "ok",
+      "facts": {
+        "boundaryID": "BGD-ADM2-16705992",
+        "boundaryType": "ADM2",
+        "boundaryLicense": "Creative Commons Attribution 3.0 Intergovernmental Organisations (CC BY 3.0 IGO)",
+        "licenseDetail": "nan",
+        "boundarySource": "Bangladesh Bureau of Statistics (BBS), OCHA ROAP",
+        "boundaryYearRepresented": "2020",
+        "sourceDataUpdateDate": "Thu Jan 19 07:31:04 2023",
+        "buildDate": "Dec 12, 2023",
+        "admUnitCount": "64",
+        "gjDownloadURL": "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/BGD/ADM2/geoBoundaries-BGD-ADM2.geojson"
+      }
+    },
+    {
+      "source_id": "geoboundaries_bgd",
+      "url": "https://www.geoboundaries.org/api/current/gbOpen/BGD/ADM3/",
+      "fetch_policy": "usage_policy",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://www.geoboundaries.org/api/current/gbOpen/BGD/ADM3/",
+      "content_type": "application/json",
+      "bytes": 1855,
+      "last_modified": "Sat, 24 Feb 2024 10:30:56 GMT",
+      "result": "ok",
+      "facts": {
+        "boundaryID": "BGD-ADM3-5055444",
+        "boundaryType": "ADM3",
+        "boundaryLicense": "Creative Commons Attribution 3.0 Intergovernmental Organisations (CC BY 3.0 IGO)",
+        "licenseDetail": "nan",
+        "boundarySource": "Bangladesh Bureau of Statistics (BBS), OCHA ROAP",
+        "boundaryYearRepresented": "2020",
+        "sourceDataUpdateDate": "Thu Jan 19 07:31:04 2023",
+        "buildDate": "Dec 12, 2023",
+        "admUnitCount": "544",
+        "gjDownloadURL": "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/BGD/ADM3/geoBoundaries-BGD-ADM3.geojson"
+      }
+    },
+    {
+      "source_id": "hdx_cod_ab_bgd",
+      "url": "https://data.humdata.org/api/3/action/package_show?id=cod-ab-bgd",
+      "fetch_policy": "usage_policy",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://data.humdata.org/api/3/action/package_show?id=cod-ab-bgd",
+      "content_type": "application/json;charset=utf-8",
+      "bytes": 37802,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "license": "Creative Commons Attribution for Intergovernmental Organisations (CC BY-IGO)",
+        "dataset_date": "[2023-05-21T00:00:00 TO 2025-06-01T23:59:59]",
+        "last_modified": "2026-01-26T15:14:12.782628",
+        "resources": [
+          {
+            "name": "bgd_admin_boundaries.gdb.zip",
+            "format": "Geodatabase",
+            "url": "https://data.humdata.org/dataset/401d3fae-4262-48c9-891f-461fd776d49b/resource/277b50e7-a354-48f9-81a6-a8614121b9ec/download/bgd_admin_boundaries.gdb.zip"
+          },
+          {
+            "name": "bgd_admin_boundaries.shp.zip",
+            "format": "SHP",
+            "url": "https://data.humdata.org/dataset/401d3fae-4262-48c9-891f-461fd776d49b/resource/05d85fe2-40c0-4b57-b1b5-be9c36a592fb/download/bgd_admin_boundaries.shp.zip"
+          },
+          {
+            "name": "bgd_admin_boundaries.geojson.zip",
+            "format": "GeoJSON",
+            "url": "https://data.humdata.org/dataset/401d3fae-4262-48c9-891f-461fd776d49b/resource/cec2abe3-d8b7-4025-9362-9f7e780f2a07/download/bgd_admin_boundaries.geojson.zip"
+          },
+          {
+            "name": "bgd_admin_boundaries.xlsx",
+            "format": "XLSX",
+            "url": "https://data.humdata.org/dataset/401d3fae-4262-48c9-891f-461fd776d49b/resource/5f7e534d-9b06-442e-a706-083789bff2c9/download/bgd_admin_boundaries.xlsx"
+          }
+        ]
+      }
+    },
+    {
+      "source_id": "bd_district_portals",
+      "url": "https://gaibandha.gov.bd/pages/tourist-spot",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://gaibandha.gov.bd/pages/tourist-spot",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 149142,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "পর্যটন স্পট | গাইবান্ধা জেলা",
+        "entries_text": "মোট ৯ এন্ট্রি",
+        "copyright_all_rights_reserved": true
+      }
+    },
+    {
+      "source_id": "bd_district_portals",
+      "url": "https://bandarban.gov.bd/pages/tourist-spot",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://bandarban.gov.bd/pages/tourist-spot",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 158126,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "পর্যটন স্পট | বান্দরবান জেলা",
+        "entries_text": "মোট ১৭ এন্ট্রি",
+        "copyright_all_rights_reserved": true
+      }
+    },
+    {
+      "source_id": "bd_district_portals",
+      "url": "https://coxsbazar.gov.bd/pages/tourist-spot",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://coxsbazar.gov.bd/pages/tourist-spot",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 153338,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "পর্যটন স্পট | কক্সবাজার জেলা",
+        "entries_text": "মোট ১৫ এন্ট্রি",
+        "copyright_all_rights_reserved": true
+      }
+    },
+    {
+      "source_id": "bd_tourism_board",
+      "url": "https://tourismboard.gov.bd/",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://tourismboard.gov.bd/",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 135122,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "হোম | বাংলাদেশ ট্যুরিজম বোর্ড"
+      }
+    },
+    {
+      "source_id": "bd_parjatan",
+      "url": "https://parjatan.gov.bd/",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://parjatan.gov.bd/",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 175043,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "হোম | বাংলাদেশ পর্যটন করপোরেশন"
+      }
+    },
+    {
+      "source_id": "bd_archaeology",
+      "url": "https://archaeology.gov.bd/",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://archaeology.gov.bd/",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 153221,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "হোম | প্রত্নতত্ত্ব অধিদপ্তর"
+      }
+    },
+    {
+      "source_id": "bd_forest_department",
+      "url": "https://bforest.gov.bd/",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://bforest.gov.bd/",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 246168,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "হোম | বন অধিদপ্তর"
+      }
+    },
+    {
+      "source_id": "wikidata",
+      "url": "https://query.wikidata.org/sparql?query=ASK%7B%7D&format=json",
+      "fetch_policy": "usage_policy",
+      "robots_allowed": false,
+      "status": 200,
+      "final_url": "https://query.wikidata.org/sparql?query=ASK%7B%7D&format=json",
+      "content_type": "application/sparql-results+json;charset=utf-8",
+      "bytes": 38,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {}
+    },
+    {
+      "source_id": "wikivoyage",
+      "url": "https://en.wikivoyage.org/w/api.php?action=query&meta=siteinfo&format=json",
+      "fetch_policy": "usage_policy",
+      "robots_allowed": false,
+      "status": 200,
+      "final_url": "https://en.wikivoyage.org/w/api.php?action=query&meta=siteinfo&format=json",
+      "content_type": "application/json; charset=utf-8",
+      "bytes": 3071,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {}
+    },
+    {
+      "source_id": "osm_geofabrik_bd",
+      "url": "https://download.geofabrik.de/asia/bangladesh.html",
+      "fetch_policy": "usage_policy",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://download.geofabrik.de/asia/bangladesh.html",
+      "content_type": "text/html",
+      "bytes": 23633,
+      "last_modified": "Wed, 04 Nov 2026 15:32:58 GMT",
+      "result": "ok",
+      "facts": {
+        "title": "Download OpenStreetMap for Bangladesh | Geofabrik Download Server"
+      }
+    },
+    {
+      "source_id": "osm_overpass",
+      "url": "https://overpass-api.de/api/status",
+      "fetch_policy": "usage_policy",
+      "robots_allowed": false,
+      "result": "error",
+      "error": "ReadTimeout: The read operation timed out"
+    },
+    {
+      "source_id": "overture_places",
+      "url": "https://docs.overturemaps.org/guides/places",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://docs.overturemaps.org/guides/places/",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 162196,
+      "last_modified": "Wed, 04 Nov 2026 04:19:51 GMT",
+      "result": "ok",
+      "facts": {
+        "title": "Overview | Overture Documentation"
+      }
+    },
+    {
+      "source_id": "wikimedia_commons",
+      "url": "https://commons.wikimedia.org/w/api.php?action=query&meta=siteinfo&format=json",
+      "fetch_policy": "usage_policy",
+      "robots_allowed": false,
+      "status": 200,
+      "final_url": "https://commons.wikimedia.org/w/api.php?action=query&meta=siteinfo&format=json",
+      "content_type": "application/json; charset=utf-8",
+      "bytes": 3860,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {}
+    },
+    {
+      "source_id": "geonames",
+      "url": "https://download.geonames.org/export/dump/",
+      "fetch_policy": "usage_policy",
+      "robots_allowed": false,
+      "status": 200,
+      "final_url": "https://download.geonames.org/export/dump/",
+      "content_type": "text/html;charset=ISO-8859-1",
+      "bytes": 43616,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "GeoNames"
+      }
+    },
+    {
+      "source_id": "dpdt_gi",
+      "url": "https://dpdt.gov.bd/",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://dpdt.gov.bd/",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 148751,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "হোম | পেটেন্ট, শিল্প-নকশা ও ট্রেডমার্কস অধিদপ্তর"
+      }
+    },
+    {
+      "source_id": "bd_railway",
+      "url": "https://railway.gov.bd/pages/static-pages/691997d5933eb65569ddf8e2",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://railway.gov.bd/pages/static-pages/691997d5933eb65569ddf8e2",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 82062,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "সকল ট্রেনের সময়সূচি | পাতা | বাংলাদেশ রেলওয়ে",
+        "pdf_links": []
+      }
+    },
+    {
+      "source_id": "bd_railway",
+      "url": "https://railway.gov.bd/pages/static-pages/691997bf933eb65569ddec51",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://railway.gov.bd/pages/static-pages/691997bf933eb65569ddec51",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 83626,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "পূর্বাঞ্চলের ট্রেনের সময়সূচি (টাইম টেবিল নং ৫৪ অনুসারে, কার্যকরের তারিখ: ১০.০৩.২০২৫ ইং) | পাতা | বাংলাদেশ রেলওয়ে",
+        "pdf_links": [
+          "https://objectstorage.ap-dcc-gazipur-1.oraclecloud15.com/n/axvjbnqprylg/b/V2Ministry/o/office-railway/2024/12/667d364484f84ac7b06d7e8e8804b2c9.pdf"
+        ]
+      }
+    },
+    {
+      "source_id": "bd_railway",
+      "url": "https://railway.gov.bd/pages/static-pages/691997b8933eb65569dde71d",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://railway.gov.bd/pages/static-pages/691997b8933eb65569dde71d",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 83650,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "পশ্চিমাঞ্চলের ট্রেনের সময়সূচি (টাইম টেবিল নং ৫৪ অনুসারে, কার্যকরের তারিখ: ১০.০৩.২০২৫ ইং) | পাতা | বাংলাদেশ রেলওয়ে",
+        "pdf_links": [
+          "https://objectstorage.ap-dcc-gazipur-1.oraclecloud15.com/n/axvjbnqprylg/b/V2Ministry/o/office-railway/2024/12/59b5aa56840546f1a05b0741b8cca044.pdf"
+        ]
+      }
+    },
+    {
+      "source_id": "bd_railway",
+      "url": "https://railway.gov.bd/pages/files/69199762933eb65569ddc6b9",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://railway.gov.bd/pages/files/69199762933eb65569ddc6b9",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 84684,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "পূর্বাঞ্চল ট্রেনের ভাড়ার তালিকা | ফাইল সমূহ | বাংলাদেশ রেলওয়ে",
+        "pdf_links": [
+          "https://objectstorage.ap-dcc-gazipur-1.oraclecloud15.com/n/axvjbnqprylg/b/V2Ministry/o/office-railway/2024/12/490e51e79c1445bcb2f928e8fb1208e3.pdf",
+          "https://objectstorage.ap-dcc-gazipur-1.oraclecloud15.com/n/axvjbnqprylg/b/V2Ministry/o/office-railway/2024/12/6282b854c9954babbc04f29d10d5aeee.pdf"
+        ]
+      }
+    },
+    {
+      "source_id": "bd_railway",
+      "url": "https://railway.gov.bd/pages/files/6919975d933eb65569ddc526",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://railway.gov.bd/pages/files/6919975d933eb65569ddc526",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 112682,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "পশ্চিমাঞ্চল ট্রেনের ভাড়ার তালিকা | ফাইল সমূহ | বাংলাদেশ রেলওয়ে",
+        "pdf_links": [
+          "https://objectstorage.ap-dcc-gazipur-1.oraclecloud15.com/n/axvjbnqprylg/b/V2Ministry/o/office-railway/2024/12/9dfacd8428da45038eff003139867091.pdf",
+          "https://objectstorage.ap-dcc-gazipur-1.oraclecloud15.com/n/axvjbnqprylg/b/V2Ministry/o/office-railway/2024/12/c3f98ea76ae74f2c8afbfdd9e1b314ac.pdf",
+          "https://objectstorage.ap-dcc-gazipur-1.oraclecloud15.com/n/axvjbnqprylg/b/V2Ministry/o/office-railway/2024/12/ff3f62702121434a9961d678a59a76b2.pdf"
+        ]
+      }
+    },
+    {
+      "source_id": "bd_railway_eticket",
+      "url": "https://eticket.railway.gov.bd/",
+      "fetch_policy": "robots",
+      "robots_allowed": false,
+      "result": "blocked_by_robots"
+    },
+    {
+      "source_id": "bd_brta",
+      "url": "https://brta.gov.bd/pages/static-pages/6922de1b933eb65569e184a9",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://brta.gov.bd/pages/static-pages/6922de1b933eb65569e184a9",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 92975,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "আন্তঃজেলা ও দূরপাল্লার রুটের বাস ভাড়ার তালিকা | পাতা | বাংলাদেশ সড়ক পরিবহন কর্তৃপক্ষ"
+      }
+    },
+    {
+      "source_id": "bd_rhd_dmt",
+      "url": "https://gis.rhd.gov.bd/dmt/",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://gis.rhd.gov.bd/dmt/",
+      "content_type": "text/html",
+      "bytes": 81751,
+      "last_modified": "Wed, 17 Sep 2025 03:58:17 GMT",
+      "result": "ok",
+      "facts": {
+        "title": "Distance Matrix Tool"
+      }
+    },
+    {
+      "source_id": "bd_biwta",
+      "url": "https://biwta.gov.bd/",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://biwta.gov.bd/",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 172391,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "হোম | বাংলাদেশ অভ্যন্তরীণ নৌ-পরিবহন কর্তৃপক্ষ"
+      }
+    },
+    {
+      "source_id": "bd_biwtc",
+      "url": "https://biwtc.gov.bd/",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://biwtc.gov.bd/",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 137698,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "হোম | বাংলাদেশ অভ্যন্তরীণ নৌ-পরিবহন করপোরেশন"
+      }
+    },
+    {
+      "source_id": "bd_caab",
+      "url": "https://caab.gov.bd/",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://caab.gov.bd/",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 188096,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "হোম | বাংলাদেশ বেসামরিক বিমান চলাচল কর্তৃপক্ষ"
+      }
+    },
+    {
+      "source_id": "ourairports",
+      "url": "https://davidmegginson.github.io/ourairports-data/airports.csv",
+      "fetch_policy": "usage_policy",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://davidmegginson.github.io/ourairports-data/airports.csv",
+      "content_type": "text/csv; charset=utf-8",
+      "bytes": 12756741,
+      "last_modified": "Wed, 04 Nov 2026 02:54:04 GMT",
+      "result": "ok",
+      "facts": {}
+    },
+    {
+      "source_id": "airline_schedules_bd",
+      "url": "https://usbair.com/flight-schedule",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://usbair.com/flight-schedule",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 56344,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "Flight Schedule | US-Bangla Airlines"
+      }
+    },
+    {
+      "source_id": "airline_schedules_bd",
+      "url": "https://www.flynovoair.com/travelinfo/flight_schedules",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://www.flynovoair.com/travelinfo/flight_schedules",
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 44229,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "NOVOAIR - Flight Schedules"
+      }
+    },
+    {
+      "source_id": "airline_schedules_bd",
+      "url": "https://www.biman-airlines.com/",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 403,
+      "final_url": "https://www.biman-airlines.com/",
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 5572,
+      "last_modified": null,
+      "result": "http_403"
+    },
+    {
+      "source_id": "copernicus_dem",
+      "url": "https://copernicus-dem-30m.s3.amazonaws.com/readme.html",
+      "fetch_policy": "usage_policy",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://copernicus-dem-30m.s3.amazonaws.com/readme.html",
+      "content_type": "text/html",
+      "bytes": 8536,
+      "last_modified": "Wed, 22 Nov 2023 10:39:04 GMT",
+      "result": "ok",
+      "facts": {
+        "title": "Copernicus Digital Elevation Model datasets"
+      }
+    },
+    {
+      "source_id": "mobility_database",
+      "url": "https://github.com/MobilityData/mobility-database-catalogs",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 200,
+      "final_url": "https://github.com/MobilityData/mobility-database-catalogs",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 351560,
+      "last_modified": null,
+      "result": "ok",
+      "facts": {
+        "title": "GitHub - MobilityData/mobility-database-catalogs: The Catalogs of Sources of the Mobility Database. · GitHub"
+      }
+    },
+    {
+      "source_id": "unesco_whc",
+      "url": "https://whc.unesco.org/en/list/",
+      "fetch_policy": "robots",
+      "robots_allowed": true,
+      "status": 403,
+      "final_url": "https://whc.unesco.org/en/list/",
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 5588,
+      "last_modified": null,
+      "result": "http_403"
+    }
+  ]
+}
