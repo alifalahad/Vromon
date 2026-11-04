@@ -94,9 +94,13 @@ class OurAirportsBD(_HubConnector):
             if r["iso_country"] == "BD" and r["scheduled_service"] == "yes" and r["type"] in ("large_airport", "medium_airport", "small_airport"):
                 yield {**r, "id": r["ident"]}
 
-    def normalize(self, ctx: Context, raw: dict[str, Any]) -> Record:
-        fields, edge = _hub_fields(self.lookup, float(raw["latitude_deg"]), float(raw["longitude_deg"]), raw["name"], None,
-                                   "airport", iata_code=raw.get("iata_code") or None)
+    def normalize(self, ctx: Context, raw: dict[str, Any]) -> Record | None:
+        try:
+            fields, edge = _hub_fields(self.lookup, float(raw["latitude_deg"]), float(raw["longitude_deg"]), raw["name"], None,
+                                       "airport", iata_code=raw.get("iata_code") or None)
+        except ValueError:
+            ctx.count("skipped_outside_bangladesh")
+            return None
         rec = Record(entity_type="transport_hub", source_record_id=raw["ident"], fields=fields,
                      raw={k: raw[k] for k in ("ident", "type", "name", "municipality", "iata_code")},
                      external_ids=[("icao", raw["ident"])] + ([("iata", raw["iata_code"])] if raw.get("iata_code") else []),

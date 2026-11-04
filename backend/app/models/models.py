@@ -853,6 +853,14 @@ class SourceDocument(Base):
     content_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     ingested_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Provenance (guideline §11): every chunk inherits these through its document
+    data_source_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    publisher: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    published_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    retrieved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    license: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    language: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    doc_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     chunks: Mapped[List["DocumentChunk"]] = relationship(
         "DocumentChunk", back_populates="source", cascade="all, delete-orphan"

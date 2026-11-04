@@ -175,3 +175,58 @@ python -m vromon_data publish places
 - Fares are date-specific, so they're link-out only.
 
 **Water (blocked):** no BIWTA launch timetable or fare chart was found online; the BIWTA site has notices only. The same transcription importer works for launch charts.
+
+## Phase 3: district map pilot (2026-11-04) ✅ (awaiting owner check)
+
+**Implemented:**
+- The `vromon_data.maps` renderer: real DEM hillshade with restrained exaggeration, OSM rivers, neighbours from adjacency, published attractions only (plus a watermarked draft for reviewers), and a legend, scale bar, north arrow, credits and version.
+- Bangla labels shaped with HarfBuzz.
+- A credits JSON and a `map_exports` row for every image (migration `0023`).
+
+Details are in `docs/MAP_PIPELINE.md`.
+
+**Pilot:** Bandarban (hill), Cox's Bazar (coastal), Barishal (riverine), Rajshahi (flat), in Bangla and English, plus Bangla drafts.
+
+**Checking the map found a real data bug:** Wikidata peaks in Myanmar and India had been placed in the nearest Bangladesh district.
+- Points more than about 1 km outside every district are now excluded: 22 attractions, plus hubs on the same rule.
+- The 20 such records already imported went to review; none were deleted.
+
+## Phase 7: all district maps (2026-11-04) 🟡 running
+
+- `maps render --all` is rendering 64 districts × 2 languages in the background (`data-platform/exports/maps-all.log`).
+- Every export stays `needs_review` until the owner approves the pilot.
+
+## Phase 8: food, accommodation, facilities (2026-11-04) 🟡
+
+**Done: GI register.** `dpdt_gi_register` imports the official DPDT list of registered Geographical Indications: **67 products, 48 food or agricultural**.
+- 50 are linked to a district by the product's own name (e.g. রাজবাড়ীর ক্ষীর চমচম → Rajbari) and published.
+- 8 are linked only through the applicant and wait for review.
+- 9 are national.
+- API: `/api/v1/catalog/foods`.
+
+**Not done:**
+- **Accommodation and restaurants:** the only official lists (district portal lodging pages) are all rights reserved, so this needs the a2i permission. The existing Wikivoyage listings stay as they are.
+- **Facilities** (hospitals, police, ATMs): OSM is possible (the same hub pattern) but not imported in this pass.
+
+## Phase 9: RAG, search and journey planner (2026-11-04) ✅
+
+- **Journey planner:** `/api/v1/catalog/journeys/plan?from=&to=` returns, per mode:
+  - the road estimate (engine, profile, network, date)
+  - published direct trains between the two districts' stations
+  - the airports, with "check with the airline" for schedules
+  - published fares by type
+  - a `missing` list for every gap
+
+  Nothing is merged into one unexplained number.
+- **RAG documents** now record publisher, licence, data source, retrieval date, language and version (migration `0023`, nullable columns on `source_documents`).
+- **Questions about fares or timetables** get a warning that these come from the dated, versioned tables, not from passages.
+- **Search** in Bangla and English across attractions and hubs (`q=`).
+
+## Phase 10: operations (2026-11-04) ✅
+
+- `source-registry/schedule.yaml` sets each connector's freshness window and stale limits.
+- `ops due` / `ops run-due` run what's due; one failure doesn't stop the rest.
+- `ops stale` marks published fares older than 120 days and timetables older than 365 days as `stale`, which the API stops serving.
+- `ops weekly` writes `quality-reports/weekly-<date>.md`.
+- `ops backup` makes a consistent SQLite copy plus the manifests and registry.
+- `scripts/data-platform/run-scheduled.ps1` is for Windows Task Scheduler. The runbook (procedures, failure handling, restore) is `docs/OPERATIONS_RUNBOOK.md`.

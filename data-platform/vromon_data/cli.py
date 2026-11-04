@@ -12,6 +12,8 @@ Command line: `python -m vromon_data <command>` (run with data-platform's venv).
   review export <file.csv> [--type T] / review import <file.csv> --reviewer NAME
   report geography|attractions quality reports
   publish places [--dry-run]    approved attractions -> the app's places table
+  maps render [--districts a,b] [--all] [--draft] [--lang en,bn]   district maps -> exports/maps
+  ops due | run-due | stale | weekly | backup   scheduled runs, stale data, weekly report, backup
   fares template <file.csv>    empty CSV for transcribing a scanned fare chart (connector transcribed_fares)
   artifact add <source> <file> record a file a person downloaded (e.g. HDX behind its bot challenge)
 """
@@ -133,6 +135,44 @@ def _publish(args) -> int:
     return 0
 
 
+def _maps(args) -> int:
+    from sqlalchemy import select
+    from app.models.catalog import AdminUnit
+    from vromon_data.maps.render import render_district
+    with _session() as s:
+        if args.all:
+            slugs = list(s.scalars(select(AdminUnit.slug).where(AdminUnit.level == "district").order_by(AdminUnit.slug)))
+        else:
+            slugs = [x if x.startswith("bd-district-") else f"bd-district-{x}" for x in (args.districts or "").split(",") if x]
+        for slug in slugs:
+            for lang in args.lang.split(","):
+                try:
+                    print(render_district(s, slug, lang, draft=args.draft), flush=True)
+                except Exception as e:  # one district's failure must not stop the batch
+                    print(f"FAILED {slug} {lang}: {type(e).__name__}: {e}", flush=True)
+    return 0
+
+
+def _ops(args) -> int:
+    from vromon_data import db, ops
+    if args.action == "run-due":
+        for r in ops.run_due(db.session_factory(db.make_engine())):
+            print(r)
+        return 0
+    if args.action == "backup":
+        print("backup written to", ops.backup())
+        return 0
+    with _session() as s:
+        if args.action == "due":
+            for c in ops.due(s):
+                print(f"{c['name']:<24} every {c['every_days']} days, last success {c['last_success']}")
+        elif args.action == "stale":
+            print(ops.mark_stale(s))
+        else:
+            print(json.dumps(ops.weekly_report(s), indent=2, ensure_ascii=False, default=str))
+    return 0
+
+
 def _fares(args) -> int:
     from pathlib import Path
     from vromon_data.connectors.transcribed_fares import COLUMNS, write_template
@@ -205,6 +245,18 @@ def build_parser() -> argparse.ArgumentParser:
     pb.add_argument("what", choices=["places"])
     pb.add_argument("--dry-run", action="store_true")
     pb.set_defaults(func=_publish)
+
+    mp = sub.add_parser("maps", help="district maps")
+    mp.add_argument("action", choices=["render"])
+    mp.add_argument("--districts")
+    mp.add_argument("--all", action="store_true")
+    mp.add_argument("--draft", action="store_true")
+    mp.add_argument("--lang", default="en,bn")
+    mp.set_defaults(func=_maps)
+
+    op = sub.add_parser("ops", help="operations")
+    op.add_argument("action", choices=["due", "run-due", "stale", "weekly", "backup"])
+    op.set_defaults(func=_ops)
 
     fr = sub.add_parser("fares", help="fare transcription")
     fr.add_argument("action", choices=["template"])

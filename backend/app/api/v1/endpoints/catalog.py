@@ -10,6 +10,8 @@ GET /catalog/sources                           licences and attribution to show 
 GET /catalog/hubs?type=&district=&q=           transport hubs (stations, terminals, airports, ghats)
 GET /catalog/trains?from=&to=&q=               published train services (one row per direction)
 GET /catalog/fares?mode=&from=&to=             published fares, each with its kind and checked date
+GET /catalog/journeys/plan?from=&to=           district to district: road estimate, trains, airports, fares, gaps
+GET /catalog/foods?district=                   GI-registered specialities (DPDT)
 
 Every factual field carries where it came from and whether it was verified, so the app
 can tell verified, imported and unknown values apart (guideline §1.1, §6.2). Records a
@@ -28,11 +30,11 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.catalog import (
     AdminAdjacency, AdminBoundary, AdminUnit, Attraction, AttractionCategory, AttractionMedia, DataSource, FareProduct,
-    TimetableVersion, Train, TrainService, TransportHub,
+    JourneyCalculation, LocalFood, TimetableVersion, Train, TrainService, TransportHub,
 )
 from app.schemas.catalog import (
     AdminUnitDetail, AdminUnitOut, AttractionDetail, AttractionOut, CategoryOut, FareOut, FieldSource, HubOut, PhotoOut,
-    SourceOut, TrainServiceOut,
+    FoodOut, JourneyPlan, RoadLeg, SourceOut, TrainServiceOut,
 )
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -243,3 +245,89 @@ def fares(mode: Optional[str] = None, from_: Optional[str] = Query(None, alias="
                     vat_amount=f.vat_amount, fare_type=f.fare_type, official_distance_km=f.official_distance_km,
                     effective_from=f.effective_from.isoformat() if f.effective_from else None,
                     last_checked_at=f.last_checked_at, source_url=f.source_url, notes=f.notes) for f in rows]
+
+
+@router.get("/journeys/plan", response_model=JourneyPlan)
+def journey_plan(from_: str = Query(..., alias="from", description="Origin district slug"),
+                 to: str = Query(..., description="Destination district slug"), db: Session = Depends(get_db)):
+    """What Vromon knows about getting from one district to another, mode by mode. Nothing is combined
+    into one unexplained number, and every gap is listed in `missing`."""
+    units = {u.slug: u for u in db.scalars(select(AdminUnit).where(AdminUnit.slug.in_([from_, to]),
+                                                                    AdminUnit.level == "district"))}
+    if from_ not in units or to not in units:
+        raise HTTPException(status_code=404, detail="Unknown district")
+    a, b = units[from_], units[to]
+    slugs = _slugs(db, {a.parent_id, b.parent_id})
+    plan = JourneyPlan(origin=_unit_out(a, slugs), destination=_unit_out(b, slugs))
+    j = db.scalar(select(JourneyCalculation).where(JourneyCalculation.origin_ref == f"admin_unit:{from_}",
+                                                   JourneyCalculation.destination_ref == f"admin_unit:{to}",
+                                                   JourneyCalculation.mode == "road")
+                  .order_by(JourneyCalculation.calculated_at.desc()))
+    if j is not None and j.distance_km is not None:
+        plan.road = RoadLeg(distance_km=j.distance_km, duration_min=j.duration_min, engine=j.engine, profile=j.profile,
+                            network_version=j.network_version, calculated_at=j.calculated_at)
+    else:
+        plan.missing.append("road: no calculated road journey between these districts")
+    hubs_a = {h.id: h for h in db.scalars(select(TransportHub).where(TransportHub.district_id == a.id,
+                                                                     TransportHub.status == "published"))}
+    hubs_b = {h.id: h for h in db.scalars(select(TransportHub).where(TransportHub.district_id == b.id,
+                                                                     TransportHub.status == "published"))}
+    rows = db.execute(select(TrainService, Train, TimetableVersion)
+                      .join(Train, Train.id == TrainService.train_id)
+                      .join(TimetableVersion, TimetableVersion.id == TrainService.timetable_version_id)
+                      .where(TrainService.status == "published", TimetableVersion.status == "published",
+                             TrainService.origin_hub_id.in_(list(hubs_a) or [None]),
+                             TrainService.destination_hub_id.in_(list(hubs_b) or [None]))
+                      .order_by(TrainService.departure_time)).all()
+    for svc, train, version in rows:
+        plan.trains.append(TrainServiceOut(
+            train_number=train.train_number, train_name_bn=train.name_bn, origin=svc.origin_name,
+            destination=svc.destination_name, origin_hub_slug=hubs_a[svc.origin_hub_id].slug,
+            destination_hub_slug=hubs_b[svc.destination_hub_id].slug, departure_time=svc.departure_time,
+            arrival_time=svc.arrival_time,
+            arrives_next_day=bool(svc.arrival_day_offset) if svc.arrival_day_offset is not None else None,
+            off_day=WEEKDAY_EN[svc.off_day] if svc.off_day is not None else None, runs_daily=svc.runs_daily,
+            timetable=version.name, effective_from=version.effective_from.isoformat() if version.effective_from else None,
+            timezone=version.timezone, source_url=version.source_url))
+    if not plan.trains:
+        plan.missing.append("train: no published direct train between stations of these districts")
+
+    def airports(hubs):
+        return [HubOut(slug=h.slug, hub_type=h.hub_type, name_en=h.name_en, name_bn=h.name_bn, latitude=h.latitude,
+                       longitude=h.longitude, iata_code=h.iata_code) for h in hubs.values() if h.hub_type == "airport"]
+    plan.airports_origin, plan.airports_destination = airports(hubs_a), airports(hubs_b)
+    if plan.airports_origin and plan.airports_destination:
+        plan.missing.append("air: both districts have airports; flight schedules and fares are not held, check with the airlines")
+    names_a = {a.name_bn, a.name_en} | {h.name_bn for h in hubs_a.values()} | {h.name_en for h in hubs_a.values()}
+    names_b = {b.name_bn, b.name_en} | {h.name_bn for h in hubs_b.values()} | {h.name_en for h in hubs_b.values()}
+    names_a.discard(None)
+    names_b.discard(None)
+    for f in db.scalars(select(FareProduct).where(FareProduct.status == "published", FareProduct.origin_name.in_(names_a),
+                                                  FareProduct.destination_name.in_(names_b)).order_by(FareProduct.amount)):
+        plan.fares.append(FareOut(mode=f.mode, origin=f.origin_name, destination=f.destination_name, fare_class=f.fare_class,
+                                  fare_class_label=f.fare_class_label, amount=f.amount, currency=f.currency,
+                                  base_amount=f.base_amount, vat_amount=f.vat_amount, fare_type=f.fare_type,
+                                  official_distance_km=f.official_distance_km,
+                                  effective_from=f.effective_from.isoformat() if f.effective_from else None,
+                                  last_checked_at=f.last_checked_at, source_url=f.source_url, notes=f.notes))
+    if not plan.fares:
+        plan.missing.append("fares: no published fare for this pair; check with the operator")
+    return plan
+
+
+@router.get("/foods", response_model=List[FoodOut])
+def foods(district: Optional[str] = None, food_only: bool = True, db: Session = Depends(get_db)):
+    stmt = select(LocalFood).where(LocalFood.status == "published")
+    if food_only:
+        stmt = stmt.where(LocalFood.is_food.is_(True))
+    if district:
+        did = db.scalar(select(AdminUnit.id).where(AdminUnit.slug == district))
+        if did is None:
+            raise HTTPException(status_code=404, detail="Unknown district")
+        stmt = stmt.where(LocalFood.district_id == did)
+    rows = db.scalars(stmt.order_by(LocalFood.name_bn)).all()
+    slugs = _slugs(db, {f.district_id for f in rows})
+    return [FoodOut(name_bn=f.name_bn, name_en=f.name_en, district_slug=slugs.get(f.district_id), is_food=f.is_food,
+                    gi_registration_no=f.gi_registration_no,
+                    gi_application_date=f.gi_application_date.isoformat() if f.gi_application_date else None,
+                    district_evidence=f.district_evidence, source_url=f.source_url) for f in rows]

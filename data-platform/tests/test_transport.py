@@ -12,7 +12,7 @@ from vromon_data.connectors.railway import parse_row
 from vromon_data.pdftext import reorder
 
 CSV = ("id,ident,type,name,latitude_deg,longitude_deg,iso_country,municipality,scheduled_service,iata_code\n"
-       "1,VGBR,medium_airport,Barisal Airport,22.8,90.3,BD,Barisal,yes,BZL\n"
+       "1,VGBR,medium_airport,Barisal Airport,22.3,90.3,BD,Barisal,yes,BZL\n"
        "2,VGXX,small_airport,Old Strip,22.1,90.1,BD,,no,\n"
        "3,VECC,large_airport,Kolkata,22.6,88.4,IN,Kolkata,yes,CCU\n")
 

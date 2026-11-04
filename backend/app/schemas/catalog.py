@@ -147,3 +147,36 @@ class FareOut(BaseModel):
     last_checked_at: datetime
     source_url: Optional[str] = None
     notes: Optional[str] = None
+
+
+class RoadLeg(BaseModel):
+    distance_km: Optional[float] = None
+    duration_min: Optional[float] = None
+    kind: str = "calculated"          # never an official distance
+    engine: str
+    profile: str
+    network_version: str
+    calculated_at: datetime
+
+
+class JourneyPlan(BaseModel):
+    """District to district (guideline §10.2): what is known per mode, each with its kind and source, and what isn't."""
+    origin: AdminUnitOut
+    destination: AdminUnitOut
+    road: Optional[RoadLeg] = None
+    trains: List[TrainServiceOut] = []
+    airports_origin: List[HubOut] = []
+    airports_destination: List[HubOut] = []
+    fares: List[FareOut] = []
+    missing: List[str] = []
+
+
+class FoodOut(BaseModel):
+    name_bn: str
+    name_en: Optional[str] = None
+    district_slug: Optional[str] = None
+    is_food: bool
+    gi_registration_no: Optional[str] = None
+    gi_application_date: Optional[str] = None
+    district_evidence: Optional[str] = None
+    source_url: Optional[str] = None

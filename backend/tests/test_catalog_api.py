@@ -151,3 +151,31 @@ def test_transport_endpoints_serve_published_records_only(client):
     assert [(r["train_number"], r["timetable"], r["runs_daily"]) for r in rows] == [("t705", "Time table no. 54", True)]
     fares = client.get("/api/v1/catalog/fares", params={"mode": "train", "from": "ঢাকা"}).json()
     assert [(f["fare_class"], f["fare_type"]) for f in fares] == [("snigdha", "official_operator")]
+
+
+def test_journey_plan_labels_what_is_calculated_and_what_is_missing(client):
+    from app.models.catalog import JourneyCalculation
+    with _ApiTestSession() as db:
+        db.add(JourneyCalculation(origin_ref="admin_unit:t-district-barishal", destination_ref="admin_unit:t-district-bhola",
+                                  origin_lat=22.7, origin_lon=90.35, destination_lat=22.68, destination_lon=90.65, mode="road",
+                                  distance_km=60.5, duration_min=95, engine="openrouteservice", profile="driving-car",
+                                  network_version="test", is_estimate=True, calculated_at=datetime.utcnow()))
+        db.commit()
+    plan = client.get("/api/v1/catalog/journeys/plan", params={"from": "t-district-barishal", "to": "t-district-bhola"}).json()
+    assert plan["road"]["distance_km"] == 60.5 and plan["road"]["kind"] == "calculated"
+    assert any(m.startswith("train:") for m in plan["missing"]) and any(m.startswith("fares:") for m in plan["missing"])
+    assert client.get("/api/v1/catalog/journeys/plan", params={"from": "x", "to": "y"}).status_code == 404
+
+
+def test_foods_only_published_with_their_gi_evidence(client):
+    from app.models.catalog import LocalFood
+    with _ApiTestSession() as db:
+        import uuid as _u
+        d = db.scalar(__import__("sqlalchemy").select(AdminUnit.id).where(AdminUnit.slug == "t-district-barishal"))
+        db.add_all([LocalFood(slug="t-gi-1", name_bn="বরিশালের আমড়া", is_food=True, district_id=d, district_evidence="product_name",
+                              gi_registration_no="১", source_id="t_wikidata", status="published", last_checked_at=datetime.utcnow()),
+                    LocalFood(slug="t-gi-2", name_bn="অন্য পণ্য", is_food=True, district_id=d, district_evidence="applicant",
+                              source_id="t_wikidata", status="needs_review", last_checked_at=datetime.utcnow())])
+        db.commit()
+    rows = client.get("/api/v1/catalog/foods", params={"district": "t-district-barishal"}).json()
+    assert [(r["name_bn"], r["district_evidence"]) for r in rows] == [("বরিশালের আমড়া", "product_name")]
