@@ -51,6 +51,22 @@ sources:
     probe:
       - https://data.humdata.org/api/3/action/package_show?id=cod-ab-bgd
 
+  - source_id: vromon_curated
+    source_name: Vromon curated reference tables
+    organization: Vromon team
+    source_type: curated_table
+    website_url: null
+    access_method: repository_file
+    license_name: Vromon (own work)
+    terms_review_status: open_license
+    coverage: Bangladesh division and district names (official English spellings, Bangla names)
+    reliability_class: direct_human
+    recommended_use: production
+    notes: >-
+      BD_DISTRICTS in scripts/geo/prepare.py and the Bangladesh rows of data/geo/regions.json
+      (official spellings such as Chattogram, Cumilla, Barishal). Bangla names are verified
+      against the district and division portal titles (connector bd_portal_names).
+
   # --- Tourist places -----------------------------------------------------------------------
   - source_id: bd_district_portals
     source_name: District portals, tourist spots (দর্শনীয় স্থান)

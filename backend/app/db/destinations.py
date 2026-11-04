@@ -33,6 +33,7 @@ UNKNOWN_HOURS = ("09:00", "17:00")
 UNKNOWN_MEAL_HOURS = ("08:00", "22:00")
 UNKNOWN_MEAL_COST = 300.0        # the placeholder the planner already uses for a meal without a price
 NEUTRAL_RATING = 3.5             # neither helps nor hurts the ranking; never shown
+CATALOG_REF_PREFIX = "catalog:"  # places published by data-platform (vromon_data.publish), left alone here
 
 
 def _files(directory: Path) -> list[Path]:
@@ -81,9 +82,11 @@ def _load(db: Session, data: dict, dest: Optional[Destination], version: str) ->
 
 
 def _sync(db: Session, model, dest: Destination, records: list[dict], fill) -> None:
+    # Rows published by the data platform (source_ref "catalog:…") belong to it, not to these files
     existing = {
         row.source_ref: row
-        for row in db.query(model).filter(model.destination_id == dest.id, model.source_ref.isnot(None))
+        for row in db.query(model).filter(model.destination_id == dest.id, model.source_ref.isnot(None),
+                                          ~model.source_ref.startswith(CATALOG_REF_PREFIX))
     }
     seen = set()
     for r in records:

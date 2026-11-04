@@ -6,7 +6,7 @@ Aggregates all v1 endpoint routers under /api/v1 prefix.
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import chat, destinations, friends, geo, live, me, photos, places, rag, rooms, trips, users, visits
+from app.api.v1.endpoints import catalog, chat, destinations, friends, geo, live, me, photos, places, rag, rooms, trips, users, visits
 
 router = APIRouter(prefix="/api/v1")
 
@@ -24,3 +24,4 @@ router.include_router(live.router)
 router.include_router(photos.router)
 router.include_router(geo.router)
 router.include_router(visits.router)
+router.include_router(catalog.router)
