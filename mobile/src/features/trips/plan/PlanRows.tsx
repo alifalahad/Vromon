@@ -214,10 +214,13 @@ export function LegRow({
   mode,
   fare,
   note,
+  crossing,
   onPress,
 }: {
   minutes: number;
   km: number;
+  /** No road: by boat or ferry between two ghats (estimates, check the local schedule) */
+  crossing?: { from_ghat: string; to_ghat: string; water_km: number } | null;
   /** Usual (not live) slow traffic on this leg */
   note?: string;
   /** How (from road data); none for the straight-line estimate */
@@ -232,15 +235,18 @@ export function LegRow({
   const f = usePlanFormat();
   const time = f.duration(minutes);
   const kmText = f.km(km);
-  const text = mode ? t('plan.legMode', { mode: t(`plan.modes.${mode}`), time, km: kmText }) : t('plan.legAbout', { time, km: kmText });
-  const price = mode ? (fare ? t('plan.legFare', { amount: f.money(fare) }) : t('plan.legFree')) : null;
-  const a11y = [mode ? text : t('plan.legA11y', { time, km: kmText }), price, note].filter(Boolean).join(', ');
+  const text = crossing
+    ? t('plan.legBoat', { from: crossing.from_ghat, to: crossing.to_ghat, time })
+    : mode ? t('plan.legMode', { mode: t(`plan.modes.${mode}`), time, km: kmText }) : t('plan.legAbout', { time, km: kmText });
+  const price = mode && !crossing ? (fare ? t('plan.legFare', { amount: f.money(fare) }) : t('plan.legFree')) : null;
+  const legNote = [crossing ? t('plan.legBoatNote') : null, note].filter(Boolean).join(' ');
+  const a11y = [crossing || mode ? text : t('plan.legA11y', { time, km: kmText }), price, legNote].filter(Boolean).join(', ');
   const body = (
     <View style={styles.leg}>
-      <MaterialCommunityIcons name={mode ? MODE_ICON[mode] : 'map-marker-path'} size={18} color={mode ? colors.link : colors.textSecondary} />
+      <MaterialCommunityIcons name={crossing ? 'ferry' : mode ? MODE_ICON[mode] : 'map-marker-path'} size={18} color={crossing || mode ? colors.link : colors.textSecondary} />
       <View style={styles.flex}>
         <Text style={styles.legText}>{text}</Text>
-        {note ? <Text style={styles.legNote}>{note}</Text> : null}
+        {legNote ? <Text style={styles.legNote}>{legNote}</Text> : null}
       </View>
       {price ? <Text style={styles.legText}>{price}</Text> : null}
       {onPress ? <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textTertiary} /> : null}

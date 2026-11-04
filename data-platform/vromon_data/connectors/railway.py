@@ -79,6 +79,12 @@ def parse_row(line: str, has_off_day: bool, known_stations: frozenset = frozense
 
 
 SAMPLE_SIZE = 12
+# Words the decoder gets wrong in this PDF (reph drawn with a glyph it can't place), each checked
+# by eye against the official timetable (western zone, pages 2-3) on 2026-11-05
+NAME_FIXES = {"পাবর্তীপুর": "পার্বতীপুর", "পুনভর্বা": "পুনর্ভবা"}
+# International trains (Maitree, Bandhan, Mitali) run only on set days, printed in a separate table
+def is_international(number: str) -> bool:
+    return "/" in number or (len(number) == 4 and number.startswith("31"))
 
 
 def _digits(s: str) -> str:
@@ -159,11 +165,15 @@ class RailwayTimetable(Connector):
                 ctx.count(f"scanned_{z['zone']}")
                 continue
             for page_no, lines in enumerate(pages, 1):
-                header = " ".join(lines[:4])
+                # The header is everything above the first numbered row (blank lines come first on some pages)
+                first_row = next((i for i, line in enumerate(lines) if _SERIAL.match(line)), len(lines))
+                header = " ".join(lines[:first_row])
                 if "ট্রেনের তালিকা" not in header:
                     continue
                 has_off_day = "বন্ধের দিন" in header
                 for line in lines:
+                    for wrong, right in NAME_FIXES.items():
+                        line = line.replace(wrong, right)
                     row = parse_row(line, has_off_day, self.known_stations)
                     if row:
                         yield {"id": f"{version.name}|{z['zone']}|{_digits(row[1])}", "zone": z["zone"], "page": page_no,
@@ -210,7 +220,7 @@ class RailwayTimetable(Connector):
             "origin_name": origin, "destination_name": dest, "departure_time": dep_t, "arrival_time": arr_t,
             "arrival_day_offset": 1 if arr_t < dep_t else 0,
             "off_day": WEEKDAYS.get(off) if off else None, "off_day_text": off if off and off != "-" else None,
-            "runs_daily": (off == "-") if off else None,
+            "runs_daily": (off == "-") if off and not is_international(number) else None,
             "origin_hub_id": str(o_hub) if o_hub else None, "destination_hub_id": str(d_hub) if d_hub else None,
         }
         rec = Record(entity_type="train_service", source_record_id=raw["id"], fields=fields,
@@ -255,6 +265,14 @@ class RailwayTimetable(Connector):
 
     def after(self, ctx: Context, records: list[Record]) -> None:
         s = ctx.session
+        # Train names follow the latest parse of the official timetable
+        for rec in records:
+            if rec.entity_id and not rec.errors:
+                svc = s.get(TrainService, rec.entity_id)
+                train = s.get(Train, svc.train_id) if svc else None
+                if train is not None and rec.raw.get("name") and train.name_bn != rec.raw["name"]:
+                    train.name_bn = rec.raw["name"]
+                    ctx.count("train_names_updated")
         for zone, version in self.versions.items():
             recs = [r for r in records if r.raw.get("zone") == zone and r.entity_id and not r.errors]
             if not recs:

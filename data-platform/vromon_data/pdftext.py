@@ -69,7 +69,7 @@ def _glyph_text(tt: TTFont) -> dict[str, str]:
                             text = "".join(out[p] for p in parts)
                             if tags & {"blwf", "pstf"} and len(text) == 2 and text[1] == "্":
                                 text = "্" + text[0]          # phala: halant + consonant
-                            elif "rphf" in tags and text == "র্":
+                            elif tags & {"rphf", "half"} and text == "র্":  # ra + halant before a consonant is always drawn as reph
                                 text = REPH
                             out[lig.LigGlyph] = text
                             changed = True
@@ -124,7 +124,7 @@ def reorder(text: str) -> str:
         return cluster + sign + tail
     text = _REORDER.sub(fix, text)
     text = _REPH_AFTER.sub(lambda m: "র্" + m.group(1), text)
-    text = re.sub(r" ([া-ৌৗ])", r"", text)  # a vowel sign never starts a word
+    text = re.sub(r" ([া-ৌৗ])", r"\1", text)  # a vowel sign never starts a word
     return text.replace(REPH, "র্")
 
 
@@ -139,8 +139,9 @@ def page_lines(page) -> list[str]:
             fmap = fonts.get(ch["fontname"].split("+")[-1]) or fonts.get(ch["fontname"]) or \
                 next((v for k, v in fonts.items() if ch["fontname"].endswith(k.split("+")[-1])), {})
             text = fmap.get(int(m.group(1)), text)
-        if len(text) == 1 and ord(text) < 32:
-            text = "�"  # an unmapped glyph: shown as unknown, never guessed
+        text = re.sub(r"[\x00-\x1f]", "\ufffd", text)  # an unmapped glyph: shown as unknown, never guessed
+        if text == "র্":  # a glyph that is ra + halant on its own is a reph, drawn after its base
+            text = REPH
         chars.append({**ch, "text": text})
     lines: dict[int, list] = {}
     for ch in chars:

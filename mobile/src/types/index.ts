@@ -104,7 +104,22 @@ export interface LegOptions {
 export interface DayRoute {
   day_id: number;
   provider: string | null;
-  legs: { from_item_id: number; to_item_id: number; line: number[][] | null }[];
+  legs: {
+    from_item_id: number;
+    to_item_id: number;
+    line: number[][] | null;
+    /** No road at all: by boat or ferry between two ghats (estimates) */
+    crossing?: LegCrossing & { from_ghat: { name: string; lat: number; lon: number }; to_ghat: { name: string; lat: number; lon: number } };
+    /** Road to the ghat, across the water, road on: [lon, lat] lines; `estimate` lines are straight */
+    segments?: { mode: 'road' | 'water'; line: number[][]; estimate: boolean }[];
+  }[];
+}
+
+/** A crossing by boat or ferry where no road goes (times are estimates, not a schedule) */
+export interface LegCrossing {
+  water_km: number;
+  minutes: number;
+  estimate: boolean;
 }
 
 /** From the trip's starting city to the destination (rough estimates) */
@@ -358,6 +373,8 @@ export interface ItineraryItem {
   travel_mode_chosen?: boolean;
   /** "road": distance and time from road data; "estimate": straight line */
   travel_source?: 'road' | 'estimate' | null;
+  /** No road to the next stop: by boat or ferry between two ghats (estimates) */
+  travel_crossing?: (LegCrossing & { from_ghat: string; to_ghat: string }) | null;
   /** Fare per vehicle, an estimate (0 walking) */
   travel_fare?: number | null;
   place?: Place;

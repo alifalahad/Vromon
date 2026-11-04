@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Optional, Protocol, Sequence
 
 from app.services.routing import modes as M
+from app.services.routing import water as W
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -36,15 +37,20 @@ PROFILE = "driving-car"
 RETRY_AFTER_S = 300                      # after a failure, don't ask again for 5 minutes
 MATRIX_BLOCK = 50                        # points per side of one matrix request
 
-# A road answer much longer than the straight line isn't believed: the place was matched to the
-# wrong road (a beach point far from any road, or across a river or a border). The straight-line
-# estimate is used instead, and says so. Normal roads here are about 1.2-2x the straight line.
-MAX_DETOUR = 2.5
-MAX_DETOUR_KM = 2.0                      # extra slack for short distances
+# A road answer far longer than the straight line isn't believed (the place was matched to a
+# wrong road: a beach point far from any road). Inside a town (under 3 km) that stays strict.
+# Further apart, rivers make real detours long in Bangladesh: the road goes round to a bridge or
+# a ferry (OpenRouteService's car routing includes ferries), so up to 5x the straight line plus
+# 25 km is accepted. Normal roads here are about 1.2-2x the straight line.
+SHORT_KM = 3.0
+SHORT_DETOUR, SHORT_DETOUR_KM = 2.5, 2.0
+MAX_DETOUR, MAX_DETOUR_KM = 5.0, 25.0
 WALK_STRAIGHTNESS = 1.3                  # on foot you can cut across (beaches, lanes): at most 1.3x the straight line
 
 
 def plausible(straight_km: float, road_km: float) -> bool:
+    if straight_km < SHORT_KM:
+        return road_km <= straight_km * SHORT_DETOUR + SHORT_DETOUR_KM
     return road_km <= straight_km * MAX_DETOUR + MAX_DETOUR_KM
 
 
@@ -115,6 +121,8 @@ class RoadNetwork:
         self._provider_ready = False
         self._pairs: dict[tuple, Road] = {}
         self._lines: dict[tuple, list[list[float]]] = {}
+        self._no_road: set[tuple] = set()        # pairs the routing service found no road between
+        self._ghats: list = []                   # ferry/launch ghats for crossings (water.py)
         self._loaded = False
         self._failed_at = 0.0
         self._lock = threading.Lock()
@@ -125,6 +133,8 @@ class RoadNetwork:
         with self._lock:
             self._pairs.clear()
             self._lines.clear()
+            self._no_road.clear()
+            self._ghats = []
             self._loaded = False
             self._failed_at = 0.0
             self.provider = provider
@@ -161,6 +171,10 @@ class RoadNetwork:
         """
         road = self.pair(a, b)
         if road.source == "estimate" and mode is None:
+            crossing = self.crossing(a, b)
+            if crossing is not None:  # no road: by boat or ferry between two ghats (estimate)
+                return Travel(crossing.minutes, crossing.road_km_before + crossing.water_km + crossing.road_km_after,
+                              None, "water_estimate")
             return Travel(road.km / M.STRAIGHT_KMH * 60, road.km, None, "estimate")
         # On foot you needn't follow the car road (beaches, lanes)
         walk_km = min(road.km, haversine_km(a, b) * WALK_STRAIGHTNESS) if a and b else road.km
@@ -168,10 +182,21 @@ class RoadNetwork:
         km = walk_km if m == "walk" else road.km
         return Travel(M.minutes(m, km, road.drive_min), km, m, road.source)
 
+    def crossing(self, a: Optional[Point], b: Optional[Point]) -> Optional["W.Crossing"]:
+        """The boat or ferry crossing for a leg the road network can't do (no road route at all), else None."""
+        if a is None or b is None or (_key(a), _key(b)) not in self._no_road or not self._ghats:
+            return None
+        return W.plan(a, b, self._ghats)
+
     # -- fetching ----------------------------------------------------------------
     def _load(self, db: "Session") -> None:
         if self._loaded:
             return
+        try:
+            self._ghats = W.load_ghats(db)
+        except Exception as exc:  # no data-platform tables: no crossings, everything else as before
+            logger.info("No ferry ghats loaded: %s", exc)
+            self._ghats = []
         from app.models.models import RouteCache
         for row in db.query(RouteCache).filter(RouteCache.profile == PROFILE):
             a, b = (row.from_lat, row.from_lon), (row.to_lat, row.to_lon)
@@ -182,6 +207,8 @@ class RoadNetwork:
 
     def _remember(self, a: Point, b: Point, km: Optional[float], minutes: Optional[float]) -> None:
         straight = haversine_km(a, b)
+        if km is None or minutes is None:
+            self._no_road.add((_key(a), _key(b)))
         if km is None or minutes is None or not plausible(straight, float(km)):
             # No road, or an answer we don't believe: the estimate, without asking again
             self._pairs[(_key(a), _key(b))] = Road(straight, None, "estimate")
@@ -192,6 +219,7 @@ class RoadNetwork:
         """A batch wasn't saved: drop what it put in memory by reloading from the database next time."""
         self._pairs.clear()
         self._lines.clear()
+        self._no_road.clear()
         self._loaded = False
 
     def _known(self, a: Point, b: Point) -> bool:

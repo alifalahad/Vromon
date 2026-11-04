@@ -282,6 +282,11 @@ export default function TripScreen() {
     () => Object.fromEntries((route.data?.legs ?? []).flatMap((l) => (l.line ? [[`${l.from_item_id}>${l.to_item_id}`, l.line]] : []))),
     [route.data],
   );
+  // Legs with no road: road to the ghat, across the water, road on
+  const crossings = useMemo(
+    () => Object.fromEntries((route.data?.legs ?? []).flatMap((l) => (l.segments ? [[`${l.from_item_id}>${l.to_item_id}`, l.segments]] : []))),
+    [route.data],
+  );
 
   // Sheet: about half the screen over the map, or pulled up to just below the buttons
   const sheetLow = Math.round(height * 0.46);
@@ -552,6 +557,7 @@ export default function TripScreen() {
             km={r.km}
             mode={r.mode}
             fare={r.fare}
+            crossing={r.crossing}
             note={
               dayConditions?.legs[String(r.itemId)]
                 ? t('conditions.slowLeg', {
@@ -702,6 +708,7 @@ export default function TripScreen() {
         onSelect={pickFromMap}
         fitKey={`${day?.id ?? 'none'}-${fitCount}`}
         roadLines={roadLines}
+        crossings={crossings}
         topPadding={insets.top + 56}
         bottomPadding={sheetLow}
         accessibilityLabel={t('plan.mapLabel', { n: f.n(day?.day_number ?? 1) })}

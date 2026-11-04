@@ -1,5 +1,8 @@
 /**
- * The street map under trip plans. Light: OpenFreeMap "liberty" as it is. Dark:
+ * The street map under trip plans. With EXPO_PUBLIC_ESRI_API_KEY (an ArcGIS Location Platform key
+ * with only the Basemaps privilege), Esri's basemap styles: navigation (night in dark mode) and
+ * satellite imagery with labels; Esri requires "Powered by Esri" on the map (`ESRI_CREDIT`).
+ * Without a key, as before: Light: OpenFreeMap "liberty" as it is. Dark:
  * OpenFreeMap "dark" recoloured so the sea, land, parks and roads can be told
  * apart (the original is near-black everywhere), in the trip screen's palette.
  * Same free tiles; only colours change, in the app.
@@ -7,6 +10,16 @@
 
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
 import { useQuery } from '@tanstack/react-query';
+
+const ESRI_KEY = process.env.EXPO_PUBLIC_ESRI_API_KEY ?? '';
+export const HAS_ESRI = ESRI_KEY.length > 0;
+export const ESRI_CREDIT = 'Powered by Esri';
+const ESRI_STYLES = 'https://basemapstyles-api.arcgis.com/arcgis/rest/services/styles/v2/styles/arcgis';
+
+/** An Esri basemap style URL: `navigation`, `navigation-night` or `imagery` (satellite with labels). */
+export function esriStyle(name: 'navigation' | 'navigation-night' | 'imagery', language: string): string {
+  return `${ESRI_STYLES}/${name}?token=${encodeURIComponent(ESRI_KEY)}&language=${language === 'bn' ? 'bn' : 'en'}`;
+}
 
 export const STREETS = { light: 'https://tiles.openfreemap.org/styles/liberty', dark: 'https://tiles.openfreemap.org/styles/dark' };
 
@@ -63,15 +76,16 @@ export function recolour(style: Style): Style {
 }
 
 /** The map style to use: the recoloured dark style once fetched (the plain URL until then, or offline). */
-export function useStreetStyle(scheme: 'light' | 'dark'): string | Style {
+export function useStreetStyle(scheme: 'light' | 'dark', satellite = false, language = 'en'): string | Style {
   const dark = useQuery({
     queryKey: ['mapStyle', 'dark'],
     queryFn: async () => recolour((await (await fetch(STREETS.dark)).json()) as Style),
-    enabled: scheme === 'dark',
+    enabled: scheme === 'dark' && !HAS_ESRI,
     staleTime: Infinity,
     gcTime: Infinity,
     retry: 1,
   });
+  if (HAS_ESRI) return esriStyle(satellite ? 'imagery' : scheme === 'dark' ? 'navigation-night' : 'navigation', language);
   if (scheme === 'light') return STREETS.light;
   return dark.data ?? STREETS.dark;
 }
