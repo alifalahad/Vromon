@@ -82,3 +82,9 @@ This file grows with each phase.
 | `local_foods` | Registered GIs (DPDT). `district_evidence`: product_name (published), applicant (review) or national. `is_food` covers Nice classes 29–32 (31 includes seeds and jute). |
 | `map_exports` | One generated map: file, sha256, template version and credits (all input versions). `needs_review` until the pilot is approved. |
 | `source_documents` (existing, new columns) | `data_source_id`, `publisher`, `published_at`, `retrieved_at`, `license`, `language`, `doc_version` |
+
+## Hotels and restaurants
+
+| Table | Notes |
+|---|---|
+| `service_places` | `kind`: accommodation / food. `category`: hotel, resort, inn, restaurant, cafe, fast_food_restaurant, bar, smoothie_juice_bar … `official_star_rating` comes only from the ministry's list (verified). `listing_confidence` is Overture's own score. Prices, ratings and opening hours are not stored until a source states them. |

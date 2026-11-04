@@ -99,6 +99,8 @@ def resolve(session: Session, entity_type: str, entity_id: uuid.UUID) -> dict[st
             status[field] = {"status": "needs_review" if proposed else "unknown"}
         value = spec.coerce(field, value)
         old = getattr(entity, field)
+        if value is None and not spec.model.__table__.columns[field].nullable:
+            continue  # a required column (e.g. kind) keeps its value when no claim is left; the entity goes inactive
         if old != value:
             setattr(entity, field, value)
             changed[field] = (old, value)

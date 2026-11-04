@@ -586,6 +586,40 @@ class LocalFood(Base):
     job_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
 
 
+class ServicePlace(Base):
+    """A hotel, resort, guest house, restaurant, café … (guideline §3.7): public business listings, with
+    the official star rating where the Ministry of Civil Aviation and Tourism lists one. Prices,
+    ratings and opening hours stay unknown unless a source states them."""
+    __tablename__ = "service_places"
+    __table_args__ = (
+        UniqueConstraint("slug", name="uq_service_places_slug"),
+        Index("ix_service_places_kind_district", "kind", "district_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    slug: Mapped[str] = mapped_column(String(220), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)          # accommodation / food
+    category: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)   # hotel, resort, inn, restaurant, cafe …
+    name_en: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    name_bn: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    division_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("admin_units.id"), nullable=True)
+    district_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("admin_units.id"), nullable=True)
+    subdistrict_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("admin_units.id"), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    website: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    brand: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    official_star_rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # 3 / 4 / 5 (MoCAT list)
+    listing_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)     # the source's own score
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="needs_review")
+    field_status: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_by_job_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class MapExport(Base):
     """One generated district map, with every input version (guideline §7.4 step 17)."""
     __tablename__ = "map_exports"

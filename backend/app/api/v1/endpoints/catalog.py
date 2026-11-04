@@ -12,6 +12,8 @@ GET /catalog/trains?from=&to=&q=               published train services (one row
 GET /catalog/fares?mode=&from=&to=             published fares, each with its kind and checked date
 GET /catalog/journeys/plan?from=&to=           district to district: road estimate, trains, airports, fares, gaps
 GET /catalog/foods?district=                   GI-registered specialities (DPDT)
+GET /catalog/hotels?district=&stars=&q=        hotels (official star rating where listed; else business listing)
+GET /catalog/restaurants?district=&q=          restaurants and cafés (business listings)
 
 Every factual field carries where it came from and whether it was verified, so the app
 can tell verified, imported and unknown values apart (guideline §1.1, §6.2). Records a
@@ -30,11 +32,11 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.catalog import (
     AdminAdjacency, AdminBoundary, AdminUnit, Attraction, AttractionCategory, AttractionMedia, DataSource, FareProduct,
-    JourneyCalculation, LocalFood, TimetableVersion, Train, TrainService, TransportHub,
+    JourneyCalculation, LocalFood, ServicePlace, TimetableVersion, Train, TrainService, TransportHub,
 )
 from app.schemas.catalog import (
     AdminUnitDetail, AdminUnitOut, AttractionDetail, AttractionOut, CategoryOut, FareOut, FieldSource, HubOut, PhotoOut,
-    FoodOut, JourneyPlan, RoadLeg, SourceOut, TrainServiceOut,
+    FoodOut, JourneyPlan, RoadLeg, ServicePlaceOut, SourceOut, TrainServiceOut,
 )
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -331,3 +333,50 @@ def foods(district: Optional[str] = None, food_only: bool = True, db: Session = 
                     gi_registration_no=f.gi_registration_no,
                     gi_application_date=f.gi_application_date.isoformat() if f.gi_application_date else None,
                     district_evidence=f.district_evidence, source_url=f.source_url) for f in rows]
+
+
+def _service_places(db: Session, kind: str, district: Optional[str], category: Optional[str], q: Optional[str],
+                    stars: Optional[int], limit: int) -> List[ServicePlaceOut]:
+    stmt = select(ServicePlace).where(ServicePlace.kind == kind, ServicePlace.status == "published")
+    if district:
+        did = db.scalar(select(AdminUnit.id).where(AdminUnit.slug == district))
+        if did is None:
+            raise HTTPException(status_code=404, detail="Unknown district")
+        stmt = stmt.where(ServicePlace.district_id == did)
+    if category:
+        stmt = stmt.where(ServicePlace.category == category)
+    if stars:
+        stmt = stmt.where(ServicePlace.official_star_rating >= stars)
+    if q:
+        stmt = stmt.where(or_(func.lower(ServicePlace.name_en).like(f"%{q.strip().lower()}%"),
+                              ServicePlace.name_bn.like(f"%{q.strip()}%")))
+    # Officially rated first, then the most confident listings
+    rows = db.scalars(stmt.order_by(ServicePlace.official_star_rating.desc().nullslast(),
+                                    ServicePlace.listing_confidence.desc().nullslast()).limit(limit)).all()
+    slugs = _slugs(db, {p.district_id for p in rows})
+    names = dict(db.execute(select(DataSource.source_id, DataSource.source_name)).all())
+    out = []
+    for p in rows:
+        src = (p.field_status or {}).get("latitude", {}).get("source_id") or (p.field_status or {}).get("name_bn", {}).get("source_id")
+        out.append(ServicePlaceOut(slug=p.slug, kind=p.kind, category=p.category, name_en=p.name_en, name_bn=p.name_bn,
+                                   latitude=p.latitude, longitude=p.longitude, district_slug=slugs.get(p.district_id),
+                                   address=p.address, website=p.website, phone=p.phone,
+                                   official_star_rating=p.official_star_rating,
+                                   trust="official" if p.official_star_rating else "business_listing",
+                                   source=names.get(src)))
+    return out
+
+
+@router.get("/hotels", response_model=List[ServicePlaceOut])
+def hotels(district: Optional[str] = None, category: Optional[str] = None, q: Optional[str] = Query(None, min_length=2, max_length=100),
+           stars: Optional[int] = Query(None, ge=3, le=5), limit: int = Query(50, ge=1, le=500), db: Session = Depends(get_db)):
+    """Hotels, resorts, guest houses: official star rating where the ministry lists one, otherwise a business listing."""
+    return _service_places(db, "accommodation", district, category, q, stars, limit)
+
+
+@router.get("/restaurants", response_model=List[ServicePlaceOut])
+def restaurants(district: Optional[str] = None, category: Optional[str] = None,
+                q: Optional[str] = Query(None, min_length=2, max_length=100), limit: int = Query(50, ge=1, le=500),
+                db: Session = Depends(get_db)):
+    """Restaurants, cafés, fast food: business listings (not checked by Vromon)."""
+    return _service_places(db, "food", district, category, q, None, limit)

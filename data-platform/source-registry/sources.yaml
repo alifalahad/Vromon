@@ -233,7 +233,8 @@ sources:
     coverage: global
     update_frequency: monthly releases
     reliability_class: licensed_provider
-    recommended_use: enrichment
+    recommended_use: production
+    notes: Hotels and restaurants are published from it as business listings (not checked), with its confidence score.
     probe:
       - https://docs.overturemaps.org/guides/places
 
@@ -271,6 +272,18 @@ sources:
     recommended_use: enrichment
     probe:
       - https://download.geonames.org/export/dump/
+
+  - source_id: mocat_hotels
+    source_name: Star-rated hotels (five, four, three star)
+    organization: Ministry of Civil Aviation and Tourism, Hotel & Restaurant Cell
+    source_type: official_web_pages
+    website_url: https://mocat.gov.bd/pages/static-pages/694032da35ce18e1c05636ee
+    access_method: html
+    license_name: "government publication (facts used: name, address, star class)"
+    terms_review_status: open_license
+    coverage: star-classified hotels in Bangladesh
+    reliability_class: official_government
+    recommended_use: production
 
   - source_id: dpdt_gi
     source_name: Geographical Indication register

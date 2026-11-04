@@ -33,12 +33,15 @@ def rollback_job(session: Session, job_id: uuid.UUID, *, reason: str, reviewer: 
     for c in job_claims:
         c.status = "rejected"
         c.review_notes = f"rolled back: {reason}"
-    # The claims these superseded become current again
+    session.flush()  # the session doesn't autoflush: without this the query below still sees them as superseded
+    # The claims these superseded become current again (not ones from this job: one entity can be
+    # claimed twice in a run, the second claim superseding the first)
     for c in job_claims:
         prev = session.scalars(select(SourceClaim).where(
             SourceClaim.entity_type == c.entity_type, SourceClaim.entity_id == c.entity_id,
             SourceClaim.field_name == c.field_name, SourceClaim.source_id == c.source_id,
             SourceClaim.status == "superseded", SourceClaim.created_at < c.created_at,
+            SourceClaim.id.notin_([j.id for j in job_claims]),
         ).order_by(SourceClaim.created_at.desc()).limit(1)).first()
         if prev is not None:
             # add_claim notes the status it had before being superseded

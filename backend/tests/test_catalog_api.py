@@ -179,3 +179,21 @@ def test_foods_only_published_with_their_gi_evidence(client):
         db.commit()
     rows = client.get("/api/v1/catalog/foods", params={"district": "t-district-barishal"}).json()
     assert [(r["name_bn"], r["district_evidence"]) for r in rows] == [("বরিশালের আমড়া", "product_name")]
+
+
+def test_hotels_say_what_is_official_and_what_is_a_listing(client):
+    from app.models.catalog import ServicePlace
+    with _ApiTestSession() as db:
+        d = db.scalar(__import__("sqlalchemy").select(AdminUnit.id).where(AdminUnit.slug == "t-district-barishal"))
+        db.add_all([
+            ServicePlace(slug="t-sea-gull", kind="accommodation", category="hotel", name_en="Sea Gull", district_id=d,
+                         official_star_rating=5, listing_confidence=0.9, status="published", field_status={}),
+            ServicePlace(slug="t-inn", kind="accommodation", category="inn", name_en="Small Inn", district_id=d,
+                         listing_confidence=0.95, status="published", field_status={}),
+            ServicePlace(slug="t-unchecked", kind="accommodation", name_en="Pending", district_id=d, status="needs_review",
+                         field_status={}),
+        ])
+        db.commit()
+    rows = client.get("/api/v1/catalog/hotels", params={"district": "t-district-barishal"}).json()
+    assert [(r["slug"], r["trust"], r["price"]) for r in rows] == [("t-sea-gull", "official", None), ("t-inn", "business_listing", None)]
+    assert [r["slug"] for r in client.get("/api/v1/catalog/hotels", params={"stars": 5}).json()] == ["t-sea-gull"]
