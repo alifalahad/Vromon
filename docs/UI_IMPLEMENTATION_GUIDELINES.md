@@ -120,6 +120,45 @@ The components that enforce this (`TrustChip`, `FactRow`, `FareRow`, `TimeRange`
   - No demo data is visible.
   - A Maheshkhali day keeps lunch on the island.
 
+### Phase U1b: Getting there from where you are (car, bus, train, plane, boat)
+
+A trip starts where the traveller is and offers every way to get there that our data supports, each labelled by how sure it is. This replaces today's `getting_there`, whose fares come from formulas (bus = km × ৳3/50 km, train = ৳2.2/km, plane = ৳3,500 + ৳8/km). Those are invented fares, which guideline §2.2 forbids, so they are removed.
+
+**Start point:**
+- **"Use my current location"** asks for foreground location once. The trip keeps only the start district and a point rounded to about 1 km, never a GPS track (same privacy rule as Today mode).
+- **"Choose a place"** offers a district, upazila, station, bus terminal or airport.
+
+**Options, one card per mode,** all side by side and never merged into one "cheapest" number:
+
+| Mode | Built from (our datasets) | Shows | When data is missing |
+|---|---|---|---|
+| **Car** | Road route from the start point to the destination (`journey_calculations`; OpenRouteService now, OSRM later) | Distance, driving time (Estimate chip), the route line on the map; ferries on the way if the route uses one | "No road route known" |
+| **Bus** | Nearest bus terminals at both ends (`transport_hubs`), road time between them; BRTA regulated fare for the route (`fare_products`, fare type *Regulated*) | Departure and arrival terminals, road time (Estimate), regulated non-AC fare with the chart date | Fare: "Check with the bus company" (until the BRTA charts are transcribed) |
+| **Train** | Stations near both ends (`transport_hubs`) and **direct services between them** in the published timetable (`train_services`); class fares from the official chart (`fare_products`, *Official*) | Train name and number, departure → arrival ("+1 day" when overnight), off day; **trains whose off day is the travel date are left out**; fares by class; "Book at eticket.railway.gov.bd" | "No direct train in the published timetable"; fares "Not published yet" |
+| **Plane** | Airports near both ends (8 domestic airports with scheduled service) | Both airports, road time to and from them (Estimate), airline links | Schedule and fare: "Check with the airline" (not held: date-specific) |
+| **Boat** | Ferry/launch ghats (`transport_hubs`) when the destination is across water | Ghats, water distance, estimated time | "Check the local schedule at the ghat" |
+
+Every card also shows the short road legs **to** the station, terminal or airport and **from** it to the destination (Estimate), so the total door-to-door picture is visible.
+
+**Choosing an option:**
+- It becomes the trip's **"Getting there"** block, before day 1 starts, on the timeline and on the map: road legs solid, train legs as a rail line between stations, flights as an arc, boat legs dashed blue.
+- The return journey is chosen the same way.
+- The day plans that follow keep their road and boat legs (from the routing fix).
+
+**Backend:** `GET /api/v1/journeys/options?from_lat=&from_lon=&to=<district>&date=` returns the cards above from `transport_hubs`, `train_services`, `fare_products` and the routing service. Each value carries its kind (Official / Regulated / Estimate / Not known), source and checked date. The `trips` table stores the chosen option (mode, hubs, service id if a train) and the rounded start point.
+
+**Data gaps this phase must show honestly, not hide:**
+- **Eastern-zone trains** (Dhaka ↔ Chattogram, Sylhet, Mymensingh …) are missing: the eastern timetable is a scanned PDF. Until it is transcribed, train cards for those routes say "Timetable not yet available".
+- **Bus fares** await the BRTA chart transcription. Bus operators, AC fares and departure times need a partnership (Shohoz / BDTickets).
+- **Flights:** airports only; no schedules or fares.
+- **Multi-leg journeys** with a transfer (bus to Dhaka, then train to Sylhet) come after direct options work.
+
+**Acceptance (on the phone):**
+- From the phone's current location, a trip to Rajshahi or Dinajpur (western zone) shows car (road route), bus (terminals and fare status), train (real trains on that date, off-day trains removed), plane (airports, "check with the airline").
+- Choosing the train adds it to the timeline and the map.
+- A trip to Sylhet shows the eastern-timetable gap message instead of an invented train.
+- No formula fare appears anywhere.
+
 ### Phase U2: Onboarding rewrite
 - **Step 1:** username (as now).
 - **Step 2, "Where's home?":** cascading selects:
@@ -189,4 +228,12 @@ The components that enforce this (`TrustChip`, `FactRow`, `FareRow`, `TimeRange`
 
 ## 5. Order and size
 
-U0 → U1 → U2 → U3 → U4 → U5 → U6. U1 (real data) and U2 (onboarding) are the most visible fixes; U4 brings the district maps into the app. Each phase is its own branch and commits, and nothing is merged without the phone check.
+U0 → U1 → U1b → U2 → U3 → U4 → U5 → U6.
+- **U1 and U1b** (real places, and getting there from your location by car, bus, train, plane and boat) are the core of the trip planner.
+- **U2** (onboarding) is the quickest visible fix.
+- **U4** brings the district maps into the app.
+
+To make U1b complete, the data platform still needs:
+1. The eastern-zone timetable transcribed.
+2. The railway fare-chart station names transcribed.
+3. The BRTA bus charts transcribed. Each phase is its own branch and commits, and nothing is merged without the phone check.
