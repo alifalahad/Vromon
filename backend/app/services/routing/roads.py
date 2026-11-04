@@ -207,9 +207,10 @@ class RoadNetwork:
 
     def _remember(self, a: Point, b: Point, km: Optional[float], minutes: Optional[float]) -> None:
         straight = haversine_km(a, b)
-        if km is None or minutes is None:
-            self._no_road.add((_key(a), _key(b)))
         if km is None or minutes is None or not plausible(straight, float(km)):
+            # No usable road: none at all, or only a loop far round the water (an island across a
+            # channel). A boat crossing may be offered for it (crossing()).
+            self._no_road.add((_key(a), _key(b)))
             # No road, or an answer we don't believe: the estimate, without asking again
             self._pairs[(_key(a), _key(b))] = Road(straight, None, "estimate")
         else:
