@@ -1,0 +1,6 @@
+# Raw source snapshots and large outputs (manifests with checksums are committed instead)
+raw/
+processed/
+exports/*
+!exports/.gitkeep
+*.db
