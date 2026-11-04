@@ -9,4 +9,11 @@ def all_connectors() -> dict[str, type]:
     from vromon_data.connectors.portal_names import PortalNames
     from vromon_data.connectors.wikidata_attractions import WikidataAttractions
     from vromon_data.connectors.commons_media import CommonsMedia
-    return {c.name: c for c in (GeoBoundariesBGD, CuratedAdminNames, PortalNames, WikidataAttractions, CommonsMedia)}
+    from vromon_data.connectors.hubs import OsmHubsBD, OurAirportsBD
+    from vromon_data.connectors.railway import RailwayTimetable
+    from vromon_data.connectors.railway_fares import RailwayFaresEast
+    from vromon_data.connectors.journeys import DistrictJourneys
+    from vromon_data.connectors.transcribed_fares import TranscribedFares
+    return {c.name: c for c in (GeoBoundariesBGD, CuratedAdminNames, PortalNames, WikidataAttractions, CommonsMedia,
+                                OurAirportsBD, OsmHubsBD, RailwayTimetable, RailwayFaresEast, DistrictJourneys,
+                                TranscribedFares)}

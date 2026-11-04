@@ -381,3 +381,177 @@ class AttractionMedia(Base):
     role: Mapped[str] = mapped_column(String(20), nullable=False, default="primary")   # primary / secondary / illustrative
     approval_status: Mapped[str] = mapped_column(String(20), nullable=False, default="needs_review")
     job_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Transport (guideline §3.3-3.6): hubs, operators, trains, timetables, fares, journeys
+# ---------------------------------------------------------------------------
+
+class TransportOperator(Base):
+    __tablename__ = "transport_operators"
+    __table_args__ = (UniqueConstraint("slug", name="uq_transport_operators_slug"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    slug: Mapped[str] = mapped_column(String(120), nullable=False)
+    name_en: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    name_bn: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    operator_type: Mapped[str] = mapped_column(String(30), nullable=False)  # railway / bus / airline / launch / ferry / boat
+    website: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="published")
+
+
+class TransportHub(Base):
+    __tablename__ = "transport_hubs"
+    __table_args__ = (
+        UniqueConstraint("slug", name="uq_transport_hubs_slug"),
+        Index("ix_transport_hubs_type_district", "hub_type", "district_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    slug: Mapped[str] = mapped_column(String(200), nullable=False)
+    # railway_station / railway_halt / bus_terminal / airport / ferry_terminal
+    hub_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    name_en: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    name_bn: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    division_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("admin_units.id"), nullable=True)
+    district_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("admin_units.id"), nullable=True)
+    subdistrict_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("admin_units.id"), nullable=True)
+    operator_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    iata_code: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="imported")
+    field_status: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_by_job_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class TimetableVersion(Base):
+    """One published timetable (e.g. Bangladesh Railway time table no. 54); kept, never overwritten."""
+    __tablename__ = "timetable_versions"
+    __table_args__ = (UniqueConstraint("operator_id", "name", "zone", name="uq_timetable_versions"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    operator_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("transport_operators.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    zone: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)            # east / west
+    effective_from: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    artifact_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("source_artifacts.id"), nullable=True)
+    source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="needs_review")
+    timezone: Mapped[str] = mapped_column(String(40), nullable=False, default="Asia/Dhaka")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Train(Base):
+    __tablename__ = "trains"
+    __table_args__ = (UniqueConstraint("operator_id", "train_number", name="uq_trains_number"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    operator_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("transport_operators.id"), nullable=False)
+    train_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    name_bn: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    name_en: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    train_class: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)   # intercity / mail / commuter / international
+
+
+class TrainService(Base):
+    """One train in one direction under one timetable version. The reverse direction is its own row."""
+    __tablename__ = "train_services"
+    __table_args__ = (UniqueConstraint("timetable_version_id", "train_id", name="uq_train_services"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    timetable_version_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("timetable_versions.id"), nullable=False, index=True)
+    train_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("trains.id"), nullable=False)
+    origin_hub_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("transport_hubs.id"), nullable=True)
+    destination_hub_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("transport_hubs.id"), nullable=True)
+    origin_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)         # as printed
+    destination_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    departure_time: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)        # HH:MM, Asia/Dhaka
+    arrival_time: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
+    arrival_day_offset: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)      # 1 = next day
+    off_day: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)                 # 0=Mon … 6=Sun
+    off_day_text: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    runs_daily: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="needs_review")
+    field_status: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_by_job_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ServiceStop(Base):
+    __tablename__ = "service_stops"
+    __table_args__ = (UniqueConstraint("service_id", "sequence", name="uq_service_stops_seq"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    service_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("train_services.id", ondelete="CASCADE"), nullable=False, index=True)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    hub_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("transport_hubs.id"), nullable=True)
+    stop_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    arrival_time: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
+    departure_time: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
+    day_offset: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source_page: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    job_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+
+
+class FareProduct(Base):
+    """One fare for one class between two points, with its kind (guideline §3.5): never one unexplained number."""
+    __tablename__ = "fare_products"
+    __table_args__ = (Index("ix_fare_products_route", "mode", "origin_name", "destination_name"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    mode: Mapped[str] = mapped_column(String(20), nullable=False)                 # train / bus / air / launch / ferry
+    operator_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("transport_operators.id"), nullable=True)
+    origin_hub_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("transport_hubs.id"), nullable=True)
+    destination_hub_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("transport_hubs.id"), nullable=True)
+    origin_name: Mapped[str] = mapped_column(String(200), nullable=False)        # as printed
+    destination_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    fare_class: Mapped[str] = mapped_column(String(60), nullable=False)          # e.g. shovan_chair, snigdha, ac_seat
+    fare_class_label: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    ac: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    vehicle_seats: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    amount: Mapped[float] = mapped_column(Float, nullable=False)                 # what the passenger pays
+    base_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    vat_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="BDT")
+    one_way: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # official_operator / regulated / operator_published / platform_displayed / human_confirmed / historical / estimated
+    fare_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    official_distance_km: Mapped[Optional[float]] = mapped_column(Float, nullable=True)   # as the fare chart states it
+    effective_from: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    artifact_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("source_artifacts.id"), nullable=True)
+    source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    source_page: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    last_checked_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    verification_method: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="needs_review")
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    job_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+
+
+class JourneyCalculation(Base):
+    """A calculated road journey (guideline §3.4): a calculation with its engine and network, never an official fact."""
+    __tablename__ = "journey_calculations"
+    __table_args__ = (UniqueConstraint("origin_ref", "destination_ref", "mode", "engine", "network_version",
+                                       name="uq_journey_calculations"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    origin_ref: Mapped[str] = mapped_column(String(200), nullable=False)        # admin_unit:<slug> / hub:<slug>
+    destination_ref: Mapped[str] = mapped_column(String(200), nullable=False)
+    origin_lat: Mapped[float] = mapped_column(Float, nullable=False)
+    origin_lon: Mapped[float] = mapped_column(Float, nullable=False)
+    destination_lat: Mapped[float] = mapped_column(Float, nullable=False)
+    destination_lon: Mapped[float] = mapped_column(Float, nullable=False)
+    mode: Mapped[str] = mapped_column(String(20), nullable=False)               # road
+    distance_km: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    duration_min: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    engine: Mapped[str] = mapped_column(String(40), nullable=False)             # openrouteservice / osrm / straight_line
+    profile: Mapped[str] = mapped_column(String(40), nullable=False)
+    network_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    is_estimate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    calculated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

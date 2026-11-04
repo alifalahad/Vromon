@@ -14,6 +14,7 @@ from app.models.catalog import AdminBoundary, AdminUnit
 from vromon_data import geo
 
 EDGE_DEG = 0.001  # ~110 m: closer than this to a district border, a person checks the assignment
+OUTSIDE_DEG = 0.01  # ~1 km beyond every district: not in Bangladesh (a coastal point just offshore is kept)
 
 
 @dataclass
@@ -23,6 +24,7 @@ class Placement:
     subdistrict_id: uuid.UUID | None
     near_edge: bool
     outside: bool
+    in_country: bool = True
 
 
 class AdminLookup:
@@ -47,8 +49,9 @@ class AdminLookup:
         if outside:  # a coastal or river point just off the simplified outline: the nearest district, reviewed
             hits = [uuid.UUID(self._idx["district"].nearest(p))]
         district = hits[0]
+        in_country = not outside or self.shapes[district].distance(p) <= OUTSIDE_DEG
         near_edge = outside or len(hits) > 1 or self.shapes[district].boundary.distance(p) < EDGE_DEG
         subs = [uuid.UUID(k) for k in self._idx["subdistrict"].covering_point(p)]
         sub = next((s for s in subs if self.units[s].parent_id == district), None)
         return Placement(division_id=self.units[district].parent_id, district_id=district, subdistrict_id=sub,
-                         near_edge=near_edge, outside=outside)
+                         near_edge=near_edge, outside=outside, in_country=in_country)

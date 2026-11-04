@@ -12,6 +12,8 @@ from app.models.catalog import (  # data platform (docs/DATASET_IMPLEMENTATION_P
     EntityExternalId, EntityName, ReviewTask, VerificationEvent,
     AdminUnit, AdminBoundary, AdminAdjacency,
     AttractionCategory, Attraction, AttractionMedia,
+    TransportOperator, TransportHub, TimetableVersion, Train, TrainService, ServiceStop, FareProduct,
+    JourneyCalculation,
 )
 
 __all__ = [
@@ -26,4 +28,6 @@ __all__ = [
     "EntityExternalId", "EntityName", "ReviewTask", "VerificationEvent",
     "AdminUnit", "AdminBoundary", "AdminAdjacency",
     "AttractionCategory", "Attraction", "AttractionMedia",
+    "TransportOperator", "TransportHub", "TimetableVersion", "Train", "TrainService", "ServiceStop", "FareProduct",
+    "JourneyCalculation",
 ]

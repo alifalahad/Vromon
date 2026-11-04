@@ -55,6 +55,15 @@ def decide(session: Session, task_id: uuid.UUID, decision: str, *, reviewer: str
             entity.status = "published" if decision == "approve" else "rejected"
         claims.resolve(session, task.entity_type, task.entity_id)
         task.decision["claims"] = len(proposed)
+    if task.task_type == "timetable_sample" and task.entity_id and decision == "approve":
+        # The sample matched the official PDF: the whole version is published
+        from app.models.catalog import TimetableVersion, TrainService
+        version = session.get(TimetableVersion, task.entity_id)
+        version.status = "published"
+        services = session.scalars(select(TrainService).where(TrainService.timetable_version_id == version.id)).all()
+        for svc in services:
+            svc.status = "published"
+        task.decision["services"] = len(services)
     if task.entity_type and task.entity_id:
         session.add(VerificationEvent(entity_type=task.entity_type, entity_id=task.entity_id, method="review",
                                       reviewer=reviewer, reason=f"{task.task_type}: {decision}: {reason}"))

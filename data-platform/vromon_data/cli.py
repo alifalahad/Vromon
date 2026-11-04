@@ -12,6 +12,7 @@ Command line: `python -m vromon_data <command>` (run with data-platform's venv).
   review export <file.csv> [--type T] / review import <file.csv> --reviewer NAME
   report geography|attractions quality reports
   publish places [--dry-run]    approved attractions -> the app's places table
+  fares template <file.csv>    empty CSV for transcribing a scanned fare chart (connector transcribed_fares)
   artifact add <source> <file> record a file a person downloaded (e.g. HDX behind its bot challenge)
 """
 
@@ -132,6 +133,14 @@ def _publish(args) -> int:
     return 0
 
 
+def _fares(args) -> int:
+    from pathlib import Path
+    from vromon_data.connectors.transcribed_fares import COLUMNS, write_template
+    write_template(Path(args.file))
+    print(f"template with columns {', '.join(COLUMNS)} written to {args.file}")
+    return 0
+
+
 def _artifact(args) -> int:
     from pathlib import Path
     from vromon_data import artifacts, registry
@@ -196,6 +205,11 @@ def build_parser() -> argparse.ArgumentParser:
     pb.add_argument("what", choices=["places"])
     pb.add_argument("--dry-run", action="store_true")
     pb.set_defaults(func=_publish)
+
+    fr = sub.add_parser("fares", help="fare transcription")
+    fr.add_argument("action", choices=["template"])
+    fr.add_argument("file")
+    fr.set_defaults(func=_fares)
 
     ar = sub.add_parser("artifact", help="raw artifacts")
     ar.add_argument("action", choices=["add"])

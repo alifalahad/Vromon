@@ -141,6 +141,9 @@ class WikidataAttractions(Connector):
                     continue
                 lon, lat = float(m.group(1)), float(m.group(2))
                 place = self.lookup.place(lat, lon)
+                if not place.in_country:  # e.g. peaks across the border in Myanmar or India
+                    ctx.count("skipped_outside_bangladesh")
+                    continue
                 if place.district_id not in wanted:
                     continue
                 seen.add(qid)

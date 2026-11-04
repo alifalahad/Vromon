@@ -361,6 +361,22 @@ sources:
     probe:
       - https://gis.rhd.gov.bd/dmt/
 
+  - source_id: openrouteservice
+    source_name: openrouteservice (road distances and driving times)
+    organization: HeiGIT gGmbH; road data © OpenStreetMap contributors
+    source_type: routing_engine
+    website_url: https://openrouteservice.org/
+    access_method: api
+    fetch_policy: usage_policy  # documented API/download: its usage policy applies, not crawler robots.txt
+    usage_policy_url: https://openrouteservice.org/terms-of-service/
+    license_name: ORS terms; data ODbL (OpenStreetMap)
+    attribution_text: "Routes: openrouteservice.org by HeiGIT | © OpenStreetMap contributors"
+    terms_review_status: open_license
+    coverage: global road network
+    reliability_class: community_geospatial
+    recommended_use: enrichment
+    notes: Calculated journeys only, always labelled as estimates. Free key has daily limits; self-hosted OSRM planned.
+
   - source_id: bus_ticket_platforms
     source_name: Bus ticket platforms (Shohoz, BDTickets)
     organization: Shohoz; BDTickets

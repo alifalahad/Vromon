@@ -126,6 +126,8 @@ class Connector:
     auto_accept: bool = False
     # Process records in this order of entity type (parents before children)
     order: tuple[str, ...] = ()
+    # False: records are staged and handed to after() only (e.g. fare rows written as fare products)
+    creates_entities: bool = True
 
     def discover(self, ctx: Context) -> dict[str, Any]:
         return {"source": ctx.source["source_id"]}
@@ -187,12 +189,14 @@ def sync_registry(session: Session) -> int:
     return len(sources)
 
 
-def _previous_hashes(session: Session, source_id: str) -> dict[tuple[str, str], str]:
-    """Latest record hash per (entity_type, source_record_id) from successful real runs."""
+def _previous_hashes(session: Session, source_id: str, connector: str) -> dict[tuple[str, str], str]:
+    """Latest record hash per (entity_type, source_record_id) from this connector's successful real runs
+    (several connectors can read one source: the railway timetable and its fare chart)."""
     latest = (select(StagingRecord.entity_type, StagingRecord.source_record_id,
                      func.max(StagingRecord.created_at).label("at"))
               .join(IngestionJob, IngestionJob.id == StagingRecord.job_id)
-              .where(StagingRecord.source_id == source_id, IngestionJob.status == "succeeded")
+              .where(StagingRecord.source_id == source_id, IngestionJob.status == "succeeded",
+                     IngestionJob.connector == connector)
               .group_by(StagingRecord.entity_type, StagingRecord.source_record_id).subquery())
     rows = session.execute(select(StagingRecord.entity_type, StagingRecord.source_record_id, StagingRecord.record_hash)
                            .join(latest, (latest.c.entity_type == StagingRecord.entity_type)
@@ -203,10 +207,12 @@ def _previous_hashes(session: Session, source_id: str) -> dict[tuple[str, str], 
 
 
 def _add_names(ctx: Context, record: Record) -> None:
+    seen: set[tuple[str, str]] = set()
     for lang, name, kind in record.names:
         name = clean(name)
-        if not name:
+        if not name or (lang, name) in seen:  # a source can repeat a name (name:bn = alt_name)
             continue
+        seen.add((lang, name))
         exists = ctx.session.scalar(select(EntityName.id).where(
             EntityName.entity_type == record.entity_type, EntityName.entity_id == record.entity_id,
             EntityName.lang == lang, EntityName.name == name))
@@ -257,7 +263,7 @@ def run(connector: Connector, session: Session, *, dry_run: bool = False, params
         order = {t: i for i, t in enumerate(connector.order)}
         records.sort(key=lambda r: order.get(r.entity_type, 99))
 
-        previous = _previous_hashes(session, source["source_id"])
+        previous = _previous_hashes(session, source["source_id"], connector.name)
         seen: set[tuple[str, str]] = set()
         status = "accepted" if connector.auto_accept else "proposed"
         touched: set[tuple[str, uuid.UUID]] = set()
@@ -281,6 +287,8 @@ def run(connector: Connector, session: Session, *, dry_run: bool = False, params
                 ctx.count("rejected")
                 for msg in rec.errors:
                     ctx.error("validate", msg, rec.source_record_id)
+                continue
+            if not connector.creates_entities:
                 continue
             rec.entity_id = connector.match(ctx, rec)
             if rec.entity_id is None:

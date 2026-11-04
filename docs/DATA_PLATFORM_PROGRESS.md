@@ -104,3 +104,74 @@ Findings:
 python -m vromon_data review import exports/pilot-review-2026-11-04.csv --reviewer "<name>"
 python -m vromon_data publish places
 ```
+
+## Phase 4: transport hubs (2026-11-04) ✅
+
+**Implemented:** migration `0022` (new tables only):
+- `transport_operators`, `transport_hubs`
+- `timetable_versions`, `trains`, `train_services`, `service_stops`
+- `fare_products`, `journey_calculations`
+
+**Connectors:** `ourairports_bd`, `osm_hubs_bd` (Overpass).
+
+**Counts:**
+
+| Hub type | Count |
+|---|---|
+| Railway stations | 493 |
+| Railway halts | 5 |
+| Bus terminals | 659 |
+| Ferry/launch terminals | 253 |
+| Airports | **8** (matches the 8 domestic airports on Novoair's schedule page) |
+
+- 713 hubs have a Bangla name.
+- 52 hubs near a district border went to review.
+- 422 OSM objects were skipped because they had no name or type.
+
+**Licence:** OSM (ODbL) is used for hubs by the owner's decision; every hub carries its source and reliability class in `field_status`. Airports come from OurAirports (public domain).
+
+**Known limitation:** OSM often maps one station twice (as a node and as an area). Timetable matching treats candidates within 1 km as one station.
+
+## Phase 5: trains (2026-11-04) ✅ (awaiting sample check)
+
+**Implemented:**
+- `vromon_data.pdftext`, a decoder for Bangla government PDFs whose fonts lack a Unicode map. It reverses the font's own GSUB rules (ligatures, phala and reph forms) and restores Unicode order. On the western timetable it leaves **0 undecoded glyphs**.
+- `bd_railway_timetable`: the official timetable pages give the version (**time table no. 54, in effect 2025-03-10**) and link the PDFs.
+- `bd_railway_fares_east`: the eastern fare chart.
+
+**Counts:**
+- **Western zone:** 174 train services (one per direction, as printed), with number, name, off day and times; overnight arrivals are flagged.
+  - 89 services are linked to station hubs at both ends.
+  - 10 printed station names are unmatched (2 are in India).
+  - 1 row was unparsed and 3 were rejected by validation.
+- **Eastern zone timetable:** a **scanned image**. It needs OCR or transcription, and nothing was guessed.
+- **Eastern fare chart:** 364 station pairs, **4,004 class-wise fares** (8 plain classes; snigdha, AC seat and AC berth with VAT), each with the official distance.
+  - Station names are printed in a legacy font encoding, so 167 names wait for a person to transcribe them in `source-registry/bd-railway-fare-station-names.csv`.
+  - 204 printed totals differ from fare + VAT by rounding; they're kept as printed, with a note.
+- **Western fare chart:** a scanned image (needs transcription).
+
+**Review:**
+- `timetable_sample`: 12 rows to compare with the PDF. Approving it publishes the version.
+- `unmatched_station`: each unmatched name comes with suggested hubs.
+- `transcription`: the station-name file for the fare chart.
+
+**API:** `/api/v1/catalog/hubs`, `/catalog/trains`, `/catalog/fares`, serving published records only.
+
+## Phase 6: road, bus, air, water (2026-11-04) 🟡 (partly blocked, see below)
+
+**Road (done):**
+- `district_journeys_ors`: **4,032 district pairs, 3,906 routable** via openrouteservice. Each is stored with engine, profile, network description and date, and always flagged as an estimate.
+- The district point is its most populous GeoNames town; 6 districts use their bus terminal instead.
+- 126 pairs ORS can't route stay unknown.
+- **Check:** Dhaka → Gaibandha comes out at **262.5 km**, against the reference site's 263.1 km (calculated) and BRTA's chart figure of 268 km (official). The two kinds stay separate (`journey_calculations.distance_km` vs `fare_products.official_distance_km`).
+
+**Bus (blocked on transcription):** all four BRTA fare-chart PDFs (Aug 2026) are **scanned images**.
+- `transcribed_fares` imports rows a person types from a chart (`vromon_data fares template`), as `regulated` fares with chart URL, page and transcriber, and status `needs_review`.
+- AC and operator fares have no open source (partnership needed).
+
+**Air (blocked):** US-Bangla and Novoair schedule pages load their data in the browser from a search form; no static schedule exists and their terms don't cover automated use.
+- Airports are hubs.
+- Schedules need a partnership or a licensed provider.
+- Fares are date-specific, so they're link-out only.
+
+**Water (blocked):** no BIWTA launch timetable or fare chart was found online; the BIWTA site has notices only. The same transcription importer works for launch charts.
