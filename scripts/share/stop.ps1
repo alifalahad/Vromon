@@ -15,6 +15,10 @@ foreach ($port in $ApiPort, $ApkPort) {
         if ($id) { taskkill /PID $id /T /F 2>&1 | Out-Null; $stopped++ }
     }
 }
+# Servers bound to 127.0.0.1 don't always show in Get-NetTCPConnection on Windows: find them by command line too
+Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" |
+    Where-Object { $_.CommandLine -like "*--port $ApiPort*" -or $_.CommandLine -like "*http.server $ApkPort*" } |
+    ForEach-Object { taskkill /PID $_.ProcessId /T /F 2>&1 | Out-Null; $stopped++ }
 Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe' OR Name = 'pwsh.exe'" |
     Where-Object { $_.CommandLine -like '*share\start.ps1*' -and $_.ProcessId -ne $PID } |
     ForEach-Object { taskkill /PID $_.ProcessId /T /F 2>&1 | Out-Null; $stopped++ }

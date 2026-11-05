@@ -81,8 +81,7 @@ export default function DistrictScreen() {
                 transition={200}
               />
               <View style={styles.mapHint}>
-                <MaterialIcons name="zoom-out-map" size={18} color="#FFFFFF" />
-                <Text style={styles.mapHintText}>{t('explore.mapHint')}</Text>
+                <MaterialIcons name="zoom-out-map" size={20} color="#FFFFFF" />
               </View>
             </PressableScale>
           ) : maps.isLoading ? (
@@ -305,17 +304,15 @@ const useStyles = makeStyles((t) => ({
   mapLoading: { height: 300 },
   mapHint: {
     position: 'absolute',
-    right: 12,
-    top: 12,
+    right: 10,
+    top: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderRadius: 18,
+    padding: 8,
   },
-  mapHintText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
   body: { paddingHorizontal: 16, paddingTop: 16 },
   back: {
     position: 'absolute',
