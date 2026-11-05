@@ -163,6 +163,7 @@ function ThemedStack() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="destination/[id]" options={{ title: t('screens.destination') }} />
             <Stack.Screen name="explore/district/[slug]" options={{ headerShown: false }} />
+            <Stack.Screen name="explore/district-map/[slug]" options={{ headerShown: false, animation: 'fade' }} />
             <Stack.Screen name="explore/districts" options={{ title: t('explore.districtsTitle') }} />
             <Stack.Screen name="explore/continent/[name]" options={{ title: '' }} />
             <Stack.Screen name="explore/country/[iso2]" options={{ title: '' }} />

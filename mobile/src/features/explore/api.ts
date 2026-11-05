@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 
 import api from '../../services/api';
+import { apiUrl } from '../../services/serverConfig';
 import { localDigits } from '../trips/plan/usePlanFormat';
 
 export type ExplorePhoto = {
@@ -146,6 +147,8 @@ export type DistrictDetail = DistrictCard & {
 
 export type CountryDetail = CountryCard & { regions: number; cities: CityCard[]; label_lat: number | null; label_lon: number | null };
 
+export type DistrictMaps = { languages: ('en' | 'bn')[]; width: number; height: number; credits: string[]; made_on: string | null };
+
 export type SearchResult = { districts: DistrictCard[]; countries: CountryCard[]; cities: CityCard[] };
 
 export const exploreApi = {
@@ -156,6 +159,7 @@ export const exploreApi = {
   country: (iso2: string) => api.get<CountryDetail>(`/explore/countries/${iso2}`).then((r) => r.data),
   cities: (params: { continent?: string; country?: string; limit?: number }) =>
     api.get<CityCard[]>('/explore/cities', { params }).then((r) => r.data),
+  districtMaps: (slug: string) => api.get<DistrictMaps>(`/explore/districts/${slug}/maps`).then((r) => r.data),
   search: (q: string) => api.get<SearchResult>('/explore/search', { params: { q } }).then((r) => r.data),
 };
 
@@ -167,6 +171,8 @@ const V = 'explore-2';
 export const useBangladesh = () => useQuery({ queryKey: [V, 'bd'], queryFn: exploreApi.bangladesh, staleTime: STALE });
 export const useDistrict = (slug: string) =>
   useQuery({ queryKey: [V, 'district', slug], queryFn: () => exploreApi.district(slug), enabled: !!slug, staleTime: STALE });
+export const useDistrictMaps = (slug: string) =>
+  useQuery({ queryKey: [V, 'districtMaps', slug], queryFn: () => exploreApi.districtMaps(slug), enabled: !!slug, staleTime: STALE });
 export const useContinents = () => useQuery({ queryKey: [V, 'continents'], queryFn: exploreApi.continents, staleTime: STALE });
 export const useCountries = (continent?: string) =>
   useQuery({ queryKey: [V, 'countries', continent ?? ''], queryFn: () => exploreApi.countries(continent), staleTime: STALE });
@@ -221,4 +227,16 @@ export function districtLine(d: DistrictCard, t: TFunction, lang: string): strin
   if (d.counts.attractions) parts.push(t('explore.nSights', { count: d.counts.attractions, n: localDigits(String(d.counts.attractions), lang) }));
   if (d.counts.hotels) parts.push(t('explore.nHotels', { count: d.counts.hotels, n: localDigits(String(d.counts.hotels), lang) }));
   return parts.join(' · ') || (lang === 'bn' ? d.division_bn || d.division_en || '' : d.division_en || '');
+}
+
+/** The district's rendered map (JPEG): `card` 1080 px wide for the page, `full` 2160 px for zooming and saving. */
+export function districtMapUrl(slug: string, lang: 'en' | 'bn', size: 'card' | 'full'): string {
+  return `${apiUrl()}/api/v1/explore/districts/${slug}/map?lang=${lang}&size=${size}`;
+}
+
+/** The map in the app's language when it's published in it, else the other one. */
+export function mapLanguage(maps: DistrictMaps | undefined, lang: string): 'en' | 'bn' | null {
+  if (!maps?.languages.length) return null;
+  const want = lang.startsWith('bn') ? 'bn' : 'en';
+  return maps.languages.includes(want) ? want : maps.languages[0];
 }

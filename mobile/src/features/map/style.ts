@@ -66,6 +66,23 @@ export function statusColorExpression(
   return matchExpression(pairs, { type, property }, fallback);
 }
 
+/**
+ * Your visits with each country counted from what's inside it: a country you haven't marked
+ * yourself shows as lived or visited when a region, district or city in it is (zoomed out,
+ * the country is what you see).
+ */
+export function withImpliedCountries(visits: readonly Visit[]): Visit[] {
+  const marked = new Set(visits.filter((v) => v.place_type === 'country').map((v) => v.place_code));
+  const implied = new Map<string, Visit>();
+  for (const v of visits) {
+    const iso = v.country_iso2;
+    if (v.place_type === 'country' || !iso || marked.has(iso) || v.status === 'want') continue;
+    const prev = implied.get(iso);
+    if (!prev || (v.status === 'lived' && prev.status !== 'lived')) implied.set(iso, { ...v, place_type: 'country', place_code: iso });
+  }
+  return [...visits, ...implied.values()];
+}
+
 /** Friend comparison fill: In common, only You, only the friend. */
 export function compareColorExpression(
   mine: readonly string[],

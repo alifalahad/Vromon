@@ -26,7 +26,7 @@ import { Dock } from '../../src/features/map/Dock';
 import { FriendLayers } from '../../src/features/map/FriendLayers';
 import { footprintsGeoJSON, friendsAt } from '../../src/features/map/friendGeo';
 import { pickDockState } from '../../src/features/map/dockState';
-import { countryLabelPoint, HOME_REGIONS, homeRegionName } from '../../src/features/map/geoData';
+import { countryLabelPoint, HOME_DISTRICT_AREAS, HOME_REGIONS, homeDistrictName, homeRegionName } from '../../src/features/map/geoData';
 import { countriesVisited, DEFAULT_HOME, homeRegionProgress, regionWord } from '../../src/features/map/home';
 import { MapSheet } from '../../src/features/map/MapSheet';
 import { mapCountryName } from '../../src/features/map/mapCountries';
@@ -94,7 +94,8 @@ export default function MapScreen() {
   const friendsOn = mapLayers.friends && hasFriends && !poster;
   const layerType = view === 'countries' ? 'country' : view === 'regions' ? 'region' : null;
   const { data: footprints } = useFootprints(layerType, friendsOn);
-  const placeType = place && place.place_type !== 'city' ? place.place_type : null;
+  // Friends' footprints are by country and region (no districts)
+  const placeType = place && (place.place_type === 'country' || place.place_type === 'region') ? place.place_type : null;
   const { data: placeFootprints } = useFootprints(placeType, hasFriends && !!place);
   const dock = useMemo(
     () => pickDockState(trips ?? [], visits, destinations ?? [], today, friendsOn ? (footprints?.[0] ?? null) : null),
@@ -420,7 +421,12 @@ export default function MapScreen() {
           }}
           onSend={(p, name) => {
             setPlace(null);
-            const card = mapPlaceCard(p.place_type, p.place_code, name, { country: p.country_iso2 ?? undefined });
+            // A district goes as its division's card (cards have no districts)
+            const division = p.place_type === 'district' ? HOME_DISTRICT_AREAS.features.find((f) => f.properties.code === p.place_code)?.properties.region : undefined;
+            const card =
+              p.place_type === 'district'
+                ? mapPlaceCard('region', division ?? 'BD', name, { country: 'BD' })
+                : mapPlaceCard(p.place_type, p.place_code, name, { country: p.country_iso2 ?? undefined });
             router.push({ pathname: '/share/send', params: { card: JSON.stringify(card) } });
           }}
         />
@@ -430,7 +436,9 @@ export default function MapScreen() {
           name={
             quick.place.place_type === 'region'
               ? (homeRegionName(quick.place.place_code, resolveLanguage(language)) ?? quick.place.name)
-              : quick.place.place_type === 'country'
+              : quick.place.place_type === 'district'
+                ? (homeDistrictName(quick.place.place_code, resolveLanguage(language)) ?? quick.place.name)
+                : quick.place.place_type === 'country'
                 ? mapCountryName(quick.place.place_code, resolveLanguage(language))
                 : quick.place.name
           }

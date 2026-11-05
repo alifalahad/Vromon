@@ -140,3 +140,33 @@ def test_search_finds_districts_countries_and_cities(client):
     r = client.get("/api/v1/explore/search", params={"q": "বাগেরহাট"})
     assert [d["slug"] for d in r.json()["districts"]] == ["x-district-bagerhat"]
     assert client.get("/api/v1/explore/search", params={"q": "opolis"}).json()["cities"] == []   # names start with it
+
+
+def test_district_map_is_the_published_render_as_jpeg(client, world, tmp_path, monkeypatch):
+    from PIL import Image
+
+    from app.api.v1.endpoints import explore
+    from app.models.catalog import MapExport
+
+    Image.new("RGB", (216, 270), "white").save(tmp_path / "x-district-bagerhat-en.png")
+    monkeypatch.setattr(explore, "MAPS_DIR", tmp_path)
+    monkeypatch.setattr(explore, "MAP_CACHE", tmp_path / "web")
+    with _ApiTestSession() as db:
+        db.add_all([
+            MapExport(district_id=world["d1"], language="en", variant="final", file_path="x-district-bagerhat-en.png",
+                      sha256="ab" * 32, template_version="district-map-1", status="published",
+                      credits={"credits_on_map": ["Terrain: Copernicus DEM GLO-90, ESA/EU"]}),
+            MapExport(district_id=world["d1"], language="bn", variant="final", file_path="x-district-bagerhat-bn.png",
+                      sha256="cd" * 32, template_version="district-map-1", status="needs_review", credits={}),
+        ])
+        db.commit()
+    try:
+        meta = client.get("/api/v1/explore/districts/x-district-bagerhat/maps").json()
+        assert meta["languages"] == ["en"] and meta["credits"] == ["Terrain: Copernicus DEM GLO-90, ESA/EU"]
+        r = client.get("/api/v1/explore/districts/x-district-bagerhat/map", params={"lang": "en", "size": "card"})
+        assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg"
+        assert client.get("/api/v1/explore/districts/x-district-bagerhat/map", params={"lang": "bn"}).status_code == 404
+    finally:
+        with _ApiTestSession() as db:
+            db.execute(delete(MapExport).where(MapExport.district_id == world["d1"]))
+            db.commit()

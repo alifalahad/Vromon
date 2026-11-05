@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
 from app.db import get_db
+from app.models.catalog import AdminUnit
 from app.models.models import City, Country, Region, User, Visit
 from app.schemas.geo import PlaceType, VisitBatch, VisitIn, VisitOut
 from app.services.stats import visits_with_country
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/me/visits", tags=["visits"])
 
 
 def _unknown_places(db: Session, visits: List[VisitIn]) -> list[str]:
-    wanted: dict[str, set[str]] = {"country": set(), "region": set(), "city": set()}
+    wanted: dict[str, set[str]] = {"country": set(), "region": set(), "city": set(), "district": set()}
     for v in visits:
         wanted[v.place_type].add(v.place_code)
     found = set()
@@ -32,6 +33,10 @@ def _unknown_places(db: Session, visits: List[VisitIn]) -> list[str]:
         found |= {("country", c) for c in db.scalars(select(Country.iso2).where(Country.iso2.in_(wanted["country"])))}
     if wanted["region"]:
         found |= {("region", c) for c in db.scalars(select(Region.code).where(Region.code.in_(wanted["region"])))}
+    if wanted["district"]:
+        slugs = {f"bd-district-{c[3:]}": c for c in wanted["district"] if c.startswith("BD-")}
+        found |= {("district", slugs[s]) for s in db.scalars(select(AdminUnit.slug).where(
+            AdminUnit.slug.in_(slugs), AdminUnit.level == "district"))}
     city_ids = {int(c) for c in wanted["city"] if c.isdigit()}
     if city_ids:
         found |= {("city", str(c)) for c in db.scalars(select(City.geonameid).where(City.geonameid.in_(city_ids)))}

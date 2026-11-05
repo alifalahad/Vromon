@@ -418,3 +418,48 @@ def test_username_checks_are_rate_limited(client, alice):
     codes = [client.get("/api/v1/usernames/someone_x/available", headers=alice["headers"]).status_code for _ in range(31)]
     assert codes[:30] == [200] * 30
     assert codes[30] == 429
+
+
+class TestProfilePhoto:
+    """POST /me/avatar: a square 512 px JPEG without metadata goes to ImgBB; its URL is the photo."""
+
+    @staticmethod
+    def _png(w=800, h=600) -> bytes:
+        import io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new("RGB", (w, h), (200, 30, 30)).save(buf, "PNG")
+        return buf.getvalue()
+
+    def test_upload_crops_strips_and_shows_everywhere(self, client, alice, bob, monkeypatch):
+        import io
+        from PIL import Image
+        from app.services import avatars
+
+        sent = {}
+
+        def fake_upload(jpeg, name, client=None):
+            sent["jpeg"], sent["name"] = jpeg, name
+            return "https://i.ibb.co/abc/vromon.jpg"
+
+        monkeypatch.setattr(avatars, "upload", fake_upload)
+        r = client.post("/api/v1/me/avatar", files={"file": ("me.png", self._png(), "image/png")}, headers=alice["headers"])
+        assert r.status_code == 200, r.text
+        assert r.json()["avatar_url"] == "https://i.ibb.co/abc/vromon.jpg"
+        with Image.open(io.BytesIO(sent["jpeg"])) as im:
+            assert im.format == "JPEG" and im.size == (512, 512) and not im.getexif()
+        # Others see it on the public profile
+        found = client.get(f"/api/v1/users/search?q={alice['username']}", headers=bob["headers"])
+        if found.status_code == 200 and found.json():
+            assert found.json()[0]["avatar_url"] == "https://i.ibb.co/abc/vromon.jpg"
+        r = client.delete("/api/v1/me/avatar", headers=alice["headers"])
+        assert r.status_code == 200 and r.json()["avatar_url"] is None
+
+    def test_not_a_picture_is_422_and_no_key_is_503(self, client, alice, monkeypatch):
+        from app.core.config import settings
+
+        r = client.post("/api/v1/me/avatar", files={"file": ("x.png", b"not an image", "image/png")}, headers=alice["headers"])
+        assert r.status_code == 422
+        monkeypatch.setattr(settings, "imgbb_api_key", "")
+        r = client.post("/api/v1/me/avatar", files={"file": ("me.png", self._png(), "image/png")}, headers=alice["headers"])
+        assert r.status_code == 503

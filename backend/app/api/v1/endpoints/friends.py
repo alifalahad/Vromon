@@ -54,7 +54,8 @@ SEARCH_LIMIT = 20
 
 
 def _public(user: User) -> PublicProfile:
-    return PublicProfile(id=user.id, username=user.username or "", display_name=user.display_name)
+    return PublicProfile(id=user.id, username=user.username or "", display_name=user.display_name,
+                         avatar_url=user.avatar_url)
 
 
 def _person(db: Session, viewer: User, other: User) -> PersonOut:

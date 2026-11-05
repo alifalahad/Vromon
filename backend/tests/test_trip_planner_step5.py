@@ -340,6 +340,30 @@ class TestDoubtfulAnswers:
             s.close()
 
 
+    def test_one_unreachable_stop_leaves_the_other_legs_on_roads(self):
+        island = (21.40, 92.30)
+
+        class OneBadStop(FakeRoads):
+            def route(self, points):
+                if island in points:
+                    self.route_calls += 1
+                    raise RoutingUnavailable("Could not find routable point", temporary=False)
+                return super().route(points)
+
+        fake = OneBadStop()
+        ROADS.reset(provider=fake)
+        s = _Session()
+        try:
+            a, b, c = (21.4272, 92.0058), (21.44, 92.015), (21.45, 92.02)
+            pts = [a, b, c, island]
+            ROADS.prepare(s, pts)
+            lines = ROADS.lines(s, pts)
+            assert lines[0] and lines[1] and lines[2] is None      # asked leg by leg after the day was refused
+            assert ROADS.available
+        finally:
+            s.close()
+
+
 class TestModes:
 
     def test_times_and_fares(self):

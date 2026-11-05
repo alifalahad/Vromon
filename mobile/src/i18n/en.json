@@ -63,7 +63,8 @@
     "placeType": {
       "country": "Country",
       "region": "Region",
-      "city": "City"
+      "city": "City",
+      "district": "District"
     },
     "pending_one": "1 change waiting to sync",
     "pending_other": "{{count}} changes waiting to sync",
@@ -404,7 +405,9 @@
       "tomorrow": "tomorrow",
       "hint": "Opens your chat. Hold to see their trip.",
       "openTrip": "Open their trip"
-    }
+    },
+    "exportCompare": "Save or share this map",
+    "posterTitle": "You and {{name}}"
   },
   "settings": {
     "title": "Settings",
@@ -539,7 +542,15 @@
     "username": "Username",
     "homeCountry": "Home country",
     "notSet": "Not set",
-    "email": "Email"
+    "email": "Email",
+    "addPhoto": "Add photo",
+    "changePhoto": "Change photo",
+    "takePhoto": "Take photo",
+    "removePhoto": "Remove",
+    "photoNote": "Everyone who sees your profile sees your photo. It's stored on ImgBB.",
+    "photoFailedTitle": "Couldn't save the photo",
+    "photoFailedBody": "Check your connection and try again.",
+    "cameraDenied": "Allow Vromon to use the camera in your phone's settings."
   },
   "deleteAccount": {
     "title": "Delete your account",
@@ -1730,6 +1741,22 @@
       "northAmerica": "N. America",
       "oceania": "Oceania",
       "southAmerica": "S. America"
-    }
+    },
+    "openMap": "Open the map of {{name}}",
+    "mapHint": "Tap to zoom, save or share",
+    "noDistrictMap": "This district's map isn't published yet.",
+    "mapCredits": "Map: {{credits}}"
+  },
+  "share": {
+    "save": "Save",
+    "share": "Share",
+    "savedTitle": "Saved",
+    "savedBody": "It's in your gallery, in the Vromon album.",
+    "saveFailedTitle": "Couldn't save",
+    "deniedBody": "Allow Vromon to save photos in your phone's settings, then try again.",
+    "failedBody": "Something went wrong. Try again.",
+    "shareMapTitle": "Map of {{name}}",
+    "shareTitle": "Share your map",
+    "storyHint": "In Instagram or Facebook, choose Story."
   }
 }

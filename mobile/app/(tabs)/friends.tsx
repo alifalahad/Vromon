@@ -247,7 +247,7 @@ function RequestsRow({ requests, onPress }: { requests: FriendRequest[]; onPress
       <View style={styles.stack}>
         {requests.slice(0, 2).map((r, i) => (
           <View key={r.id} style={[styles.stackItem, i > 0 && styles.stackOverlap]}>
-            <Avatar name={r.user.display_name ?? r.user.username} id={r.user.id} size={32} />
+            <Avatar name={r.user.display_name ?? r.user.username} id={r.user.id} uri={r.user.avatar_url} size={32} />
           </View>
         ))}
       </View>
@@ -279,7 +279,7 @@ function RequestRow({ request, children }: { request: FriendRequest; children: R
   const name = request.user.display_name ?? request.user.username;
   return (
     <View style={styles.row} testID={`request-${request.user.username}`}>
-      <Avatar name={name} id={request.user.id} size={44} />
+      <Avatar name={name} id={request.user.id} uri={request.user.avatar_url} size={44} />
       <View style={styles.rowText}>
         <Text style={styles.name} numberOfLines={1}>
           {name}
@@ -310,7 +310,7 @@ function FriendRow({ friend, onPress, onMessage }: { friend: Friend; onPress: ()
         accessibilityLabel={`${name}, ${meta}`}
         testID={`friend-${friend.username}`}
       >
-        <Avatar name={name} id={friend.id} size={44} />
+        <Avatar name={name} id={friend.id} uri={friend.avatar_url} size={44} />
         <View style={styles.rowText}>
           <Text style={styles.name} numberOfLines={1}>
             {name}

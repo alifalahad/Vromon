@@ -270,13 +270,15 @@ export default function TripScreen() {
     }
   };
 
-  // Road lines for the map, a day at a time (kept on the server); legs without one are drawn straight
+  // Road lines for the map, a day at a time (kept on the server); legs without one are drawn straight.
+  // A day whose route is missing a leg (routing was down, or still working) is asked again every 30 s
   const stopOrder = pins.map((p) => p.id).join(',');
   const route = useQuery({
     queryKey: ['dayRoute', tripId, day?.id, stopOrder],
     queryFn: () => tripsApi.dayRoute(tripId, day!.id),
     enabled: !!day && pins.length > 1,
-    staleTime: Infinity,
+    staleTime: (q) => (routeComplete(q.state.data) ? Infinity : 0),
+    refetchInterval: (q) => (q.state.data && !routeComplete(q.state.data) ? 30_000 : false),
   });
   const roadLines = useMemo(
     () => Object.fromEntries((route.data?.legs ?? []).flatMap((l) => (l.line ? [[`${l.from_item_id}>${l.to_item_id}`, l.line]] : []))),
@@ -1304,3 +1306,8 @@ const useStyles = makeStyles((t) => {
     dropChipText: { fontSize: 15, fontWeight: '700', color: t.colors.link },
   };
 });
+
+/** Every leg has its road line, or its boat crossing */
+function routeComplete(route: { legs: { line: unknown; segments?: unknown }[] } | undefined): boolean {
+  return !!route && route.legs.every((l) => l.line || l.segments);
+}

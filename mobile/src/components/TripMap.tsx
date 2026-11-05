@@ -1,8 +1,8 @@
 /**
  * Trip map (Android / iOS) — MapLibre, the app's one map engine.
  *
- * Streets come from OpenFreeMap (OpenStreetMap data, no key; MapLibre shows the
- * attribution). Numbered markers per activity and a dashed line per day join them
+ * Streets come from Esri's basemaps (keyless public tiles, or the vector styles with a key;
+ * MapLibre shows the attribution). Numbered markers per activity and a dashed line per day join them
  * in visiting order. The lines are straight-line connections between stops,
  * NOT road routes; the caption says so. Tap a marker to see what it is.
  */
@@ -131,8 +131,8 @@ export function MapLegend({ days }: { days: ItineraryDay[] }) {
         ))}
       </View>
       <Text style={styles.caption}>
-        Dashed lines join stops in visiting order. They are straight lines, not road routes; travel times are estimates at 30 km/h. Map data ©
-        OpenStreetMap contributors, tiles by OpenFreeMap.
+        Dashed lines join stops in visiting order. They are straight lines, not road routes; travel times are estimates at 30 km/h. Basemap:
+        Esri.
       </Text>
     </View>
   );

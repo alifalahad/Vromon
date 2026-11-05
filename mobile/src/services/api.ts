@@ -275,6 +275,15 @@ export const meApi = {
   putSettings: (settings: Omit<UserSettings, 'updated_at'>) => api.put<UserSettings>('/me/settings', settings).then((r) => r.data),
   usernameAvailable: (username: string) =>
     api.get<UsernameAvailability>(`/usernames/${encodeURIComponent(username)}/available`).then((r) => r.data),
+  /** A new profile photo (a square JPEG); the server stores it on ImgBB */
+  uploadAvatar: (uri: string) => {
+    const form = new FormData();
+    form.append('file', { uri, name: 'avatar.jpg', type: 'image/jpeg' } as unknown as Blob);
+    return api
+      .post<Me>('/me/avatar', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 })
+      .then((r) => r.data);
+  },
+  removeAvatar: () => api.delete<Me>('/me/avatar').then((r) => r.data),
 };
 
 // ---------------------------------------------------------------------------

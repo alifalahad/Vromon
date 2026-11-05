@@ -8,11 +8,12 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { CompareMap } from '../../../src/features/friends/CompareMap';
+import { CompareMap, type CompareMapHandle } from '../../../src/features/friends/CompareMap';
+import { PosterPreview } from '../../../src/features/map/Poster';
 import { friendKeys } from '../../../src/features/friends/queries';
 import { flagEmoji } from '../../../src/features/geo/countries';
 import { countryLabelPoint } from '../../../src/features/map/geoData';
@@ -36,6 +37,13 @@ export default function CompareScreen() {
   const theme = useMapTheme();
   const [view, setView] = useState<MapView>('countries');
   const [open, setOpen] = useState<Group | null>(null);
+  // Export: a story-sized poster of the comparison map, to save or share
+  const mapRef = useRef<CompareMapHandle>(null);
+  const [poster, setPoster] = useState<{ uri: string | null } | null>(null);
+  const exportPoster = async () => {
+    setPoster({ uri: null });
+    setPoster({ uri: (await mapRef.current?.snapshot()) ?? null });
+  };
 
   const profile = useQuery({ queryKey: friendKeys.profile(id), queryFn: () => friendsApi.profile(id) });
   const compare = useQuery({ queryKey: friendKeys.compare(id), queryFn: () => friendsApi.compare(id) });
@@ -60,7 +68,17 @@ export default function CompareScreen() {
 
   return (
     <View style={styles.container} testID="compare-screen">
-      <Stack.Screen options={{ title: t('friends.compare') }} />
+      <Stack.Screen
+        options={{
+          title: t('friends.compare'),
+          headerRight: () =>
+            data ? (
+              <PressableScale onPress={exportPoster} hitSlop={10} accessibilityLabel={t('friends.exportCompare')} testID="compare-export">
+                <MaterialCommunityIcons name="export-variant" size={24} color={colors.textPrimary} />
+              </PressableScale>
+            ) : null,
+        }}
+      />
       <View style={styles.legend} testID="compare-legend">
         {legend.map(([label, color]) => (
           <View key={label} style={styles.legendItem}>
@@ -72,7 +90,7 @@ export default function CompareScreen() {
         ))}
       </View>
 
-      <View style={styles.map}>{data ? <CompareMap theme={theme} view={view} data={data} center={center} /> : null}</View>
+      <View style={styles.map}>{data ? <CompareMap ref={mapRef} theme={theme} view={view} data={data} center={center} /> : null}</View>
 
       <ScrollView style={styles.panel} contentContainerStyle={styles.panelContent}>
         <SegmentedControl<MapView>
@@ -106,6 +124,15 @@ export default function CompareScreen() {
           );
         })}
       </ScrollView>
+      {poster && data ? (
+        <PosterPreview
+          mapUri={poster.uri}
+          title={t('friends.posterTitle', { name })}
+          headline={t('friends.inCommonCount', { count: data.in_common.length })}
+          detail={`${t('friends.onlyYou', { count: data.only_me.length })} · ${t('friends.onlyThem', { count: data.only_them.length, name })}`}
+          onClose={() => setPoster(null)}
+        />
+      ) : null}
     </View>
   );
 }

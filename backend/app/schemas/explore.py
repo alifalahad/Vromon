@@ -143,3 +143,12 @@ class SearchOut(BaseModel):
     districts: List[DistrictCard]
     countries: List[CountryCard]
     cities: List[CityCard]
+
+
+class DistrictMapOut(BaseModel):
+    """The district's rendered map (the data platform's template): published languages and credits."""
+    languages: List[str]
+    width: int
+    height: int
+    credits: List[str]
+    made_on: Optional[str] = None

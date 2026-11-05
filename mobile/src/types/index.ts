@@ -718,6 +718,8 @@ export interface Me {
   email: string | null;
   username: string | null;
   display_name: string | null;
+  /** Profile photo (ImgBB), when one was added */
+  avatar_url?: string | null;
   home_country_iso2: string | null;
   discoverable: boolean;
   friend_code: string;
@@ -762,7 +764,8 @@ export interface UserSettings {
 // Travel map (Android Phase 3)
 // ---------------------------------------------------------------------------
 
-export type PlaceType = 'country' | 'region' | 'city';
+/** district: Bangladesh's 64, coded "BD-<name>" */
+export type PlaceType = 'country' | 'region' | 'city' | 'district';
 export type VisitStatus = 'visited' | 'want' | 'lived';
 
 export interface Visit {

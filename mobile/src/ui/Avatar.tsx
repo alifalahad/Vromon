@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import React from 'react';
 import { Text, View } from 'react-native';
 
@@ -26,11 +27,25 @@ export function avatarColor(id: string): string {
 }
 
 /**
- * Initials in a circle (profile photos arrive later). With an `id` the circle has that
- * person's colour; without one, the strong accent. Decorative: the name is always shown beside it.
+ * The person's profile photo when they added one (`uri`), else their initials in a circle. With an
+ * `id` the circle has that person's colour; without one, the strong accent. Decorative: the name is
+ * always shown beside it.
  */
-export function Avatar({ name, size = 48, id }: { name: string | null | undefined; size?: number; id?: string }) {
+export function Avatar({ name, size = 48, id, uri }: { name: string | null | undefined; size?: number; id?: string; uri?: string | null }) {
   const styles = useStyles();
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        contentFit="cover"
+        cachePolicy="disk"
+        transition={150}
+        accessibilityIgnoresInvertColors
+        importantForAccessibility="no"
+      />
+    );
+  }
   return (
     <View
       style={[styles.circle, { width: size, height: size, borderRadius: size / 2 }, id ? { backgroundColor: avatarColor(id) } : null]}

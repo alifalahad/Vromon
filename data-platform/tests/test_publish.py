@@ -107,3 +107,64 @@ def test_real_hotels_and_restaurants_replace_the_demo_ones(session):
     session.commit()
     assert publish.publish_service_places(session)["hidden"] == 1
     assert not session.get(Hotel, hotels["River Inn"].id).is_active
+
+
+def test_every_district_with_sights_becomes_a_destination_at_its_largest_town(session):
+    import uuid as _uuid
+    from datetime import datetime
+
+    from app.models.catalog import AdminBoundary, AdminUnit, Attraction, EntityExternalId
+    from app.models.models import City, Destination, Hotel, ItineraryItem, Itinerary, Place, Trip
+
+    div, d1, d2 = _uuid.uuid4(), _uuid.uuid4(), _uuid.uuid4()
+    square = '{"type":"Polygon","coordinates":[[[90.0,22.0],[90.5,22.0],[90.5,22.5],[90.0,22.5],[90.0,22.0]]]}'
+    session.add_all([
+        AdminUnit(id=div, country_iso2="BD", level="division", slug="x-div", name_en="Barishal", status="published"),
+        AdminUnit(id=d1, country_iso2="BD", level="district", slug="x-bhola", name_en="Bhola", parent_id=div,
+                  centroid_lat=22.25, centroid_lon=90.25, status="published"),
+        AdminUnit(id=d2, country_iso2="BD", level="district", slug="x-empty", name_en="Emptyganj", parent_id=div,
+                  status="published"),
+    ])
+    session.flush()
+    session.add_all([
+        EntityExternalId(entity_type="admin_unit", entity_id=div, provider="iso3166-2", external_id="BD-A",
+                         source_id="iso"),
+        AdminBoundary(admin_unit_id=d1, source_id="t", geometry_geojson=square, simplify_tolerance_deg=0.0005,
+                      min_lon=90.0, min_lat=22.0, max_lon=90.5, max_lat=22.5),
+        City(geonameid=1, country_iso2="BD", name="Bhola Town", lat=22.4, lon=90.4, population=90_000),
+        City(geonameid=2, country_iso2="BD", name="Outside", lat=23.0, lon=90.2, population=900_000),
+        Attraction(slug="x-sight", canonical_name_en="Sight", district_id=d1, status="published", field_status={}),
+    ])
+    session.commit()
+    report = publish.publish_destinations(session)
+    assert report["written"] == 1 and report["no_attractions"] == 1
+    bhola = session.scalar(select(Destination).where(Destination.name == "Bhola"))
+    assert (bhola.latitude, bhola.longitude) == (22.4, 90.4)          # its largest town inside it
+    assert bhola.region_code == "BD-A" and bhola.checked and "Bhola Town" in bhola.attribution
+    assert publish.publish_destinations(session)["reused"] == 1       # run again: no duplicate
+
+    # Tidying: unreviewed imports go where reviewed rows exist; demo rows go unless a trip uses them
+    reviewed = Place(name="Reviewed", destination_id=bhola.id, destination_name="Bhola", category="Culture",
+                     latitude=22.3, longitude=90.3, source="catalog", source_ref="catalog:x-sight", checked=True)
+    old = Place(name="Old import", destination_id=bhola.id, destination_name="Bhola", category="Culture",
+                latitude=22.3, longitude=90.3, source="wikivoyage", source_ref="wv:1", checked=False)
+    demo_used = Place(name="Demo used", destination_id=bhola.id, destination_name="Bhola", category="Beach",
+                      latitude=22.3, longitude=90.3, source="curated")
+    demo_free = Hotel(name="Demo hotel", destination_id=bhola.id, destination_name="Bhola", latitude=22.3,
+                      longitude=90.3, source="curated")
+    session.add_all([reviewed, old, demo_used, demo_free])
+    session.flush()
+    trip = Trip(title="T", destination="Bhola", total_budget=5000, start_date=datetime(2026, 11, 1).date(),
+                end_date=datetime(2026, 11, 1).date())
+    session.add(trip)
+    session.flush()
+    day = Itinerary(trip_id=trip.id, day_number=1, day_date=trip.start_date)
+    session.add(day)
+    session.flush()
+    session.add(ItineraryItem(itinerary_id=day.id, item_type="activity", place_id=demo_used.id, title="Demo used",
+                              start_time="09:00", end_time="10:00", duration_minutes=60, order_index=0))
+    session.commit()
+    t = publish.tidy_destinations(session)
+    assert t["unreviewed_hidden"] == 1 and t["demo_deleted"] == 1 and t["demo_kept_for_trips"] == 1
+    assert not session.get(Place, old.id).is_active and not session.get(Place, demo_used.id).is_active
+    assert session.get(Place, reviewed.id).is_active

@@ -1,7 +1,8 @@
 /**
  * Vromon Mobile — a district in Explore.
  *
- * The district in 3D (satellite, relief, its attractions as pins), then its names, division,
+ * The district's map (the data platform's render: relief, rivers, neighbours, reviewed attractions;
+ * tap it for full screen, zoom, save or share), then its names, division,
  * area and neighbours; "Plan a trip" when a trip destination lies in it; its GI-registered
  * foods and products (DPDT register: number, date, source); its attractions with photos; and
  * hotels, those with a room rate first ("from ৳…, as the hotel publishes it", with the date).
@@ -15,8 +16,8 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, FlatList, Linking, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { localName, useDistrict, type GiFood, type Hotel } from '../../../src/features/explore/api';
-import { DistrictMap } from '../../../src/features/explore/DistrictMap';
+import { districtMapUrl, localName, mapLanguage, useDistrict, useDistrictMaps, type GiFood, type Hotel } from '../../../src/features/explore/api';
+import { Image } from 'expo-image';
 import { PhotoCard, PhotoCredits } from '../../../src/features/explore/PhotoCard';
 import { localDigits } from '../../../src/features/trips/plan/usePlanFormat';
 import { PressableScale } from '../../../src/ui/PressableScale';
@@ -31,6 +32,8 @@ export default function DistrictScreen() {
   const insets = useSafeAreaInsets();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const q = useDistrict(slug ?? '');
+  const maps = useDistrictMaps(slug ?? '');
+  const mapLang = mapLanguage(maps.data, i18n.language);
   const d = q.data;
   const n = (v: number | string) => localDigits(String(v), lang);
 
@@ -62,14 +65,30 @@ export default function DistrictScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll} testID="district-screen">
-        <DistrictMap
-          geometry={d.geometry}
-          bbox={d.bbox}
-          attractions={d.attractions}
-          height={420}
-          topInset={insets.top}
-          accessibilityLabel={t('explore.mapOf', { name })}
-        />
+        <View style={{ paddingTop: insets.top + 64 }}>
+          {mapLang ? (
+            <PressableScale
+              pressEffect="opacity"
+              onPress={() => router.push({ pathname: '/explore/district-map/[slug]', params: { slug: d.slug, name } })}
+              accessibilityLabel={t('explore.openMap', { name })}
+              testID="district-map-card"
+            >
+              <Image
+                source={{ uri: districtMapUrl(d.slug, mapLang, 'card') }}
+                style={styles.mapImage}
+                contentFit="cover"
+                cachePolicy="disk"
+                transition={200}
+              />
+              <View style={styles.mapHint}>
+                <MaterialIcons name="zoom-out-map" size={18} color="#FFFFFF" />
+                <Text style={styles.mapHintText}>{t('explore.mapHint')}</Text>
+              </View>
+            </PressableScale>
+          ) : maps.isLoading ? (
+            <ActivityIndicator color={colors.link} style={styles.mapLoading} />
+          ) : null}
+        </View>
         <View style={styles.body}>
           <Text style={styles.title} accessibilityRole="header">
             {name}
@@ -166,6 +185,7 @@ export default function DistrictScreen() {
           ) : null}
 
           <PhotoCredits photos={[d.photo?.kind === 'satellite' ? null : d.photo, ...d.attractions.map((a) => a.photo)]} />
+          {maps.data?.credits.length ? <Text style={styles.note}>{t('explore.mapCredits', { credits: maps.data.credits.join(' · ') })}</Text> : null}
           <Text style={styles.note}>{t('explore.districtSources')}</Text>
         </View>
       </ScrollView>
@@ -281,6 +301,21 @@ const useStyles = makeStyles((t) => ({
   screen: { flex: 1, backgroundColor: t.colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32, backgroundColor: t.colors.bg },
   scroll: { paddingBottom: 40 },
+  mapImage: { width: '100%', aspectRatio: 0.8, backgroundColor: '#F4EFE6' },
+  mapLoading: { height: 300 },
+  mapHint: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  mapHintText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
   body: { paddingHorizontal: 16, paddingTop: 16 },
   back: {
     position: 'absolute',

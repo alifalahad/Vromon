@@ -42,6 +42,7 @@ class MeOut(BaseModel):
     email: Optional[str]
     username: Optional[str]
     display_name: Optional[str]
+    avatar_url: Optional[str] = None
     home_country_iso2: Optional[str]
     discoverable: bool
     friend_code: str

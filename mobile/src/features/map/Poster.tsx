@@ -1,12 +1,11 @@
 /**
  * The shareable poster (map home step 10): a picture of your map, your counts,
- * and the app's name, at 1080×1920. Shown as a preview first, then captured and
- * handed to the share sheet. It never includes your location or your friends:
+ * and the app's name, at 1080×1920 (a story's size). Shown as a preview first, then captured:
+ * Save puts it in the gallery, Share hands it to the share sheet (Instagram or Facebook: Story). It never includes your location or your friends:
  * the map picture is taken with those layers off (see the map screen).
  */
 
 import { MaterialIcons } from '@expo/vector-icons';
-import * as Sharing from 'expo-sharing';
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Image, Text, useWindowDimensions, View } from 'react-native';
@@ -17,6 +16,7 @@ import { haptics } from '../../ui/haptics';
 import { PressableScale } from '../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../ui/theme';
 import { notify } from '../../utils/dialogs';
+import { saveToGallery, shareImage } from '../share/saveShare';
 
 const W = 360;
 const H = 640;
@@ -41,20 +41,34 @@ export function PosterPreview({
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const poster = useRef<View>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'save' | 'share' | null>(null);
   const scale = Math.min(1, (width - 48) / W, (height - insets.top - insets.bottom - 150) / H);
 
+  const capture = () => captureRef(poster, { format: 'png', width: 1080, height: 1920, result: 'tmpfile' });
   const share = async () => {
     if (!poster.current) return;
-    setBusy(true);
+    setBusy('share');
     try {
-      const uri = await captureRef(poster, { format: 'png', width: 1080, height: 1920, result: 'tmpfile' });
+      const uri = await capture();
       haptics.success();
-      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: title });
+      await shareImage(uri, title);
     } catch {
       notify(t('map.replay.posterFailed'), '', 'error');
     } finally {
-      setBusy(false);
+      setBusy(null);
+    }
+  };
+  const save = async () => {
+    if (!poster.current) return;
+    setBusy('save');
+    try {
+      const result = await saveToGallery(await capture());
+      if (result === 'saved') notify(t('share.savedTitle'), t('share.savedBody'), 'success');
+      else notify(t('share.saveFailedTitle'), result === 'denied' ? t('share.deniedBody') : t('share.failedBody'), 'error');
+    } catch {
+      notify(t('map.replay.posterFailed'), '', 'error');
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -83,10 +97,15 @@ export function PosterPreview({
         <PressableScale style={styles.secondary} onPress={onClose} accessibilityLabel={t('common.close')} testID="poster-close">
           <MaterialIcons name="close" size={22} color={colors.textPrimary} />
         </PressableScale>
-        <PressableScale style={[styles.primary, (!mapUri || busy) && styles.disabled]} disabled={!mapUri || busy} onPress={share} testID="poster-share">
-          {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{t('map.replay.poster')}</Text>}
+        <PressableScale style={[styles.save, (!mapUri || !!busy) && styles.disabled]} disabled={!mapUri || !!busy} onPress={save} accessibilityLabel={t('share.save')} testID="poster-save">
+          {busy === 'save' ? <ActivityIndicator color={colors.textPrimary} /> : <MaterialIcons name="download" size={22} color={colors.textPrimary} />}
+          <Text style={styles.saveText}>{t('share.save')}</Text>
+        </PressableScale>
+        <PressableScale style={[styles.primary, (!mapUri || !!busy) && styles.disabled]} disabled={!mapUri || !!busy} onPress={share} testID="poster-share">
+          {busy === 'share' ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{t('map.replay.poster')}</Text>}
         </PressableScale>
       </View>
+      <Text style={styles.hint}>{t('share.storyHint')}</Text>
     </View>
   );
 }
@@ -116,5 +135,8 @@ const useStyles = makeStyles((t) => ({
   primary: { flex: 1, minHeight: 52, borderRadius: 26, backgroundColor: t.colors.accentStrong, alignItems: 'center', justifyContent: 'center' },
   primaryText: { ...t.type.headline, fontSize: 16, color: t.colors.onAccent },
   secondary: { width: 52, height: 52, borderRadius: 26, backgroundColor: t.colors.surfaceRaised, alignItems: 'center', justifyContent: 'center' },
+  save: { minHeight: 52, paddingHorizontal: 18, borderRadius: 26, backgroundColor: t.colors.surfaceRaised, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  saveText: { ...t.type.headline, fontSize: 16, color: t.colors.textPrimary },
+  hint: { ...t.type.caption, color: '#B9BFC9', marginTop: -8 },
   disabled: { opacity: 0.5 },
 }));
