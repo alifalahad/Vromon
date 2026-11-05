@@ -18,6 +18,8 @@ import type {
   CardKind,
   ChatMessage,
   Conversation,
+  JourneyMode,
+  TripJourney,
   Destination,
   EditResult,
   Compare,
@@ -236,6 +238,9 @@ export const tripsApi = {
     api.patch<EditResult>(`/trips/${tripId}/items/${itemId}`, changes).then((r) => r.data),
   // Roads (trip planner step 5): how to get to the next stop, and the day's road lines
   leg: (tripId: number, itemId: number) => api.get<LegOptions>(`/trips/${tripId}/items/${itemId}/leg`).then((r) => r.data),
+  journey: (tripId: number) => api.get<TripJourney>(`/trips/${tripId}/journey`).then((r) => r.data),
+  setJourneyPreferences: (tripId: number, prefs: { transport_modes: JourneyMode[]; transport_by_budget: boolean; origin_point?: { lat: number; lon: number; label?: string } | null }) =>
+    api.put<TripJourney>(`/trips/${tripId}/journey/preferences`, prefs).then((r) => r.data),
   dayRoute: (tripId: number, dayId: number) => api.get<DayRoute>(`/trips/${tripId}/days/${dayId}/route`).then((r) => r.data),
   // Live conditions (trip planner step 6): weather, sea, sun and usual traffic, with warnings per stop
   conditions: (tripId: number, refresh = false) =>

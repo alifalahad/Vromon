@@ -300,6 +300,23 @@ class TripStopOut(BaseModel):
     region_code: Optional[str] = None
 
 
+JourneyMode = Literal["plane", "train", "bus", "car", "launch"]
+
+
+class OriginPoint(BaseModel):
+    """Where the traveller starts, from the phone's location (the nearest city is kept as the trip's first stop)."""
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    label: Optional[str] = Field(None, max_length=200)
+
+
+class JourneyPreferences(BaseModel):
+    """How the traveller wants to get there: any of the modes (tried first), or the planner's pick by budget."""
+    transport_modes: List[JourneyMode] = Field(default_factory=list, max_length=5)
+    transport_by_budget: bool = False
+    origin_point: Optional[OriginPoint] = None
+
+
 class TripCreate(BaseModel):
     destination: str
     start_date: date
@@ -311,6 +328,10 @@ class TripCreate(BaseModel):
     # Where the trip starts (optional) and how you get to the destination
     origin: Optional[TripStopIn] = None
     transport_mode: Optional[TransportMode] = None
+    # From where you are (phone location) instead of a city; how you like to travel
+    origin_point: Optional[OriginPoint] = None
+    transport_modes: List[JourneyMode] = Field(default_factory=list, max_length=5)
+    transport_by_budget: bool = False
 
     @field_validator("end_date")
     @classmethod

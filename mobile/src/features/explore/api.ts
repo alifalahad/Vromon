@@ -147,7 +147,15 @@ export type DistrictDetail = DistrictCard & {
 
 export type CountryDetail = CountryCard & { regions: number; cities: CityCard[]; label_lat: number | null; label_lon: number | null };
 
-export type DistrictMaps = { languages: ('en' | 'bn')[]; width: number; height: number; credits: string[]; made_on: string | null };
+export type DistrictMaps = {
+  languages: ('en' | 'bn')[];
+  width: number;
+  height: number;
+  credits: string[];
+  made_on: string | null;
+  /** language → the render's version, so a new render is a new image URL */
+  versions?: Partial<Record<'en' | 'bn', string>>;
+};
 
 export type SearchResult = { districts: DistrictCard[]; countries: CountryCard[]; cities: CityCard[] };
 
@@ -230,8 +238,8 @@ export function districtLine(d: DistrictCard, t: TFunction, lang: string): strin
 }
 
 /** The district's rendered map (JPEG): `card` 1080 px wide for the page, `full` 2160 px for zooming and saving. */
-export function districtMapUrl(slug: string, lang: 'en' | 'bn', size: 'card' | 'full'): string {
-  return `${apiUrl()}/api/v1/explore/districts/${slug}/map?lang=${lang}&size=${size}`;
+export function districtMapUrl(slug: string, lang: 'en' | 'bn', size: 'card' | 'full', version?: string): string {
+  return `${apiUrl()}/api/v1/explore/districts/${slug}/map?lang=${lang}&size=${size}${version ? `&v=${version}` : ''}`;
 }
 
 /** The map in the app's language when it's published in it, else the other one. */

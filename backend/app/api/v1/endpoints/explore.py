@@ -402,7 +402,8 @@ def district_maps(slug: str, response: Response, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = CACHE
     return DistrictMapOut(languages=sorted(maps), width=2160, height=2700,
                           credits=_map_credits(any_map) if any_map else [],
-                          made_on=any_map.created_at.date().isoformat() if any_map else None)
+                          made_on=any_map.created_at.date().isoformat() if any_map else None,
+                          versions={lang: m.sha256[:12] for lang, m in maps.items()})
 
 
 @router.get("/districts/{slug}/map")

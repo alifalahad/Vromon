@@ -61,6 +61,16 @@ def set_stops(db: Session, trip: Trip, stops: list[TripStopIn]) -> None:
         ))
 
 
+def nearest_city_stop(db: Session, lat: float, lon: float) -> TripStopIn | None:
+    """The GeoNames city nearest a point (within about 50 km), as a trip stop; None if there's none."""
+    d = NEAREST_CITY_BOX
+    cities = db.scalars(select(City).where(City.lat.between(lat - d, lat + d), City.lon.between(lon - d, lon + d))).all()
+    if not cities:
+        return None
+    best = min(cities, key=lambda c: (c.lat - lat) ** 2 + ((c.lon - lon) * 0.92) ** 2)
+    return TripStopIn(city_geonameid=best.geonameid, country_iso2=best.country_iso2)
+
+
 def initial_stops(db: Session, trip: Trip, origin: TripStopIn | None, transport_mode: str | None) -> None:
     """A new trip: an optional origin, then the destination (decision D7)."""
     stops: list[TripStopIn] = []

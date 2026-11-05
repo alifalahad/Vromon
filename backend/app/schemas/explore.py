@@ -152,3 +152,5 @@ class DistrictMapOut(BaseModel):
     height: int
     credits: List[str]
     made_on: Optional[str] = None
+    # language → the render's version (its checksum's start): put in the image URL so a new render is a new URL
+    versions: dict = {}

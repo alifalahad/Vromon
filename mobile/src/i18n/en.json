@@ -758,7 +758,8 @@
     },
     "map3d": "3D view",
     "fullMap": "Full map",
-    "showPlan": "Show the plan"
+    "showPlan": "Show the plan",
+    "gettingAll": "See every way there, leg by leg"
   },
   "newTrip": {
     "title": "New trip",
@@ -910,6 +911,20 @@
       "nearDistrict": "Near {{district}} · {{km}} km",
       "otherPlaces": "Other places",
       "mustSeeAdded": "{{place}} is on your must-see list"
+    },
+    "fromHere": "Start from my current location",
+    "yourLocation": "your location",
+    "locationDenied": "Allow location for Vromon, or search for a city.",
+    "locationFailed": "Couldn't find your location. Search for a city instead.",
+    "howTravel": "How do you like to travel?",
+    "howTravelHint": "Pick one or more: Vromon plans with them first. Or let Vromon suggest by your budget.",
+    "byBudget": "Suggest by my budget",
+    "travelModes": {
+      "plane": "Plane",
+      "train": "Train",
+      "bus": "Bus",
+      "car": "Car",
+      "launch": "Launch / boat"
     }
   },
   "mustDos": {
@@ -1761,5 +1776,48 @@
     "shareMapTitle": "Map of {{name}}",
     "shareTitle": "Share your map",
     "storyHint": "In Instagram or Facebook, choose Story."
+  },
+  "feedback": {
+    "title": "Rate this plan",
+    "subtitle": "Your rating helps Vromon plan better trips for you.",
+    "tapStar": "Tap a star",
+    "starLabel": "{{n}} of 5: {{word}}",
+    "words": {
+      "poor": "Poor",
+      "fair": "Fair",
+      "good": "Good",
+      "veryGood": "Very good",
+      "excellent": "Excellent"
+    },
+    "worked": "What worked",
+    "improve": "What to improve",
+    "tags": {
+      "places": "Great places",
+      "pacing": "Good pacing",
+      "value": "Good value",
+      "food": "Great food",
+      "rushed": "Too rushed",
+      "slow": "Too slow",
+      "budget": "Over budget",
+      "travel": "Too much travel"
+    },
+    "noteLabel": "Anything else",
+    "notePlaceholder": "What should we change next time? (optional)",
+    "submit": "Save rating",
+    "update": "Update rating",
+    "failed": "Couldn't save. Check your connection and try again.",
+    "thanks": "Thanks for rating this plan",
+    "edit": "Edit"
+  },
+  "journey": {
+    "title": "Getting there",
+    "noStart": "Set where you start from (in the trip's details) to see the ways there.",
+    "perPerson": "{{amount}} per person",
+    "best": "Best for you",
+    "otherTrains": "Other trains",
+    "offDay": "not on {{day}}",
+    "estimate": "estimate",
+    "noLaunch": "Launch routes and timetables aren't in Vromon yet.",
+    "honesty": "Train times are Bangladesh Railway's published timetable. Fares marked \"estimate\" and flight times are estimates: check before you book."
   }
 }

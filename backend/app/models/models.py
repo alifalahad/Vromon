@@ -661,6 +661,21 @@ class TripPreference(Base):
     leave_time: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
     # The hotel the traveller chose (None = the best one at their accommodation level)
     hotel_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("hotels.id", ondelete="SET NULL"), nullable=True)
+    # Getting there: the transport the traveller prefers (any of plane / train / bus / car / launch),
+    # or none and `transport_by_budget` (the planner suggests by budget); where they start
+    transport_modes_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    transport_by_budget: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    origin_lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    origin_lon: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    origin_label: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+    @property
+    def transport_modes(self) -> list:
+        return _json_get(self.transport_modes_json)
+
+    @transport_modes.setter
+    def transport_modes(self, value):
+        self.transport_modes_json = _json_set(value)
 
     trip: Mapped["Trip"] = relationship("Trip", back_populates="preference")
 

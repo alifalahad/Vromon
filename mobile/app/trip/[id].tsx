@@ -934,7 +934,7 @@ export default function TripScreen() {
                   />
                 )}
 
-                {dayIndex === 0 && itinerary.data?.getting_there ? <GettingThere trip={itinerary.data.getting_there} /> : null}
+                {dayIndex === 0 && itinerary.data?.getting_there ? <GettingThere trip={itinerary.data.getting_there} tripId={tripId} /> : null}
 
                 {mine &&
                   unplaced.map((u) => (

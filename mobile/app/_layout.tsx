@@ -175,6 +175,7 @@ function ThemedStack() {
             <Stack.Screen name="trip/today/[id]" options={{ title: t('today.title') }} />
             <Stack.Screen name="itinerary/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="stats/trips" options={{ title: t('screens.tripStats') }} />
+            <Stack.Screen name="trip/journey/[id]" options={{ title: t('journey.title') }} />
             <Stack.Screen name="trip/route/[id]" options={{ title: t('screens.tripRoute') }} />
             <Stack.Screen name="settings/index" options={{ title: t('settings.title') }} />
             <Stack.Screen name="settings/profile" options={{ title: t('profile.edit') }} />

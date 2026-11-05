@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.services.budget import service as budget_service
 from app.services.photos import StorageError, delete_photos
 from app.services.photos.storage import PhotoStore, optional_photo_store
-from app.services import live, rooms
+from app.services import journey, live, rooms
 from app.services.recommendation.recommendation_service import per_person_daily_budget
 from app.core.auth import get_current_user
 from app.db import get_db
@@ -32,9 +32,9 @@ from app.schemas.schemas import (
     TripCreate, TripUpdate, TripOut, TripSummaryOut,
     FeedbackCreate, FeedbackOut, AdaptRequest,
     GenerateResponse, ItineraryResponse,
-    MarkVisitedIn, MarkVisitedOut, TripStopIn, TripStopsIn, MustSeeIn, BusyIn, TIME_PATTERN,
+    MarkVisitedIn, MarkVisitedOut, TripStopIn, TripStopsIn, MustSeeIn, BusyIn, TIME_PATTERN, JourneyPreferences,
 )
-from app.services.trip_stops import initial_stops, mark_trip_visited, set_stops, stop_out
+from app.services.trip_stops import initial_stops, mark_trip_visited, nearest_city_stop, set_stops, stop_out
 from app.services.itinerary.itinerary_service import ItineraryService, day_summary
 from app.services.itinerary.constraint_validator import ConstraintValidator
 from app.services.itinerary.cpsat_scheduler import CpSatItineraryService
@@ -96,6 +96,11 @@ def create_trip(payload: TripCreate, db: Session = Depends(get_db), user: User =
         leave_time=payload.preference.leave_time,
     )
     pref.interests = payload.preference.interests
+    pref.transport_modes = list(dict.fromkeys(payload.transport_modes))
+    pref.transport_by_budget = payload.transport_by_budget or not payload.transport_modes
+    if payload.origin_point is not None:
+        pref.origin_lat, pref.origin_lon = payload.origin_point.lat, payload.origin_point.lon
+        pref.origin_label = payload.origin_point.label
     db.add(pref)
 
     # Stops a day follow the pace unless the client says otherwise
@@ -114,7 +119,11 @@ def create_trip(payload: TripCreate, db: Session = Depends(get_db), user: User =
     cons.excluded_places = payload.constraints.excluded_places
     db.add(cons)
 
-    initial_stops(db, trip, payload.origin, payload.transport_mode)
+    origin = payload.origin
+    if origin is None and payload.origin_point is not None:
+        origin = nearest_city_stop(db, payload.origin_point.lat, payload.origin_point.lon)
+    mode = payload.transport_mode or next(({"launch": "boat"}.get(m, m) for m in payload.transport_modes), None)
+    initial_stops(db, trip, origin, mode)
 
     db.commit()
     db.refresh(trip)
@@ -1173,7 +1182,92 @@ def _validate_trip_settings(
         raise HTTPException(status_code=422, detail=errors)
 
 
+def _journey_points(db: Session, trip: Trip):
+    """(start, destination) as journey points, or None without a start."""
+    from app.models.models import City
+    pref = trip.preference
+    dest = db.query(Destination).filter(Destination.name == trip.destination).first()
+    if dest is None:
+        return None
+    stops = list(trip.stops)
+    if pref is not None and pref.origin_lat is not None:
+        start = journey.Point(pref.origin_lat, pref.origin_lon, pref.origin_label or "Your location")
+    elif len(stops) >= 2 and stops[0].city_geonameid is not None:
+        city = db.get(City, stops[0].city_geonameid)
+        start = journey.Point(city.lat, city.lon, city.name)
+    else:
+        return None
+    return start, journey.Point(dest.latitude, dest.longitude, dest.name)
+
+
+def _journey(db: Session, trip: Trip) -> dict | None:
+    points = _journey_points(db, trip)
+    if points is None:
+        return None
+    pref = trip.preference
+    preferred = list(pref.transport_modes) if pref else []
+    if not preferred and trip.stops:
+        m = list(trip.stops)[-1].transport_mode
+        preferred = [{"boat": "launch"}.get(m, m)] if m else []
+    per_person = (trip.total_budget or 0) / max(trip.num_travelers or 1, 1)
+    return journey.plan(db, points[0], points[1], preferred=preferred,
+                        by_budget=bool(pref and pref.transport_by_budget and not pref.transport_modes),
+                        budget_per_person=per_person, travellers=trip.num_travelers or 1)
+
+
 def _getting_there(db: Session, trip: Trip) -> dict | None:
+    """The recommended way there (door to door, services.journey), as the budget and the plan show it."""
+    try:
+        plan = _journey(db, trip)
+    except Exception:  # the journey is extra: a failure must not break the trip
+        logger.exception("Journey planning failed for trip %s", trip.id)
+        plan = None
+    pref = trip.preference
+    chosen = list(pref.transport_modes) if pref and pref.transport_modes else         [m for m in [list(trip.stops)[-1].transport_mode if trip.stops else None] if m]
+    if plan and plan["options"] and (not chosen or plan["options"][0]["mode"] in chosen):
+        best = plan["options"][0]
+        on_road = best["mode"] in ("bus", "car") and plan["road_source"].startswith("road distance")
+        return {"from": plan["from"], "to": plan["to"], "mode": best["mode"], "km": best["km"],
+                "minutes": best["minutes"], "fare": best["cost_per_person"], "fare_per": "person",
+                "source": "road" if on_road else ("timetable" if best["mode"] == "train" else "estimate")}
+    # The chosen way isn't possible from the catalog (no airport or station near): the simple estimate for it
+    return _getting_there_simple(db, trip)
+
+
+@router.get("/{trip_id}/journey")
+def trip_journey(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Getting there door to door: options by plane, train, bus and car, with legs, times and fares
+    (each fare says whether it's official or an estimate). Owner, or a friend read-only."""
+    trip = _load_trip(db, trip_id, user, friends_may_read=True)
+    plan = _journey(db, trip)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="No starting point: set where you start from")
+    pref = trip.preference
+    plan["preferences"] = {"transport_modes": list(pref.transport_modes) if pref else [],
+                           "transport_by_budget": bool(pref and pref.transport_by_budget)}
+    return plan
+
+
+@router.put("/{trip_id}/journey/preferences")
+def set_journey_preferences(trip_id: int, payload: JourneyPreferences, db: Session = Depends(get_db),
+                            user: User = Depends(get_current_user)):
+    """Change how you like to travel there, or where you start from; returns the journey again."""
+    trip = _load_trip(db, trip_id, user)
+    pref = trip.preference
+    if pref is None:
+        pref = TripPreference(trip_id=trip.id)
+        db.add(pref)
+    pref.transport_modes = list(dict.fromkeys(payload.transport_modes))
+    pref.transport_by_budget = payload.transport_by_budget or not payload.transport_modes
+    if payload.origin_point is not None:
+        pref.origin_lat, pref.origin_lon = payload.origin_point.lat, payload.origin_point.lon
+        pref.origin_label = payload.origin_point.label
+    db.commit()
+    db.refresh(trip)
+    return trip_journey(trip_id, db, user)
+
+
+def _getting_there_simple(db: Session, trip: Trip) -> dict | None:
     """From the trip's starting city to the destination, by the trip's mode (rough estimates)."""
     from app.models.models import City
     stops = list(trip.stops)

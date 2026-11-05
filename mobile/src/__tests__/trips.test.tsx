@@ -125,10 +125,13 @@ describe('trip dates', () => {
 });
 
 describe('the new-trip flow', () => {
-  it('sends the origin and how you get there', () => {
-    const t = { ...defaultNewTrip(new Date('2026-11-01T00:00:00'), "Cox's Bazar"), origin: { city_geonameid: 1185241, label: 'Dhaka, Bangladesh' }, mode: 'bus' as const };
-    expect(toPayload(t)).toMatchObject({ origin: { city_geonameid: 1185241 }, transport_mode: 'bus' });
-    expect(toPayload(defaultNewTrip(new Date('2026-11-01T00:00:00'), "Cox's Bazar"))).toMatchObject({ origin: null, transport_mode: null });
+  it('sends where you start and how you like to travel (several ways, or by budget)', () => {
+    const base = defaultNewTrip(new Date('2026-11-01T00:00:00'), "Cox's Bazar");
+    const city = { ...base, origin: { city_geonameid: 1185241, label: 'Dhaka, Bangladesh' }, modes: ['bus', 'train'] as ('bus' | 'train')[] };
+    expect(toPayload(city)).toMatchObject({ origin: { city_geonameid: 1185241 }, origin_point: null, transport_modes: ['bus', 'train'], transport_by_budget: false });
+    const here = { ...base, origin: { here: true as const, lat: 22.8, lon: 89.5, label: 'your location' } };
+    expect(toPayload(here)).toMatchObject({ origin: null, origin_point: { lat: 22.8, lon: 89.5 }, transport_modes: [], transport_by_budget: true });
+    expect(toPayload(base)).toMatchObject({ origin: null, origin_point: null, transport_by_budget: true });
   });
 });
 

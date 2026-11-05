@@ -29,7 +29,8 @@ export default function DistrictMapScreen() {
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
   const lang = chosen ?? mapLanguage(maps.data, i18n.language);
 
-  const file = async () => localCopy(districtMapUrl(slug!, lang!, 'full'), `${slug}-${lang}-${maps.data?.made_on ?? 'map'}.jpg`);
+  const version = lang ? maps.data?.versions?.[lang] : undefined;
+  const file = async () => localCopy(districtMapUrl(slug!, lang!, 'full', version), `${slug}-${lang}-${version ?? maps.data?.made_on ?? 'map'}.jpg`);
   const save = async () => {
     setBusy('save');
     try {
@@ -57,8 +58,8 @@ export default function DistrictMapScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       {lang ? (
         <ZoomableImage
-          uri={districtMapUrl(slug!, lang, 'full')}
-          placeholder={districtMapUrl(slug!, lang, 'card')}
+          uri={districtMapUrl(slug!, lang, 'full', version)}
+          placeholder={districtMapUrl(slug!, lang, 'card', version)}
           aspectRatio={(maps.data?.width ?? 4) / (maps.data?.height ?? 5)}
           accessibilityLabel={t('explore.mapOf', { name: name ?? '' })}
         />

@@ -42,8 +42,9 @@ from vromon_data.paths import EXPORTS_DIR  # noqa: E402
 
 DEM_URL = "https://copernicus-dem-90m.s3.amazonaws.com/{n}/{n}.tif"
 OVERPASS = "https://overpass-api.de/api/interpreter"
-TEMPLATE_VERSION = "district-map-1"
+TEMPLATE_VERSION = "district-map-2"   # 2: labels placed without overlaps
 W_IN, H_IN, DPI = 8.0, 10.0, 270        # 2160 x 2700 px
+DOT_PX = 11                               # an attraction dot's radius (s=26 pt²) in pixels, with its edge
 PALETTE = {"bg": "#f4efe6", "land": "#e9e2d0", "neighbor": "#d9d3c4", "outline": "#5b4a3a", "shadow": "#3b3127",
            "water": "#6fa8c9", "text": "#2c241c", "muted": "#7a6d5f"}
 CATEGORY_COLOR = {"Nature": "#3f8f4f", "Beach": "#d08a2e", "History": "#9c4a2f", "Culture": "#6b4fa0", "Family": "#c2508b",
@@ -161,6 +162,66 @@ def _attractions(session: Session, district_id, draft: bool) -> list[dict]:
 
 # --- drawing ----------------------------------------------------------------------------------
 
+def _label_box(ax, text, x, y, size_pt, *, ha="center", bold=False):
+    """The pixel box (x0, y0, x1, y1) that _label would cover for data coords (x, y)."""
+    _, width, ascent = text_path(text, face_for(text, bold))
+    if not ascent:
+        return None
+    scale_px = size_pt * ax.figure.dpi / 72 / ascent
+    px, py = ax.transData.transform((x, y))
+    dx = {"center": -width / 2, "left": 0, "right": -width}[ha]
+    halo = size_pt * 0.22 * ax.figure.dpi / 72
+    return (px + dx * scale_px - halo, py - 0.62 * ascent * scale_px - halo,
+            px + (dx + width) * scale_px + halo, py + 0.68 * ascent * scale_px + halo)
+
+
+class _Placer:
+    """Places labels so none overlaps another label or a marked point: each label tries a few
+    positions around its anchor (above, right, left, below) and is left out when none is free."""
+
+    def __init__(self, ax):
+        self.ax = ax
+        self.boxes: list[tuple[float, float, float, float]] = []
+        a = ax.get_window_extent()
+        self.area = (a.x0 + 4, a.y0 + 4, a.x1 - 4, a.y1 - 4)
+
+    def block(self, x, y, radius_px):
+        px, py = self.ax.transData.transform((x, y))
+        self.boxes.append((px - radius_px, py - radius_px, px + radius_px, py + radius_px))
+
+    def _free(self, b):
+        x0, y0, x1, y1 = self.area
+        if b[0] < x0 or b[1] < y0 or b[2] > x1 or b[3] > y1:
+            return False
+        return all(b[2] <= o[0] or b[0] >= o[2] or b[3] <= o[1] or b[1] >= o[3] for o in self.boxes)
+
+    def place(self, text, x, y, size_pt, offsets=((0, 0, "center"),), **kw) -> bool:
+        """offsets: (dx_px, dy_px, ha) tried in order; the first free one is drawn."""
+        if not text:
+            return False
+        inv = self.ax.transData.inverted()
+        px, py = self.ax.transData.transform((x, y))
+        for dx, dy, ha in offsets:
+            lx, ly = inv.transform((px + dx, py + dy))
+            b = _label_box(self.ax, text, lx, ly, size_pt, ha=ha, bold=kw.get("bold", False))
+            if b and self._free(b):
+                self.boxes.append(b)
+                _label(self.ax, text, lx, ly, size_pt, ha=ha, **kw)
+                return True
+        return False
+
+
+def _around(radius_px, size_pt, dpi):
+    """Positions around a point marker of `radius_px`: above, right, left, below, then the corners."""
+    h = size_pt * dpi / 72                 # the text's size in pixels
+    halo = size_pt * 0.22 * dpi / 72
+    up = radius_px + 0.62 * h + halo + 2   # the box's bottom just clears the marker
+    down = -(radius_px + 0.68 * h + halo + 2)
+    side = radius_px + halo + 4
+    return ((0, up, "center"), (side, 0, "left"), (-side, 0, "right"), (0, down, "center"),
+            (side, up * 0.8, "left"), (-side, up * 0.8, "right"), (side, down * 0.8, "left"), (-side, down * 0.8, "right"))
+
+
 def _label(ax, text, x, y, size_pt, *, color=PALETTE["text"], ha="center", bold=False, halo=True, coords="data", zorder=20):
     """Shaped text at (x, y); size in points. coords: 'data' or 'axes'."""
     if not text:
@@ -242,7 +303,8 @@ def render_district(session: Session, slug: str, lang: str = "en", draft: bool =
     ax.set_axis_off()
     view = box(fx0 / aspect, fy0, fx1 / aspect, fy1)
 
-    # Neighbours
+    # Neighbours (their names are placed last, where they fit)
+    neighbour_labels: list[tuple[str, float, float]] = []
     neighbor_ids = session.scalars(select(AdminAdjacency.neighbor_id).where(AdminAdjacency.unit_id == unit.id)).all()
     for nid in neighbor_ids:
         n = session.get(AdminUnit, nid)
@@ -253,7 +315,7 @@ def render_district(session: Session, slug: str, lang: str = "en", draft: bool =
         vis = ng.intersection(view.buffer(-pad * 0.15))
         if not vis.is_empty and vis.area > 0.02 * view.area:
             p = vis.representative_point()
-            _label(ax, n.name_bn if lang == "bn" else n.name_en, p.x * aspect, p.y, 11, color=PALETTE["muted"], zorder=5)
+            neighbour_labels.append((n.name_bn if lang == "bn" else n.name_en, p.x * aspect, p.y))
     credits["neighbors"] = "admin_adjacency (shared borders of the boundary polygons)"
 
     # Shadow for the raised look, then the district
@@ -286,26 +348,38 @@ def render_district(session: Session, slug: str, lang: str = "en", draft: bool =
 
     # Rivers
     rivers = _rivers(session, (minx - 0.05, miny - 0.05, maxx + 0.05, maxy + 0.05), credits)
-    labelled = 0
+    river_labels: list[tuple[str, list]] = []
     for pts, kind, tags in sorted(rivers, key=lambda r: -len(r[0])):
         xs, ys = zip(*pts)
         ax.plot([x * aspect for x in xs], ys, color=PALETTE["water"], lw=1.4 if kind == "river" else 0.7,
                 solid_capstyle="round", zorder=6, alpha=0.95)
         name = tags.get("name:bn") if lang == "bn" else (tags.get("name:en") or (tags.get("name") if tags.get("name", "").isascii() else None))
-        if name and kind == "river" and labelled < 6 and len(pts) > 8:
-            mx, my = pts[len(pts) // 2]
-            if view.contains(box(mx - 1e-4, my - 1e-4, mx + 1e-4, my + 1e-4)):
-                _label(ax, name, mx * aspect, my, 9, color="#2f6f93", zorder=12)
-                labelled += 1
+        if name and kind == "river" and len(pts) > 8 and name not in [n for n, _ in river_labels]:
+            river_labels.append((name, pts))
 
     # Attractions
     points = _attractions(session, unit.id, draft)
+    placer = _Placer(ax)
     for p in points:
         ax.scatter([p["lon"] * aspect], [p["lat"]], s=26, color=CATEGORY_COLOR.get(p["app"], "#555"), edgecolor="white",
                    linewidth=0.8, zorder=14, alpha=0.6 if p["draft"] else 1.0, marker="D" if p["draft"] else "o")
-    for p in [p for p in points if not p["draft"]][:18]:
-        _label(ax, p["name_bn"] if lang == "bn" else p["name_en"], p["lon"] * aspect, p["lat"] + (fy1 - fy0) * 0.012, 8.5,
-               zorder=15)
+        placer.block(p["lon"] * aspect, p["lat"], DOT_PX)
+    shown = 0
+    for p in [p for p in points if not p["draft"]]:
+        # A sight without a Bangla name keeps its English one on the Bangla map (rather than no name)
+        if placer.place((p["name_bn"] or p["name_en"]) if lang == "bn" else p["name_en"], p["lon"] * aspect, p["lat"], 8.5,
+                        offsets=_around(DOT_PX, 8.5, DPI), zorder=15):
+            shown += 1
+    credits["attraction_labels"] = f"{shown} of {sum(not p['draft'] for p in points)} named (the rest would overlap)"
+    for name, pts in river_labels[:8]:
+        for frac in (0.5, 0.35, 0.65, 0.2, 0.8):
+            mx, my = pts[int(len(pts) * frac)]
+            if view.contains(box(mx - 1e-4, my - 1e-4, mx + 1e-4, my + 1e-4)) and \
+                    placer.place(name, mx * aspect, my, 9, color="#2f6f93", zorder=12):
+                break
+    for name, x, y in neighbour_labels:
+        placer.place(name, x, y, 11, offsets=((0, 0, "center"), (0, 30, "center"), (0, -30, "center"), (40, 0, "center"),
+                                              (-40, 0, "center")), color=PALETTE["muted"], zorder=5)
     credits["attractions"] = (f"{sum(not p['draft'] for p in points)} published catalog records"
                               + (f"; {sum(p['draft'] for p in points)} candidates under review (draft only)" if draft else ""))
 

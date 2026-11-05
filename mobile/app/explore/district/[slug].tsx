@@ -74,7 +74,7 @@ export default function DistrictScreen() {
               testID="district-map-card"
             >
               <Image
-                source={{ uri: districtMapUrl(d.slug, mapLang, 'card') }}
+                source={{ uri: districtMapUrl(d.slug, mapLang, 'card', maps.data?.versions?.[mapLang]) }}
                 style={styles.mapImage}
                 contentFit="cover"
                 cachePolicy="disk"

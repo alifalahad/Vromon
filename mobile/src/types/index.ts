@@ -299,6 +299,11 @@ export interface TripCreate {
   constraints?: TripConstraintInput;
   origin?: TripStopInput | null;
   transport_mode?: TransportMode | null;
+  /** From the phone's location instead of a city */
+  origin_point?: { lat: number; lon: number; label?: string | null } | null;
+  /** How you like to travel there; none + transport_by_budget: Vromon suggests by budget */
+  transport_modes?: JourneyMode[];
+  transport_by_budget?: boolean;
 }
 
 // Matches _trip_summary_out / _trip_out in trips.py
@@ -1204,4 +1209,45 @@ export interface LateResult extends LatePlan {
   day: ItineraryDay;
   validation: ValidationReport;
   undo: LateUndo;
+}
+
+/** Ways to get to a destination (door to door): the traveller's choice, tried first */
+export type JourneyMode = 'plane' | 'train' | 'bus' | 'car' | 'launch';
+
+export interface JourneyLeg {
+  mode: 'cng' | 'bus' | 'train' | 'plane' | 'car';
+  from: string;
+  to: string;
+  minutes: number;
+  km: number;
+  fare: number | null;
+  fare_per: 'person' | 'vehicle';
+  fare_kind: 'estimate' | 'official' | 'unknown';
+  depart: string | null;
+  arrive: string | null;
+  detail: string | null;
+  source: string | null;
+}
+
+export interface JourneyOption {
+  mode: Exclude<JourneyMode, 'launch'>;
+  minutes: number;
+  km: number;
+  cost_per_person: number;
+  all_official: boolean;
+  recommended: boolean;
+  preferred: boolean;
+  reason: string | null;
+  note: string | null;
+  legs: JourneyLeg[];
+  alternatives: { train: string; depart: string; arrive: string; minutes: number; off_day: string | null }[];
+}
+
+export interface TripJourney {
+  from: string;
+  to: string;
+  options: JourneyOption[];
+  missing: string[];
+  road_source: string;
+  preferences: { transport_modes: JourneyMode[]; transport_by_budget: boolean };
 }
