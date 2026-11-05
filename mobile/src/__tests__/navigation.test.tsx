@@ -5,7 +5,7 @@ import { Text } from 'react-native';
 import AuthLayout from '../../app/(auth)/_layout';
 import FriendsScreen from '../../app/(tabs)/friends';
 import TabLayout from '../../app/(tabs)/_layout';
-import SettingsScreen from '../../app/(tabs)/settings';
+import SettingsScreen from '../../app/settings/index';
 import RootLayout from '../../app/_layout';
 import { useAuth } from '../features/auth/session';
 import { DEFAULT_PREFERENCES, usePreferences } from '../features/preferences/store';
@@ -54,7 +54,6 @@ const routes = {
   '(tabs)/index': () => <Text>map-screen</Text>,
   '(tabs)/trips': () => <Text>trips-screen</Text>,
   '(tabs)/friends': FriendsScreen,
-  '(tabs)/settings': SettingsScreen,
   'destination/[id]': () => null,
   'trip/new': () => null,
   'trip/[id]': () => null,
@@ -62,6 +61,7 @@ const routes = {
   '(auth)/_layout': AuthLayout,
   '(auth)/sign-in': () => <Text>sign-in-screen</Text>,
   onboarding: () => <Text>onboarding-screen</Text>,
+  'settings/index': SettingsScreen,
   'settings/profile': () => null,
   'settings/home-country': () => null,
   'settings/delete-account': () => null,
@@ -85,12 +85,13 @@ beforeEach(async () => {
 });
 
 describe('bottom tabs', () => {
-  it('renders Map · Trips · Friends · Settings in order, without Passport', async () => {
+  it('renders Map · Trips · Friends in order, without Passport or Settings (Settings opens from the map)', async () => {
     await renderRouter(routes, { initialUrl: '/' });
     await screen.findByText('map-screen');
     const tabs = screen.getAllByTestId(/^tab-/).map((t) => t.props.testID);
-    expect(tabs).toEqual(['tab-index', 'tab-trips', 'tab-friends', 'tab-settings']);
-    for (const label of ['Map', 'Trips', 'Friends', 'Settings']) expect(screen.getByText(label)).toBeTruthy();
+    expect(tabs).toEqual(['tab-index', 'tab-trips', 'tab-friends']);
+    for (const label of ['Map', 'Trips', 'Friends']) expect(screen.getByText(label)).toBeTruthy();
+    expect(screen.queryByText('Settings')).toBeNull();
     expect(screen.queryByText('Passport')).toBeNull();
     expect(screen.getByText('map-screen')).toBeTruthy();
   });
@@ -131,9 +132,8 @@ describe('Settings', () => {
       await fireEvent.press(screen.getAllByTestId('option-bn')[0]);
     });
     expect(usePreferences.getState().language).toBe('bn');
-    // Settings title and its tab label, plus the other tab labels, are now in Bangla
-    expect(screen.getAllByText('সেটিংস')).toHaveLength(2);
-    expect(screen.getByText('মানচিত্র')).toBeTruthy();
+    // The screen is now in Bangla (its title is in the native header)
+    expect(screen.getByLabelText('Ali Ahad, প্রোফাইল সম্পাদনা')).toBeTruthy();
     expect(screen.queryByText('Settings')).toBeNull();
   });
 
@@ -164,10 +164,8 @@ describe('sign-in gate', () => {
   });
 
   it('shows the profile card for an onboarded account', async () => {
-    // Cold start: the gate resolves the account first, then the user opens Settings
-    await renderRouter(routes, { initialUrl: '/' });
-    await screen.findByText('map-screen');
-    await fireEvent.press(screen.getByTestId('tab-settings'));
+    // Cold start: the gate resolves the account first, then Settings opens
+    await renderRouter(routes, { initialUrl: '/settings' });
     expect(await screen.findByText('@ali · Bangladesh')).toBeTruthy();
     expect(screen.getByText('Ali Ahad')).toBeTruthy();
   });

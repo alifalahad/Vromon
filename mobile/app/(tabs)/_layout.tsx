@@ -1,6 +1,6 @@
 /**
- * Vromon Mobile — Bottom tabs: Map · Explore · Trips · Friends · Settings (01-bottom-nav.jpg,
- * without Passport). Material icons, accent when active, selection haptic and a
+ * Vromon Mobile — Bottom tabs: Map · Explore · Trips · Friends (01-bottom-nav.jpg, without
+ * Passport). Settings opens from the profile button on the Map tab. Material icons, accent when active, selection haptic and a
  * small icon bounce on tab change. Friends shows a badge for incoming requests and unread chats.
  */
 
@@ -42,7 +42,6 @@ const TABS: { name: string; labelKey: string; icon: IconName }[] = [
   { name: 'explore', labelKey: 'tabs.explore', icon: 'explore' },
   { name: 'trips', labelKey: 'tabs.trips', icon: 'luggage' },
   { name: 'friends', labelKey: 'tabs.friends', icon: 'people' },
-  { name: 'settings', labelKey: 'tabs.settings', icon: 'settings' },
 ];
 
 export default function TabLayout() {
@@ -76,10 +75,10 @@ export default function TabLayout() {
           paddingBottom: insets.bottom + 8,
         },
         tabBarLabelStyle: { ...theme.type.tabLabel, marginTop: 2 },
-        // Five labels share the bar: they grow with the system font size up to 1.15×
-        // (beyond that "Settings" would be cut off); the icons carry the meaning too
+        // Four labels share the bar: they grow with the system font size up to 1.25×
+        // (beyond that "Friends" would be cut off); the icons carry the meaning too
         tabBarLabel: ({ color, children }) => (
-          <Text style={[theme.type.tabLabel, tabStyles.label, { color }]} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+          <Text style={[theme.type.tabLabel, tabStyles.label, { color }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>
             {children}
           </Text>
         ),

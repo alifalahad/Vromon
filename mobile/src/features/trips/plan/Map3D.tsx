@@ -16,7 +16,8 @@ export const CREDIT_3D = 'Terrain: Mapzen / AWS Terrain Tiles · Buildings: Open
 const DEM_TILES = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
 const OPENFREEMAP = 'https://tiles.openfreemap.org/planet';
 
-export function Relief3D({ on, dark = false }: { on: boolean; dark?: boolean }) {
+/** `beforeId`: the layer to go under (the style's first label, so names stay on top). */
+export function Relief3D({ on, dark = false, beforeId }: { on: boolean; dark?: boolean; beforeId?: string }) {
   const visibility = on ? 'visible' : 'none';
   return (
     <>
@@ -24,6 +25,7 @@ export function Relief3D({ on, dark = false }: { on: boolean; dark?: boolean }) 
         <Layer
           id="relief-shade"
           type="hillshade"
+          beforeId={beforeId}
           layout={{ visibility }}
           // Default colours: this MapLibre build reads hillshade colours as lists (several light
           // directions) and crashes on a single colour
@@ -34,6 +36,7 @@ export function Relief3D({ on, dark = false }: { on: boolean; dark?: boolean }) 
         <Layer
           id="relief-buildings"
           type="fill-extrusion"
+          beforeId={beforeId}
           source-layer="building"
           minzoom={14}
           layout={{ visibility }}

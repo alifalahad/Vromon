@@ -134,6 +134,8 @@ export default function TripScreen() {
   const [why, setWhy] = useState<ItineraryItem | null>(null);
   const [replacing, setReplacing] = useState<ItineraryItem | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Full map: the plan sheet steps aside and the map takes the whole screen
+  const [fullMap, setFullMap] = useState(false);
   const [fitCount, setFitCount] = useState(0);
   const [snack, setSnack] = useState<{ message: string; undo?: () => void } | null>(null);
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null);
@@ -712,7 +714,7 @@ export default function TripScreen() {
         roadLines={roadLines}
         crossings={crossings}
         topPadding={insets.top + 56}
-        bottomPadding={sheetLow}
+        bottomPadding={fullMap ? insets.bottom + 96 : sheetLow}
         accessibilityLabel={t('plan.mapLabel', { n: f.n(day?.day_number ?? 1) })}
       />
 
@@ -757,11 +759,31 @@ export default function TripScreen() {
           </View>
         ) : null}
         <View style={styles.topRight} pointerEvents="box-none">
+          {pins.length > 0 && !fullMap ? (
+            <PressableScale onPress={() => setFullMap(true)} style={styles.fullMapButton} accessibilityLabel={t('plan.fullMap')} testID="trip-full-map">
+              <MaterialCommunityIcons name="arrow-expand" size={18} color={theme.colors.textPrimary} />
+              <Text style={styles.fullMapText}>{t('plan.fullMap')}</Text>
+            </PressableScale>
+          ) : null}
           {pins.length > 1 && <RoundButton icon="arrow-expand-all" label={t('plan.showDay')} onPress={() => setFitCount((c) => c + 1)} testID="trip-fit" />}
           {mine && <RoundButton icon="dots-vertical" label={t('plan.more')} onPress={() => setMenuOpen(true)} testID="trip-menu" />}
         </View>
       </View>
 
+      {fullMap ? (
+        <PressableScale
+          haptic="selection"
+          onPress={() => setFullMap(false)}
+          style={[styles.showPlan, { bottom: insets.bottom + 24 }]}
+          accessibilityLabel={t('plan.showPlan')}
+          testID="trip-show-plan"
+        >
+          <MaterialCommunityIcons name="format-list-bulleted" size={20} color={theme.colors.onAccent} />
+          <Text style={styles.showPlanText}>{t('plan.showPlan')}</Text>
+        </PressableScale>
+      ) : null}
+
+      {fullMap ? null : (
       <BottomSheet
         ref={sheet}
         index={0}
@@ -1007,6 +1029,7 @@ export default function TripScreen() {
           <TripDetails trip={data} ownerId={data.user_id ?? me.data?.id} mine={mine} hasPlan={hasPlan} />
         </BottomSheetScrollView>
       </BottomSheet>
+      )}
 
       {dragging && days.length > 1 && (
         <View pointerEvents="none" style={[styles.dropBar, { top: insets.top + 8 }]} testID="drop-days">
@@ -1180,6 +1203,34 @@ const useStyles = makeStyles((t) => {
     staleDot: { backgroundColor: t.colors.warning },
     updatedText: { ...t.type.footnote, color: t.colors.textSecondary },
     topRight: { flexDirection: 'row', gap: t.spacing.sm },
+    fullMapButton: {
+      minHeight: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      borderRadius: 24,
+      backgroundColor: t.colors.surface,
+      shadowColor: t.colors.shadow,
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 4,
+    },
+    fullMapText: { ...t.type.callout, fontWeight: '700', color: t.colors.textPrimary },
+    showPlan: {
+      position: 'absolute',
+      alignSelf: 'center',
+      minHeight: 52,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 22,
+      borderRadius: 26,
+      backgroundColor: t.colors.accentStrong,
+      elevation: 6,
+    },
+    showPlanText: { ...t.type.headline, color: t.colors.onAccent },
     round: {
       width: 48,
       height: 48,

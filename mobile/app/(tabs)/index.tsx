@@ -1,11 +1,10 @@
 /**
  * Vromon Mobile — Map tab (map home redesign, step 2; mockups 1 and 8).
  *
- * Full-bleed map that opens framed on the home country. Over it, at most four
- * floating things: the story capsule (top-left), the Map button (top-right: what
- * to show and the theme, MapSheet), a right-hand column (home ⇄ world, and + to
- * mark a place), and the dock above the tab bar (Dock: today's trip, the next
- * trip, an idea from the Want list, or a nudge). Tap a place for its sheet.
+ * Full-bleed map that opens framed on the home country. Over it: the story capsule
+ * (top-left), your profile photo (top-right: opens Settings), and a right-hand column
+ * at the bottom (the Map button: what to show and the theme, MapSheet; home ⇄ world;
+ * + to mark a place). Nothing else covers the map. Tap a place for its sheet.
  * Re-tapping the Map tab flies back home.
  */
 
@@ -22,7 +21,6 @@ import { useMe } from '../../src/features/account/useMe';
 import { mapPlaceCard } from '../../src/features/chat/share';
 import { useFootprints, useFriends } from '../../src/features/friends/queries';
 import { DestinationSheet } from '../../src/features/map/DestinationSheet';
-import { Dock } from '../../src/features/map/Dock';
 import { FriendLayers } from '../../src/features/map/FriendLayers';
 import { footprintsGeoJSON, friendsAt } from '../../src/features/map/friendGeo';
 import { pickDockState } from '../../src/features/map/dockState';
@@ -54,6 +52,7 @@ import { useHere } from '../../src/features/trips/today/useHere';
 import { resolveLanguage } from '../../src/i18n';
 import { destinationsApi } from '../../src/services/api';
 import type { Destination } from '../../src/types';
+import { Avatar } from '../../src/ui/Avatar';
 import { glass } from '../../src/ui/GlassSurface';
 import { haptics } from '../../src/ui/haptics';
 import { PressableScale } from '../../src/ui/PressableScale';
@@ -103,7 +102,6 @@ export default function MapScreen() {
   );
   const plannableNames = useMemo(() => (mapLayers.plannable ? (destinations ?? []).map((d) => d.name) : []), [mapLayers.plannable, destinations]);
   const friendData = useMemo(() => footprintsGeoJSON(friendsOn ? (footprints ?? []) : []), [friendsOn, footprints]);
-  const [dockHeight, setDockHeight] = useState(0);
   const [destination, setDestination] = useState<Destination | null>(null);
   const f = usePlanFormat();
   const queryClient = useQueryClient();
@@ -129,24 +127,20 @@ export default function MapScreen() {
     [tripToday.day, tripToday.state, here],
   );
   const framed = useRef<string | null>(null);
-  // Until the user moves the map, keep home framed clear of the dock as it changes size
+  // Set once the user moves the map: "home" then reframes on purpose only
   const userMoved = useRef(false);
-  const dockBucket = Math.round(dockHeight / 40);
   useEffect(() => {
-    if (!todayTrip && dockBucket > 0 && !userMoved.current) map.current?.home();
-  }, [dockBucket, todayTrip]);
-  useEffect(() => {
-    // Framed once the dock has its height (again when it grows as the trip's details load), so no stop hides under it
-    const key = todayTrip && tripToday.day && dockHeight ? `${todayTrip.id}-${tripToday.day.id}-${Math.round(dockHeight / 40)}` : null;
+    // On a trip today: framed on today's stops (again when the day's details load)
+    const key = todayTrip && tripToday.day ? `${todayTrip.id}-${tripToday.day.id}` : null;
     if (key && framed.current !== key) {
       const b = todayBounds(tripToday.day, here);
-      if (b) map.current?.fit(b, { top: insets.top + 96, bottom: dockHeight + 40, left: 32, right: 80 });
+      if (b) map.current?.fit(b, { top: insets.top + 96, bottom: 120, left: 32, right: 80 });
       framed.current = key;
     } else if (!key && framed.current) {
       framed.current = null;
       map.current?.home(); // the trip moment is over
     }
-  }, [todayTrip, tripToday.day, here, dockHeight, insets.top]);
+  }, [todayTrip, tripToday.day, here, insets.top]);
   const todayStops = tripToday.day ? tripToday.day.items.filter((i) => pointOf(i)).length : 0;
   const todayDone = tripToday.state ? tripToday.state.done.filter((i) => pointOf(i)).length : 0;
   // The trip day while zoomed in; zoomed out, the capsule is your story again
@@ -245,7 +239,7 @@ export default function MapScreen() {
           home={home}
           onScopeChange={setScope}
           onUserMove={() => (userMoved.current = true)}
-          bottomInset={dockHeight + DOCK_GAP}
+          bottomInset={DOCK_GAP}
           selected={place ?? quick?.place ?? null}
           namedPlaces={plannableNames}
           onLongPressPlace={(p, point) => {
@@ -314,18 +308,29 @@ export default function MapScreen() {
       </View>
 
       <PressableScale
-        style={[styles.round, styles.mapButton, { top: top + 4 }]}
+        style={[styles.round, styles.profileButton, { top: top + 4 }]}
         onPress={() => {
-          setPlace(null); // one sheet at a time
-          setSheetOpen(true);
+          setPlace(null);
+          router.push('/settings');
         }}
-        accessibilityLabel={t('map.sheetButton')}
-        testID="map-sheet-button"
+        accessibilityLabel={t('map.openSettings')}
+        testID="map-profile-button"
       >
-        <MaterialCommunityIcons name="layers-outline" size={24} color={theme.colors.textPrimary} />
+        <Avatar name={me?.display_name ?? me?.username} id={me?.id} uri={me?.avatar_url} size={ROUND - 6} />
       </PressableScale>
 
-      <View style={[styles.column, { bottom: DOCK_GAP + (dockHeight ? dockHeight + DOCK_GAP : 6) }]} pointerEvents="box-none">
+      <View style={[styles.column, { bottom: DOCK_GAP + 6 }]} pointerEvents="box-none">
+        <PressableScale
+          style={styles.round}
+          onPress={() => {
+            setPlace(null); // one sheet at a time
+            setSheetOpen(true);
+          }}
+          accessibilityLabel={t('map.sheetButton')}
+          testID="map-sheet-button"
+        >
+          <MaterialCommunityIcons name="layers-outline" size={24} color={theme.colors.textPrimary} />
+        </PressableScale>
         {todayTrip && here ? (
           <PressableScale
             style={styles.round}
@@ -366,13 +371,12 @@ export default function MapScreen() {
       </View>
 
       {!hintSeen ? (
-        <View style={[styles.hint, { bottom: DOCK_GAP + (dockHeight ? dockHeight + DOCK_GAP : 6) }]} pointerEvents="none" testID="mark-hint">
+        <View style={[styles.hint, { bottom: DOCK_GAP + 6 }]} pointerEvents="none" testID="mark-hint">
           <MaterialCommunityIcons name="gesture-tap-hold" size={18} color={theme.colors.textPrimary} />
           <Text style={styles.hintText}>{t('map.markHint')}</Text>
         </View>
       ) : null}
 
-      <Dock state={dock} here={here} style={styles.dock} onLayout={(e) => setDockHeight(e.nativeEvent.layout.height)} />
 
       <MapSheet
         open={sheetOpen}
@@ -500,10 +504,9 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mapButton: { position: 'absolute', right: t.spacing.lg },
-  // Bottom-right, just above the dock
+  profileButton: { position: 'absolute', right: t.spacing.lg },
+  // Bottom-right, above the tab bar
   column: { position: 'absolute', right: t.spacing.lg, alignItems: 'center', gap: t.spacing.md },
-  dock: { position: 'absolute', left: DOCK_GAP, right: DOCK_GAP, bottom: DOCK_GAP },
   mark: { width: MARK, height: MARK, borderRadius: MARK / 2 },
   pending: {
     ...glass(t),

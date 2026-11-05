@@ -176,6 +176,7 @@ function ThemedStack() {
             <Stack.Screen name="itinerary/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="stats/trips" options={{ title: t('screens.tripStats') }} />
             <Stack.Screen name="trip/route/[id]" options={{ title: t('screens.tripRoute') }} />
+            <Stack.Screen name="settings/index" options={{ title: t('settings.title') }} />
             <Stack.Screen name="settings/profile" options={{ title: t('profile.edit') }} />
             <Stack.Screen name="settings/home-country" options={{ title: t('profile.homeCountry') }} />
             <Stack.Screen name="settings/delete-account" options={{ title: t('deleteAccount.title') }} />

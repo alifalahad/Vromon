@@ -1,5 +1,5 @@
 /**
- * Vromon Mobile — Settings tab (13-settings-rows.jpg).
+ * Vromon Mobile — Settings (13-settings-rows.jpg), opened from the profile button on the Map tab.
  *
  * Profile, privacy & friends (with Chats and privacy: read receipts, notifications,
  * blocked people), preferences (synced to the account), account, data and About.
@@ -7,7 +7,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
-import { useRouter, useScrollToTop } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
@@ -32,7 +32,6 @@ import {
 import { resolveLanguage } from '../../src/i18n';
 import { meApi } from '../../src/services/api';
 import { Avatar } from '../../src/ui/Avatar';
-import { LargeTitle } from '../../src/ui/LargeTitle';
 import { OptionSheet } from '../../src/ui/OptionSheet';
 import { PressableScale } from '../../src/ui/PressableScale';
 import { SettingsRow, SettingsSection, SettingsSwitchRow } from '../../src/ui/SettingsRow';
@@ -45,7 +44,6 @@ export default function SettingsScreen() {
   const styles = useStyles();
   const { t } = useTranslation();
   const scrollRef = useRef<ScrollView>(null);
-  useScrollToTop(scrollRef);
   const [sheet, setSheet] = useState<Sheet>(null);
 
   const prefs = usePreferences();
@@ -81,8 +79,6 @@ export default function SettingsScreen() {
   return (
     <>
       <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={styles.content}>
-        <LargeTitle title={t('settings.title')} />
-
         {me ? (
           <PressableScale
             style={styles.profile}

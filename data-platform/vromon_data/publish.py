@@ -13,6 +13,9 @@ Attractions → `places`:
     that point to it keep working
   - Cox's Bazar's demo places (owner's decision, 2026-11-04): hidden once the destination
     has at least one published catalog place
+  - a town that isn't a district (Kuakata, Sreemangal) also gets the published attractions
+    within TOWN_RADIUS_KM of it (a day out from there), as rows of its own
+    (source_ref "catalog:<slug>@<town>"), the attraction staying where it is too
 
 Hotels and restaurants (service places) → `hotels`, `restaurants`:
   - only `published` ones with a location within SERVICE_RADIUS_KM of a destination's centre
@@ -52,6 +55,7 @@ from vromon_data.geo import haversine_km, load as load_geometry
 from vromon_data.text import name_similarity
 
 DEMO_DESTINATIONS = {"Cox's Bazar"}
+TOWN_RADIUS_KM = 25.0
 VISIT_HOURS = {"Culture": 1.0, "History": 1.5, "Nature": 2.5, "Family": 1.5, "Beach": 2.0, "Scenic": 1.0, "Shopping": 1.5}
 ACTIVITY = {"Nature": "High", "Beach": "Medium", "History": "Medium", "Culture": "Low", "Family": "Low", "Scenic": "Low",
             "Shopping": "Low"}
@@ -138,6 +142,49 @@ def publish_places(session: Session, *, dry_run: bool = False) -> dict:
         if new:
             session.add(VerificationEvent(entity_type="attraction", entity_id=a.id, method="publish_to_places",
                                           reason=f"place for {dest.name}"))
+
+    # Towns that aren't districts: the published attractions around them
+    districts = list(session.scalars(select(AdminUnit).where(AdminUnit.level == "district")))
+    towns = [d for d in destinations if not any(name_similarity(d.name, u.name_en or "") >= 90 for u in districts)]
+    for town in towns:
+        for a in session.scalars(select(Attraction).where(Attraction.status == "published", Attraction.latitude.isnot(None))):
+            if haversine_km(town.latitude, town.longitude, a.latitude, a.longitude) > TOWN_RADIUS_KM:
+                continue
+            ref = f"{CATALOG_REF_PREFIX}{a.slug}@{town.name.lower().replace(' ', '-')}"
+            place = session.scalar(select(Place).where(Place.source_ref == ref))
+            new = place is None
+            if new:
+                place = Place(destination_id=town.id, source_ref=ref)
+                session.add(place)
+            category = app_cat.get(a.category_code or "", "Scenic")
+            qid = session.scalar(select(EntityExternalId.external_id).where(
+                EntityExternalId.entity_type == "attraction", EntityExternalId.entity_id == a.id,
+                EntityExternalId.provider == "wikidata"))
+            place.destination_id, place.destination_name = town.id, town.name
+            place.name = a.canonical_name_en or a.canonical_name_bn
+            place.category = category
+            place.description = a.short_description_en or a.description_en
+            place.latitude, place.longitude = a.latitude, a.longitude
+            place.source = "catalog"
+            place.url = f"https://www.wikidata.org/wiki/{qid}" if qid else a.official_website
+            place.checked = True
+            place.cost_known = a.entry_fee_amount is not None
+            place.estimated_cost = float(a.entry_fee_amount) if place.cost_known else 0.0
+            place.hours_known = False
+            place.opening_time, place.closing_time = UNKNOWN_HOURS
+            place.rating_known, place.rating, place.review_count = False, NEUTRAL_RATING, 0
+            place.average_visit_duration = float(a.recommended_visit_duration or VISIT_HOURS.get(category, 1.5))
+            place.activity_level = ACTIVITY.get(category, "Medium")
+            place.crowd_level = "Medium"
+            place.tags = [category]
+            place.is_active = True
+            counts["town_places"] = counts.get("town_places", 0) + 1
+        # An attraction that stops being published hides its town rows too
+        for place in session.scalars(select(Place).where(Place.destination_id == town.id,
+                                                         Place.source_ref.like(f"{CATALOG_REF_PREFIX}%@%"))):
+            slug = place.source_ref[len(CATALOG_REF_PREFIX):].split("@")[0]
+            if session.scalar(select(Attraction.status).where(Attraction.slug == slug)) != "published":
+                place.is_active = False
 
     # Demo data: hidden (not deleted) once checked places exist for that destination
     for dest in destinations:

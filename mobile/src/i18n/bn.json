@@ -184,7 +184,8 @@
       "undatedPlaces_one": "তারিখ নেই: {{places}}, আরও {{n}}টি",
       "undatedPlaces_other": "তারিখ নেই: {{places}}, আরও {{n}}টি",
       "undatedPlacesOnly": "তারিখ নেই: {{places}}"
-    }
+    },
+    "openSettings": "আপনার প্রোফাইল ও সেটিংস"
   },
   "mapTheme": {
     "title": "মানচিত্র থিম",
@@ -755,7 +756,9 @@
       "wikivoyage": "উইকিভ্রমণ",
       "wikidata": "উইকিউপাত্ত"
     },
-    "map3d": "ত্রিমাত্রিক দৃশ্য"
+    "map3d": "ত্রিমাত্রিক দৃশ্য",
+    "fullMap": "পুরো মানচিত্র",
+    "showPlan": "পরিকল্পনা দেখুন"
   },
   "newTrip": {
     "title": "নতুন ভ্রমণ",

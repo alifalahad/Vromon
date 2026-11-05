@@ -18,7 +18,8 @@ import { makeStyles, useTheme } from '../../../ui/theme';
 import { useReduceMotion } from '../../../ui/useReduceMotion';
 import { planColors } from './colors';
 import { PITCH_3D, Relief3D } from './Map3D';
-import { ESRI_CREDIT, useStreetStyle } from './mapStyle';
+import { ANCHORS, ESRI_CREDIT, useStreetStyle } from './mapStyle';
+import { SatelliteLayer } from './SatelliteLayer';
 import { localDigits } from './usePlanFormat';
 import type { Coord, StopKind } from './timeline';
 
@@ -62,7 +63,9 @@ export function DayMap({
   const { t } = useTranslation();
   const [satellite, setSatellite] = React.useState(false);
   const [is3d, setIs3d] = React.useState(false);
-  const mapStyle = useStreetStyle(theme.scheme, satellite, lang);
+  const mapStyle = useStreetStyle(theme.scheme);
+  // Our lines go under the map's labels, so road names stay readable
+  const under = ANCHORS[theme.scheme].route;
   const padding = useMemo(() => ({ top: topPadding + 24, right: 48, bottom: bottomPadding + 24, left: 48 }), [topPadding, bottomPadding]);
   const bounds = useMemo(() => boundsFor(pins.map((p) => p.coord)), [pins]);
 
@@ -147,18 +150,21 @@ export function DayMap({
           ref={camera}
           initialViewState={bounds ? { bounds, padding } : { center: DEFAULT_CENTER, zoom: 6 }}
         />
-        <Relief3D on={is3d} dark={theme.scheme === 'dark' && !satellite} />
+        <SatelliteLayer on={satellite} scheme={theme.scheme} />
+        <Relief3D on={is3d} dark={theme.scheme === 'dark' && !satellite} beforeId={under} />
         <GeoJSONSource id="day-road" data={roads}>
           <Layer
             id="day-road-casing"
             type="line"
-            paint={{ 'line-color': '#FFFFFF', 'line-width': 7, 'line-opacity': theme.scheme === 'dark' ? 0.35 : 0.9 }}
+            beforeId={under}
+            paint={{ 'line-color': '#FFFFFF', 'line-width': 5, 'line-opacity': theme.scheme === 'dark' ? 0.3 : 0.8 }}
             layout={{ 'line-cap': 'round', 'line-join': 'round' }}
           />
           <Layer
             id="day-road"
             type="line"
-            paint={{ 'line-color': colors.visit, 'line-width': 4.5 }}
+            beforeId={under}
+            paint={{ 'line-color': colors.visit, 'line-width': 3, 'line-opacity': 0.9 }}
             layout={{ 'line-cap': 'round', 'line-join': 'round' }}
           />
         </GeoJSONSource>
@@ -167,6 +173,7 @@ export function DayMap({
           <Layer
             id="day-water"
             type="line"
+            beforeId={under}
             filter={['==', ['geometry-type'], 'LineString']}
             paint={{ 'line-color': '#1E88E5', 'line-width': 3.5, 'line-dasharray': [1.2, 1.2] }}
             layout={{ 'line-cap': 'round', 'line-join': 'round' }}
@@ -183,6 +190,7 @@ export function DayMap({
           <Layer
             id="day-line"
             type="line"
+            beforeId={under}
             paint={{ 'line-color': colors.visit, 'line-width': 2.5, 'line-opacity': 0.7, 'line-dasharray': [0.1, 2.2] }}
             layout={{ 'line-cap': 'round', 'line-join': 'round' }}
           />
@@ -262,9 +270,11 @@ export function DayMap({
           <Text style={styles.toggleText}>{is3d ? '2D' : '3D'}</Text>
         </PressableScale>
       </View>
-      <Text style={[styles.credit, { bottom: bottomPadding + 4 }]} accessibilityElementsHidden importantForAccessibility="no">
-        {ESRI_CREDIT}
-      </Text>
+      {satellite ? (
+        <Text style={[styles.credit, { bottom: bottomPadding + 4 }]} accessibilityElementsHidden importantForAccessibility="no">
+          {ESRI_CREDIT}
+        </Text>
+      ) : null}
     </View>
   );
 }

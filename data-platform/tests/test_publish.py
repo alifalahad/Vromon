@@ -168,3 +168,27 @@ def test_every_district_with_sights_becomes_a_destination_at_its_largest_town(se
     assert t["unreviewed_hidden"] == 1 and t["demo_deleted"] == 1 and t["demo_kept_for_trips"] == 1
     assert not session.get(Place, old.id).is_active and not session.get(Place, demo_used.id).is_active
     assert session.get(Place, reviewed.id).is_active
+
+
+def test_a_town_that_isnt_a_district_gets_the_reviewed_sights_around_it(session):
+    import uuid as _uuid
+
+    from app.models.catalog import AdminUnit, Attraction
+    from app.models.models import Destination, Place
+
+    d = _uuid.uuid4()
+    session.add(AdminUnit(id=d, country_iso2="BD", level="district", slug="x-patuakhali", name_en="Patuakhali",
+                          status="published"))
+    session.add(Destination(name="Kuakata", latitude=21.82, longitude=90.12))
+    session.flush()
+    session.add_all([
+        Attraction(slug="x-beach", canonical_name_en="Kuakata Beach", district_id=d, latitude=21.81, longitude=90.13,
+                   status="published", field_status={}),
+        Attraction(slug="x-far", canonical_name_en="Far Fort", district_id=d, latitude=22.40, longitude=90.40,
+                   status="published", field_status={}),
+    ])
+    session.commit()
+    report = publish.publish_places(session)
+    assert report["town_places"] == 1
+    p = session.scalar(select(Place).where(Place.source_ref == "catalog:x-beach@kuakata"))
+    assert p.destination_name == "Kuakata" and p.checked and p.source == "catalog"

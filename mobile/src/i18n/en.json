@@ -184,7 +184,8 @@
       "undatedPlaces_one": "No date yet: {{places}}, and {{n}} more",
       "undatedPlaces_other": "No date yet: {{places}}, and {{n}} more",
       "undatedPlacesOnly": "No date yet: {{places}}"
-    }
+    },
+    "openSettings": "Your profile and settings"
   },
   "mapTheme": {
     "title": "Map Theme",
@@ -755,7 +756,9 @@
       "wikivoyage": "Wikivoyage",
       "wikidata": "Wikidata"
     },
-    "map3d": "3D view"
+    "map3d": "3D view",
+    "fullMap": "Full map",
+    "showPlan": "Show the plan"
   },
   "newTrip": {
     "title": "New trip",
