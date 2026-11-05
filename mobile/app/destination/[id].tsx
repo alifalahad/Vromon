@@ -137,7 +137,7 @@ export default function DestinationScreen() {
         }
         ListFooterComponent={
           all.length > 0 ? (
-            <Text style={styles.footnote}>Ratings, prices and hours come from the Vromon database (sample data, not independently verified).</Text>
+            <Text style={styles.footnote}>Prices and hours are shown only where a source states them (Wikidata, Wikivoyage, the national portal); check them before you go.</Text>
           ) : null
         }
         renderItem={({ item }) => <PlaceCard place={item} />}

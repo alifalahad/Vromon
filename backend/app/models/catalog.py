@@ -653,6 +653,51 @@ class PriceObservation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class GeoMedia(Base):
+    """One photo for a place on the Explore screens (a district, division, country or city), from its
+    Wikidata item's image (P18) with the file's licence from Commons. Shown only when approved."""
+    __tablename__ = "geo_media"
+    __table_args__ = (UniqueConstraint("entity_type", "entity_key", name="uq_geo_media_entity"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)    # district / division / country / city
+    entity_key: Mapped[str] = mapped_column(String(64), nullable=False)     # admin unit slug / ISO 3166-1 alpha-2 / GeoNames id
+    wikidata_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    original_url: Mapped[str] = mapped_column(String(1000), nullable=False)    # the file page
+    file_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    thumb_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    creator: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    license: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    license_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    attribution: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    approval_status: Mapped[str] = mapped_column(String(20), nullable=False, default="needs_review")
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    job_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+
+
+class CountryFacts(Base):
+    """A country's basic facts as Wikidata states them (CC0): capital, population, area, currency,
+    official languages, calling code. Each value is Wikidata's preferred one; none is computed."""
+    __tablename__ = "country_facts"
+
+    iso2: Mapped[str] = mapped_column(String(2), primary_key=True)
+    wikidata_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    capital_en: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    capital_bn: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    population: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    population_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    area_km2: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    currencies: Mapped[list] = mapped_column(JSON, default=list, nullable=False)      # [{"code", "name"}]
+    languages: Mapped[list] = mapped_column(JSON, default=list, nullable=False)       # official languages, English names
+    calling_codes: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    description_en: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    description_bn: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    job_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+
+
 class MapExport(Base):
     """One generated district map, with every input version (guideline §7.4 step 17)."""
     __tablename__ = "map_exports"

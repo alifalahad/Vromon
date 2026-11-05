@@ -162,6 +162,10 @@ function ThemedStack() {
           <Stack.Protected guard={gate.inApp}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="destination/[id]" options={{ title: t('screens.destination') }} />
+            <Stack.Screen name="explore/district/[slug]" options={{ headerShown: false }} />
+            <Stack.Screen name="explore/districts" options={{ title: t('explore.districtsTitle') }} />
+            <Stack.Screen name="explore/continent/[name]" options={{ title: '' }} />
+            <Stack.Screen name="explore/country/[iso2]" options={{ title: '' }} />
             <Stack.Screen name="trip/new" options={{ headerShown: false, title: t('screens.planTrip'), presentation: 'modal' }} />
             <Stack.Screen name="trip/must-dos/[id]" options={{ title: t('screens.mustDos') }} />
             <Stack.Screen name="trip/conditions/[id]" options={{ title: t('conditions.title') }} />
