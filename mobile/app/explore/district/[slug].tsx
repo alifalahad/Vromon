@@ -306,7 +306,7 @@ const useStyles = makeStyles((t) => ({
   mapHint: {
     position: 'absolute',
     right: 12,
-    bottom: 12,
+    top: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
