@@ -26,6 +26,10 @@ if (-not $Cloudflared) {
         Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 if (-not $Cloudflared) { Write-Host "Install the tunnel first: winget install --id Cloudflare.cloudflared"; exit 1 }
+# Get-NetTCPConnection can miss servers bound to 127.0.0.1, so look at command lines as well
+$leftover = Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" |
+    Where-Object { $_.CommandLine -like "*--port $ApiPort*" -or $_.CommandLine -like "*http.server $ApkPort*" }
+if ($leftover) { Write-Host "A share backend is still running (scripts\share\stop.ps1 stops it)"; exit 1 }
 foreach ($port in $ApiPort, $ApkPort) {
     if (Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue) {
         Write-Host "Port $port is in use (is the share already running? scripts\share\stop.ps1 stops it)"; exit 1
