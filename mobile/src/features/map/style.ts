@@ -83,6 +83,15 @@ export function withImpliedCountries(visits: readonly Visit[]): Visit[] {
   return [...visits, ...implied.values()];
 }
 
+/**
+ * Close up, a country keeps its colour only when you marked the country itself and nothing in
+ * it: once a district, region or city in it is marked, those show instead of the whole country.
+ */
+export function countriesWithNothingInside(visits: readonly Visit[]): Visit[] {
+  const inside = new Set(visits.filter((v) => v.place_type !== 'country' && v.country_iso2).map((v) => v.country_iso2));
+  return visits.filter((v) => v.place_type === 'country' && !inside.has(v.place_code));
+}
+
 /** Friend comparison fill: In common, only You, only the friend. */
 export function compareColorExpression(
   mine: readonly string[],
