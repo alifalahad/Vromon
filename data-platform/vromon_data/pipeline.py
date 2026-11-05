@@ -128,6 +128,9 @@ class Connector:
     order: tuple[str, ...] = ()
     # False: records are staged and handed to after() only (e.g. fare rows written as fare products)
     creates_entities: bool = True
+    # Each run sees everything the source has, so a record missing from a run was removed. Not so for
+    # a daily price sheet or a crawl of some websites.
+    full_snapshot: bool = True
 
     def discover(self, ctx: Context) -> dict[str, Any]:
         return {"source": ctx.source["source_id"]}
@@ -319,7 +322,7 @@ def run(connector: Connector, session: Session, *, dry_run: bool = False, params
             session.flush()
 
         # Records the source no longer has: never deleted, a person decides
-        if params.get("full_snapshot", True):
+        if params.get("full_snapshot", connector.full_snapshot):
             for (etype, srid) in sorted(previous.keys() - seen):
                 entity_id = session.scalar(select(StagingRecord.target_entity_id).where(
                     StagingRecord.source_id == source["source_id"], StagingRecord.entity_type == etype,

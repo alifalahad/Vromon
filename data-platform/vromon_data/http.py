@@ -33,6 +33,9 @@ USER_AGENT = (
     f"VromonDataBot/0.1 (Bangladesh travel data pipeline) httpx/{httpx.__version__}"
 )
 MIN_INTERVAL_S = 2.0  # at most one request every 2 s per host
+# Collection is run with an AI assistant, so a site that shuts these agents out (hotels.gov.bd does)
+# is shut to this bot too, whatever it says about other crawlers
+AI_AGENTS = ("Claude-User", "ClaudeBot", "anthropic-ai")
 
 _ssl_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 _last_request: dict[str, float] = {}
@@ -54,15 +57,19 @@ def client(timeout: float = 60.0) -> httpx.Client:
 
 
 def _pace(host: str) -> None:
+    # The slot is booked under the lock and waited for outside it, so crawling many sites at once
+    # waits only on the same host
     with _lock:
-        wait = _last_request.get(host, 0.0) + MIN_INTERVAL_S - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        _last_request[host] = time.monotonic()
+        now = time.monotonic()
+        slot = max(now, _last_request.get(host, 0.0) + MIN_INTERVAL_S)
+        _last_request[host] = slot
+    if slot > now:
+        time.sleep(slot - now)
 
 
 def robots_allows(c: httpx.Client, url: str) -> bool:
-    """True unless the site's robots.txt disallows the URL. A missing robots.txt allows everything."""
+    """True unless the site's robots.txt disallows the URL, for this bot or for the AI agents that
+    run it. A missing robots.txt allows everything."""
     parts = urlsplit(url)
     base = f"{parts.scheme}://{parts.netloc}"
     if base not in _robots:
@@ -76,7 +83,7 @@ def robots_allows(c: httpx.Client, url: str) -> bool:
             parser = None
         _robots[base] = parser
     parser = _robots[base]
-    return parser is None or parser.can_fetch(USER_AGENT, url)
+    return parser is None or all(parser.can_fetch(agent, url) for agent in (USER_AGENT, *AI_AGENTS))
 
 
 def get(c: httpx.Client, url: str, *, check_robots: bool = True, **kwargs) -> httpx.Response:

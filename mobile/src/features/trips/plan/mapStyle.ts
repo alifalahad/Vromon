@@ -1,91 +1,72 @@
 /**
- * The street map under trip plans. With EXPO_PUBLIC_ESRI_API_KEY (an ArcGIS Location Platform key
- * with only the Basemaps privilege), Esri's basemap styles: navigation (night in dark mode) and
- * satellite imagery with labels; Esri requires "Powered by Esri" on the map (`ESRI_CREDIT`).
- * Without a key, as before: Light: OpenFreeMap "liberty" as it is. Dark:
- * OpenFreeMap "dark" recoloured so the sea, land, parks and roads can be told
- * apart (the original is near-black everywhere), in the trip screen's palette.
- * Same free tiles; only colours change, in the app.
+ * The map under trip plans: Esri basemaps, streets or satellite imagery with place labels.
+ *
+ * Without a key: Esri's public tile services (server.arcgisonline.com: World Street Map, World Imagery
+ * with World Boundaries and Places on top, and the dark grey canvas in dark mode). These need no key;
+ * they are raster tiles with English labels, and Esri no longer updates them. Esri's terms expect an
+ * app in production to run under an ArcGIS account, so before release set EXPO_PUBLIC_ESRI_API_KEY.
+ *
+ * With EXPO_PUBLIC_ESRI_API_KEY (an ArcGIS Location Platform key with only the basemap privileges):
+ * Esri's vector basemap styles, navigation (night in dark mode) and imagery, in Bangla or English.
+ *
+ * Either way Esri requires its credit on the map (`ESRI_CREDIT`).
  */
 
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
-import { useQuery } from '@tanstack/react-query';
 
 const ESRI_KEY = process.env.EXPO_PUBLIC_ESRI_API_KEY ?? '';
-export const HAS_ESRI = ESRI_KEY.length > 0;
+export const ESRI_KEYED = ESRI_KEY.length > 0;
 export const ESRI_CREDIT = 'Powered by Esri';
 const ESRI_STYLES = 'https://basemapstyles-api.arcgis.com/arcgis/rest/services/styles/v2/styles/arcgis';
+const ESRI_TILES = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+// Raster styles have no fonts of their own; the app's labels (Noto Sans) come from OpenFreeMap's
+const GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
 
-/** An Esri basemap style URL: `navigation`, `navigation-night` or `imagery` (satellite with labels). */
+/** An Esri basemap style URL (needs the key): `navigation`, `navigation-night` or `imagery` (with labels). */
 export function esriStyle(name: 'navigation' | 'navigation-night' | 'imagery', language: string): string {
   return `${ESRI_STYLES}/${name}?token=${encodeURIComponent(ESRI_KEY)}&language=${language === 'bn' ? 'bn' : 'en'}`;
 }
 
-export const STREETS = { light: 'https://tiles.openfreemap.org/styles/liberty', dark: 'https://tiles.openfreemap.org/styles/dark' };
+type Keyless = 'streets' | 'imagery' | 'dark';
 
-type Style = StyleSpecification;
-
-/** Paint changes by layer id */
-const DARK: Record<string, Record<string, string | number>> = {
-  background: { 'background-color': '#2A2A2A' },
-  water: { 'fill-color': '#1B2733' },
-  waterway: { 'line-color': '#1F3040' },
-  water_name: { 'text-color': '#6F8BA3', 'text-halo-color': 'rgba(0,0,0,0)' },
-  landcover_wood: { 'fill-color': '#2D3A2B' },
-  landuse_park: { 'fill-color': '#2D3A2B' },
-  landuse_residential: { 'fill-color': '#2F2F2F' },
-  landcover_ice_shelf: { 'fill-color': '#2A2A2A' },
-  building: { 'fill-color': '#353535', 'fill-outline-color': '#3C3C3C' },
-  aeroway_area: { 'fill-color': '#333333' },
-  'aeroway-area': { 'fill-color': '#333333' },
-  'aeroway-runway': { 'line-color': '#444444' },
-  'aeroway-taxiway': { 'line-color': '#3C3C3C' },
-  road_area_pier: { 'fill-color': '#2A2A2A' },
-  road_pier: { 'line-color': '#2A2A2A' },
-  highway_path: { 'line-color': '#3A3A3A' },
-  highway_minor: { 'line-color': '#404040' },
-  highway_major_casing: { 'line-color': '#4E4E4E' },
-  highway_major_inner: { 'line-color': '#4A4A4A' },
-  highway_major_subtle: { 'line-color': '#474747' },
-  highway_motorway_casing: { 'line-color': '#555555' },
-  highway_motorway_inner: { 'line-color': '#575757' },
-  highway_motorway_subtle: { 'line-color': '#4A4A4A' },
-  railway: { 'line-color': '#3A3A3A' },
-  railway_minor: { 'line-color': '#3A3A3A' },
-  railway_transit: { 'line-color': '#3A3A3A' },
-  railway_dashline: { 'line-color': '#2A2A2A' },
-  railway_minor_dashline: { 'line-color': '#2A2A2A' },
-  railway_transit_dashline: { 'line-color': '#2A2A2A' },
-  highway_name_other: { 'text-color': '#8A8A8A', 'text-halo-color': '#2A2A2A' },
-  highway_name_motorway: { 'text-color': '#8A8A8A' },
-  boundary_state: { 'line-color': '#4A4A4A' },
-  'boundary_country_z0-4': { 'line-color': '#555555' },
-  'boundary_country_z5-': { 'line-color': '#555555' },
+/** Esri's public tile services, bottom layer first, and the credit each asks for. */
+const KEYLESS: Record<Keyless, { services: string[]; attribution: string }> = {
+  streets: { services: ['World_Street_Map'], attribution: 'Esri, HERE, Garmin, USGS, NGA, OpenStreetMap contributors' },
+  imagery: {
+    services: ['World_Imagery', 'Reference/World_Boundaries_and_Places'],
+    attribution: 'Esri, Vantor, Earthstar Geographics, and the GIS User Community',
+  },
+  dark: {
+    services: ['Canvas/World_Dark_Gray_Base', 'Canvas/World_Dark_Gray_Reference'],
+    attribution: 'Esri, HERE, Garmin, OpenStreetMap contributors',
+  },
 };
-const DARK_PLACE_TEXT = { 'text-color': '#A0A0A0', 'text-halo-color': 'rgba(42,42,42,0.9)' };
 
-/** The style with the dark palette applied (a new object; the original is left as it is). */
-export function recolour(style: Style): Style {
+/** A keyless Esri style: its tile services as raster layers. */
+export function esriKeylessStyle(kind: Keyless): StyleSpecification {
+  const { services, attribution } = KEYLESS[kind];
+  const ids = services.map((s) => `esri-${s.replace(/\W+/g, '-').toLowerCase()}`);
   return {
-    ...style,
-    layers: style.layers.map((l) => {
-      const change = DARK[l.id] ?? (l.id.startsWith('place_') ? DARK_PLACE_TEXT : undefined);
-      return (change && 'paint' in l ? { ...l, paint: { ...l.paint, ...change } } : l) as typeof l;
-    }),
-  };
+    version: 8,
+    glyphs: GLYPHS,
+    sources: Object.fromEntries(
+      services.map((s, i) => [
+        ids[i],
+        { type: 'raster', tiles: [`${ESRI_TILES}/${s}/MapServer/tile/{z}/{y}/{x}`], tileSize: 256, maxzoom: 19, attribution },
+      ]),
+    ),
+    layers: ids.map((id) => ({ id, type: 'raster', source: id })),
+  } as StyleSpecification;
 }
 
-/** The map style to use: the recoloured dark style once fetched (the plain URL until then, or offline). */
-export function useStreetStyle(scheme: 'light' | 'dark', satellite = false, language = 'en'): string | Style {
-  const dark = useQuery({
-    queryKey: ['mapStyle', 'dark'],
-    queryFn: async () => recolour((await (await fetch(STREETS.dark)).json()) as Style),
-    enabled: scheme === 'dark' && !HAS_ESRI,
-    staleTime: Infinity,
-    gcTime: Infinity,
-    retry: 1,
-  });
-  if (HAS_ESRI) return esriStyle(satellite ? 'imagery' : scheme === 'dark' ? 'navigation-night' : 'navigation', language);
-  if (scheme === 'light') return STREETS.light;
-  return dark.data ?? STREETS.dark;
+const KEYLESS_STYLES: Record<Keyless, StyleSpecification> = {
+  streets: esriKeylessStyle('streets'),
+  imagery: esriKeylessStyle('imagery'),
+  dark: esriKeylessStyle('dark'),
+};
+
+/** The map style to use: streets (dark-mode canvas in dark mode) or satellite imagery. */
+export function useStreetStyle(scheme: 'light' | 'dark', satellite = false, language = 'en'): string | StyleSpecification {
+  if (ESRI_KEYED) return esriStyle(satellite ? 'imagery' : scheme === 'dark' ? 'navigation-night' : 'navigation', language);
+  return KEYLESS_STYLES[satellite ? 'imagery' : scheme === 'dark' ? 'dark' : 'streets'];
 }
