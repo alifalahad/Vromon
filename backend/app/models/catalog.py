@@ -620,6 +620,39 @@ class ServicePlace(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class PriceObservation(Base):
+    """A price as one source states it on one date: a room rate a hotel publishes, an official tariff, a
+    market's retail price. As with fares (guideline §3.5), kinds are never merged into one number; each
+    keeps its source, the words around it and when it was checked."""
+    __tablename__ = "price_observations"
+    __table_args__ = (Index("ix_price_observations_place", "service_place_id", "status"),
+                      Index("ix_price_observations_item", "price_kind", "item_key", "observed_on"))
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    # rack_rate (on the hotel's own website) / official_tariff / market_retail
+    price_kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    service_place_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("service_places.id"), nullable=True)
+    item_key: Mapped[str] = mapped_column(String(200), nullable=False)          # stable key for the item and unit
+    item_label: Mapped[str] = mapped_column(String(200), nullable=False)        # as the source prints it
+    unit: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)      # per night / প্রতি কেজি …
+    amount_min: Mapped[float] = mapped_column(Float, nullable=False)
+    amount_max: Mapped[Optional[float]] = mapped_column(Float, nullable=True)   # a range, as printed
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="BDT")
+    district_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("admin_units.id"), nullable=True)
+    area_label: Mapped[Optional[str]] = mapped_column(String(400), nullable=True)   # e.g. the markets surveyed
+    observed_on: Mapped[date] = mapped_column(Date, nullable=False)             # the date the source gives, else checked
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    artifact_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("source_artifacts.id"), nullable=True)
+    source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    context: Mapped[Optional[str]] = mapped_column(Text, nullable=True)         # the words around a price on a page
+    last_checked_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    verification_method: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="needs_review")  # + published / superseded / rejected
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    job_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class MapExport(Base):
     """One generated district map, with every input version (guideline §7.4 step 17)."""
     __tablename__ = "map_exports"

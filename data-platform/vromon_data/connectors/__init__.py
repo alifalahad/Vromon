@@ -17,7 +17,8 @@ def all_connectors() -> dict[str, type]:
     from vromon_data.connectors.gi_register import GiRegister
     from vromon_data.connectors.portal_spots import PortalTouristSpots
     from vromon_data.connectors.service_places import MocatStarHotels, OvertureServicePlaces
+    from vromon_data.connectors.prices import HotelWebsiteRates, TcbRetailPrices
     return {c.name: c for c in (GeoBoundariesBGD, CuratedAdminNames, PortalNames, WikidataAttractions, CommonsMedia,
                                 OurAirportsBD, OsmHubsBD, RailwayTimetable, RailwayFaresEast, DistrictJourneys,
                                 TranscribedFares, GiRegister, PortalTouristSpots, OvertureServicePlaces,
-                                MocatStarHotels)}
+                                MocatStarHotels, TcbRetailPrices, HotelWebsiteRates)}

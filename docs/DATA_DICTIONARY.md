@@ -88,3 +88,9 @@ This file grows with each phase.
 | Table | Notes |
 |---|---|
 | `service_places` | `kind`: accommodation / food. `category`: hotel, resort, inn, restaurant, cafe, fast_food_restaurant, bar, smoothie_juice_bar … `official_star_rating` comes only from the ministry's list (verified). `listing_confidence` is Overture's own score. Prices, ratings and opening hours are not stored until a source states them. |
+
+## Prices
+
+| Table | Notes |
+|---|---|
+| `price_observations` | One price as one source states it on one date. `price_kind`: `rack_rate` (a room rate on the hotel's own website), `official_tariff`, `market_retail` (TCB's daily Dhaka market prices). `amount_min`/`amount_max` keep a printed range. `context` keeps the words around a price read from a web page, `artifact_id` the page itself. A new reading of a hotel's site marks the last one `superseded` (kept). Kinds are never combined into one number. |

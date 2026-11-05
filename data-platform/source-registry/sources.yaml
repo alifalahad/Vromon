@@ -285,6 +285,34 @@ sources:
     reliability_class: official_government
     recommended_use: production
 
+  - source_id: tcb_prices
+    source_name: Daily retail prices of essential commodities, Dhaka city
+    organization: Trading Corporation of Bangladesh (TCB)
+    source_type: official_spreadsheet
+    website_url: https://tcb.gov.bd/pages/daily-rmps
+    access_method: xlsx
+    license_name: "government publication (facts used: item, unit, lowest and highest price, date)"
+    terms_review_status: open_license
+    coverage: about 60 foods in seven Dhaka markets, published daily
+    reliability_class: official_government
+    recommended_use: production
+    notes: Market (grocery) prices, not restaurant meal prices.
+
+  - source_id: hotel_websites
+    source_name: Room rates published on hotels' own websites
+    organization: The hotels themselves (each listing's own website)
+    source_type: operator_websites
+    website_url: https://docs.overturemaps.org/guides/places
+    access_method: html
+    license_name: "facts used: room type, rate, currency, the page and date read; robots.txt and AI-agent opt-outs respected"
+    terms_review_status: not_reviewed
+    coverage: hotels whose website states rates as text
+    reliability_class: official_operator
+    recommended_use: production
+    notes: >-
+      Rack rates as each hotel publishes them; may be out of date, so the date read is shown.
+      hotels.gov.bd (Parjatan) is not read: its robots.txt shuts out AI agents.
+
   - source_id: dpdt_gi
     source_name: Geographical Indication register
     organization: Department of Patents, Designs and Trademarks (DPDT)

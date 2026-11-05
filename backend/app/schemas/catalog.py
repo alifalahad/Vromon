@@ -199,4 +199,35 @@ class ServicePlaceOut(BaseModel):
     official_star_rating: Optional[int] = None
     trust: str                       # official / business_listing
     source: Optional[str] = None
-    price: Optional[str] = None      # always None until a source states it: shown as "Price not known"
+    price: Optional["RoomPrice"] = None   # None until a source states one: shown as "Price not known"
+
+
+class RoomPrice(BaseModel):
+    """The lowest room rate a hotel publishes on its own website, as read on `checked_at`: a rack rate
+    (it may have changed; confirm when booking), never a quote or a booking price."""
+    from_amount: float
+    currency: str
+    room: Optional[str] = None       # the room type it is for, as printed
+    kind: str = "rack_rate"
+    rates_found: int = 1
+    source_url: Optional[str] = None
+    checked_at: datetime
+
+
+class MarketPriceOut(BaseModel):
+    """A retail market price as an official survey prints it (TCB, Dhaka): lowest and highest, per unit, on a date."""
+    item: str
+    unit: Optional[str] = None
+    low: float
+    high: Optional[float] = None
+    currency: str
+    date: str
+    area: Optional[str] = None
+    week_before_low: Optional[float] = None
+    week_before_high: Optional[float] = None
+    source: Optional[str] = None
+    source_url: Optional[str] = None
+    notes: Optional[str] = None
+
+
+ServicePlaceOut.model_rebuild()

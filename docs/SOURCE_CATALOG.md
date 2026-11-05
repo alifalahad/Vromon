@@ -84,3 +84,23 @@ unseenbd.com and unseenbangladesh.com were reviewed for which fields to model (p
   - The other 37 have their district but no location, and wait in review with the closest listing named. Some are only company names (e.g. "কারিশমা সার্ভিসেস লিমিটেড"); others are spelt differently in the listings (FARS, Tower Inn, City Inn).
   - Matching rules: whole names only, so "Long Beach" is not "Inani Long Bay"; names under 8 letters must match at 95 or more, so "Sea Crown" is not "Sea Queen"; a listing that two entries point to gets neither.
 - Prices, room rates, ratings and opening hours: in neither source, so the API returns them as unknown.
+
+## 6. Prices (2026-11-05)
+
+| Source | What it gives | Use |
+|---|---|---|
+| **TCB** (Trading Corporation of Bangladesh), "ঢাকা মহানগরীর নিত্য প্রয়োজনীয় পণ্যের দৈনিক খুচরা বাজার দর", tcb.gov.bd/pages/daily-rmps | A spreadsheet every day: the lowest and highest retail price of about 60 essentials in 7 Dhaka markets, with the memo number and the markets named | **Production**, `tcb_retail_prices`. Food rows only: paper and steel rod are skipped, and so are items absent that day (both prices 0). These are market prices, not restaurant prices. |
+| **Hotels' own websites** (each listing's website; not booking platforms or social pages) | Room types and rack rates, where a site states them as text | **Production**, `hotel_website_rates`. A price is published only when a currency is next to it, a room word is near it, and nothing before it makes it something else (extra bed, breakfast, per person …). Otherwise it waits for review. Each price keeps the page, the words around it and the date read. robots.txt is respected, including any opt-out for AI agents. |
+| hotels.gov.bd (Parjatan's own hotels and motels) | Rates of the government's own hotels | **Not used.** Its robots.txt shuts out AI agents (Claude-User, ClaudeBot, ChatGPT-User …), and it was down (Cloudflare 522). Ask BPC's marketing office for the tariff sheet instead. |
+| parjatan.gov.bd hotel and motel pages | Descriptions and photos only, no rates | — |
+| Booking.com, Agoda, Google | Live prices | Terms forbid copying. Their partner (affiliate) APIs are the licensed route if live prices are wanted. |
+| Restaurant meal prices | — | No official or open source. A few restaurant websites carry menus. |
+
+**Result of the 2026-11-05 price import**
+
+- **TCB:** 10 daily sheets (26 Oct – 4 Nov 2026), 55 foods each, so 550 prices. They match the sheet exactly; spot-checked rice, rui, beef, chicken and eggs.
+- **Hotel websites:** 1,137 hotels have a website of their own.
+  - 477 sites didn't answer, and 62 shut bots or AI agents out.
+  - **200 hotels** have **1,003 published room rates**, and 460 more rates wait for review; **130 published listings** show a taka "from" price.
+  - A hand check of 30 random published rates found 27 real room rates. That led to the rules for packages, extra persons, children's charges and rates far below the hotel's others, and to sending prices on unfinished template sites ("Lorem ipsum") to review.
+- **Not used**, by their own terms or robots.txt: Google Maps, Booking.com, Agoda, foodpanda, Foodi, Pathao Food, hotels.gov.bd. Their licensed routes are the Google Places API, the Booking.com and Agoda partner APIs, and, for food delivery, a partnership.

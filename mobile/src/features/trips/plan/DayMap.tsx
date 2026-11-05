@@ -16,7 +16,7 @@ import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
 import { useReduceMotion } from '../../../ui/useReduceMotion';
 import { planColors } from './colors';
-import { ESRI_CREDIT, HAS_ESRI, useStreetStyle } from './mapStyle';
+import { ESRI_CREDIT, useStreetStyle } from './mapStyle';
 import { localDigits } from './usePlanFormat';
 import type { Coord, StopKind } from './timeline';
 
@@ -221,26 +221,22 @@ export function DayMap({
           />
         </GeoJSONSource>
       </Map>
-      {HAS_ESRI ? (
-        <>
-          <PressableScale
-            pressEffect="opacity"
-            haptic="selection"
-            onPress={() => setSatellite((s) => !s)}
-            style={[styles.toggle, { top: topPadding + 8 }]}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: satellite }}
-            accessibilityLabel={t('plan.mapSatellite')}
-            hitSlop={8}
-            testID="map-satellite-toggle"
-          >
-            <Text style={styles.toggleText}>{satellite ? t('plan.mapStreets') : t('plan.mapSatellite')}</Text>
-          </PressableScale>
-          <Text style={[styles.credit, { bottom: bottomPadding + 4 }]} accessibilityElementsHidden importantForAccessibility="no">
-            {ESRI_CREDIT}
-          </Text>
-        </>
-      ) : null}
+      <PressableScale
+        pressEffect="opacity"
+        haptic="selection"
+        onPress={() => setSatellite((s) => !s)}
+        style={[styles.toggle, { top: topPadding + 8 }]}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: satellite }}
+        accessibilityLabel={t('plan.mapSatellite')}
+        hitSlop={8}
+        testID="map-satellite-toggle"
+      >
+        <Text style={styles.toggleText}>{satellite ? t('plan.mapStreets') : t('plan.mapSatellite')}</Text>
+      </PressableScale>
+      <Text style={[styles.credit, { bottom: bottomPadding + 4 }]} accessibilityElementsHidden importantForAccessibility="no">
+        {ESRI_CREDIT}
+      </Text>
     </View>
   );
 }

@@ -197,3 +197,44 @@ def test_hotels_say_what_is_official_and_what_is_a_listing(client):
     rows = client.get("/api/v1/catalog/hotels", params={"district": "t-district-barishal"}).json()
     assert [(r["slug"], r["trust"], r["price"]) for r in rows] == [("t-sea-gull", "official", None), ("t-inn", "business_listing", None)]
     assert [r["slug"] for r in client.get("/api/v1/catalog/hotels", params={"stars": 5}).json()] == ["t-sea-gull"]
+
+
+def test_hotel_price_is_its_lowest_published_rate_with_where_and_when(client):
+    from datetime import date, datetime
+    from sqlalchemy import select
+    from app.models.catalog import PriceObservation, ServicePlace
+    with _ApiTestSession() as db:
+        d = db.scalar(select(AdminUnit.id).where(AdminUnit.slug == "t-district-barishal"))
+        h = ServicePlace(slug="t-rated", kind="accommodation", category="hotel", name_en="Rated Hotel", district_id=d,
+                         listing_confidence=0.99, status="published", field_status={})
+        db.add(h)
+        db.flush()
+        common = dict(price_kind="rack_rate", service_place_id=h.id, unit="per night", observed_on=date(2026, 11, 5),
+                      source_id="hotel_websites", source_url="https://rated.example/rooms", last_checked_at=datetime(2026, 11, 5, 6))
+        db.add_all([PriceObservation(item_key="room|deluxe", item_label="Deluxe", amount_min=6000, currency="BDT", status="published", **common),
+                    PriceObservation(item_key="room|twin", item_label="Twin", amount_min=4500, currency="BDT", status="published", **common),
+                    PriceObservation(item_key="room|suite", item_label="Suite", amount_min=40, currency="USD", status="published", **common),
+                    PriceObservation(item_key="room|x", item_label="Extra bed", amount_min=800, currency="BDT", status="needs_review", **common)])
+        db.commit()
+    row = next(r for r in client.get("/api/v1/catalog/hotels", params={"q": "rated"}).json() if r["slug"] == "t-rated")
+    p = row["price"]
+    assert (p["from_amount"], p["currency"], p["room"], p["kind"], p["rates_found"]) == (4500, "BDT", "Twin", "rack_rate", 3)
+    assert p["source_url"] == "https://rated.example/rooms" and p["checked_at"].startswith("2026-11-05")
+
+
+def test_market_prices_latest_day_with_the_week_before(client):
+    from datetime import date, datetime
+    from app.models.catalog import PriceObservation
+    with _ApiTestSession() as db:
+        common = dict(price_kind="market_retail", unit="প্রতি কেজি", currency="BDT", source_id="tcb_prices", status="published",
+                      area_label="ঢাকা মহানগর", last_checked_at=datetime(2026, 11, 5))
+        db.add_all([PriceObservation(item_key="চাল|প্রতি কেজি", item_label="চাল", amount_min=70, amount_max=90, observed_on=date(2026, 11, 4), **common),
+                    PriceObservation(item_key="চাল|প্রতি কেজি", item_label="চাল", amount_min=68, amount_max=88, observed_on=date(2026, 10, 28), **common),
+                    PriceObservation(item_key="ডিম|প্রতি হালি", item_label="ডিম", amount_min=45, amount_max=50, observed_on=date(2026, 11, 4), **common)])
+        db.commit()
+    rows = client.get("/api/v1/catalog/market-prices").json()
+    rice = next(r for r in rows if r["item"] == "চাল")
+    assert (rice["date"], rice["low"], rice["high"], rice["week_before_low"], rice["week_before_high"]) == ("2026-11-04", 70, 90, 68, 88)
+    assert [r["item"] for r in client.get("/api/v1/catalog/market-prices", params={"q": "ডিম"}).json()] == ["ডিম"]
+    assert client.get("/api/v1/catalog/market-prices", params={"on": "2026-10-28"}).json()[0]["low"] == 68
+    assert client.get("/api/v1/catalog/market-prices", params={"on": "bad"}).status_code == 422

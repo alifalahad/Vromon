@@ -32,11 +32,11 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.catalog import (
     AdminAdjacency, AdminBoundary, AdminUnit, Attraction, AttractionCategory, AttractionMedia, DataSource, FareProduct,
-    JourneyCalculation, LocalFood, ServicePlace, TimetableVersion, Train, TrainService, TransportHub,
+    JourneyCalculation, LocalFood, PriceObservation, ServicePlace, TimetableVersion, Train, TrainService, TransportHub,
 )
 from app.schemas.catalog import (
     AdminUnitDetail, AdminUnitOut, AttractionDetail, AttractionOut, CategoryOut, FareOut, FieldSource, HubOut, PhotoOut,
-    FoodOut, JourneyPlan, RoadLeg, ServicePlaceOut, SourceOut, TrainServiceOut,
+    FoodOut, JourneyPlan, MarketPriceOut, RoadLeg, RoomPrice, ServicePlaceOut, SourceOut, TrainServiceOut,
 )
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -355,6 +355,7 @@ def _service_places(db: Session, kind: str, district: Optional[str], category: O
                                     ServicePlace.listing_confidence.desc().nullslast()).limit(limit)).all()
     slugs = _slugs(db, {p.district_id for p in rows})
     names = dict(db.execute(select(DataSource.source_id, DataSource.source_name)).all())
+    prices = _room_prices(db, [p.id for p in rows]) if kind == "accommodation" else {}
     out = []
     for p in rows:
         src = (p.field_status or {}).get("latitude", {}).get("source_id") or (p.field_status or {}).get("name_bn", {}).get("source_id")
@@ -363,7 +364,26 @@ def _service_places(db: Session, kind: str, district: Optional[str], category: O
                                    address=p.address, website=p.website, phone=p.phone,
                                    official_star_rating=p.official_star_rating,
                                    trust="official" if p.official_star_rating else "business_listing",
-                                   source=names.get(src)))
+                                   source=names.get(src), price=prices.get(p.id)))
+    return out
+
+
+def _room_prices(db: Session, place_ids: list) -> dict:
+    """Each hotel's lowest published room rate, in taka when it publishes one, else as it publishes it."""
+    if not place_ids:
+        return {}
+    rates = db.scalars(select(PriceObservation).where(PriceObservation.service_place_id.in_(place_ids),
+                                                      PriceObservation.price_kind == "rack_rate",
+                                                      PriceObservation.status == "published")).all()
+    by_place: dict = {}
+    for r in rates:
+        by_place.setdefault(r.service_place_id, []).append(r)
+    out = {}
+    for pid, rs in by_place.items():
+        bdt = [r for r in rs if r.currency == "BDT"]
+        pick = min(bdt or rs, key=lambda r: r.amount_min)
+        out[pid] = RoomPrice(from_amount=pick.amount_min, currency=pick.currency, room=pick.item_label, kind=pick.price_kind,
+                             rates_found=len(rs), source_url=pick.source_url, checked_at=pick.last_checked_at)
     return out
 
 
@@ -380,3 +400,38 @@ def restaurants(district: Optional[str] = None, category: Optional[str] = None,
                 db: Session = Depends(get_db)):
     """Restaurants, cafés, fast food: business listings (not checked by Vromon)."""
     return _service_places(db, "food", district, category, q, None, limit)
+
+
+@router.get("/market-prices", response_model=List[MarketPriceOut])
+def market_prices(q: Optional[str] = Query(None, min_length=1, max_length=100), on: Optional[str] = Query(None, description="YYYY-MM-DD"),
+                  db: Session = Depends(get_db)):
+    """Food prices in Dhaka's markets as TCB publishes them each day (the latest day, or `on`), with
+    the same item a week before. Market (grocery) prices, not restaurant prices."""
+    from datetime import date, timedelta
+    base = select(PriceObservation).where(PriceObservation.price_kind == "market_retail", PriceObservation.status == "published")
+    if on:
+        try:
+            day = date.fromisoformat(on)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="on: YYYY-MM-DD")
+    else:
+        day = db.scalar(select(func.max(PriceObservation.observed_on)).where(PriceObservation.price_kind == "market_retail",
+                                                                              PriceObservation.status == "published"))
+        if day is None:
+            return []
+    stmt = base.where(PriceObservation.observed_on == day)
+    if q:
+        stmt = stmt.where(PriceObservation.item_label.like(f"%{q.strip()}%"))
+    rows = db.scalars(stmt.order_by(PriceObservation.item_label)).all()
+    # The same item about a week before (the nearest sheet 6-8 days earlier)
+    before = {}
+    for r in db.scalars(base.where(PriceObservation.observed_on.between(day - timedelta(days=8), day - timedelta(days=6)),
+                                   PriceObservation.item_key.in_([r.item_key for r in rows]))
+                        .order_by(PriceObservation.observed_on)):
+        before.setdefault(r.item_key, r)
+    names = dict(db.execute(select(DataSource.source_id, DataSource.source_name)).all())
+    return [MarketPriceOut(item=r.item_label, unit=r.unit, low=r.amount_min, high=r.amount_max, currency=r.currency,
+                           date=r.observed_on.isoformat(), area=r.area_label,
+                           week_before_low=before[r.item_key].amount_min if r.item_key in before else None,
+                           week_before_high=before[r.item_key].amount_max if r.item_key in before else None,
+                           source=names.get(r.source_id), source_url=r.source_url, notes=r.notes) for r in rows]
