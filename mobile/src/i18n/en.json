@@ -1751,7 +1751,7 @@
     "save": "Save",
     "share": "Share",
     "savedTitle": "Saved",
-    "savedBody": "It's in your gallery, in the Vromon album.",
+    "savedBody": "It's in your phone's gallery.",
     "saveFailedTitle": "Couldn't save",
     "deniedBody": "Allow Vromon to save photos in your phone's settings, then try again.",
     "failedBody": "Something went wrong. Try again.",

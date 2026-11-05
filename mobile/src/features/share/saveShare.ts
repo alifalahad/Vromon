@@ -1,5 +1,6 @@
 /**
- * Pictures leave the app two ways: saved to the phone's gallery (album "Vromon"), or handed to
+ * Pictures leave the app two ways: saved to the phone's gallery (in a "Vromon" album where the
+ * phone allows it; with write-only access Android puts it in DCIM), or handed to
  * Android's share sheet, where Instagram and Facebook offer Story, Feed or a message. Pictures
  * from the server (district maps) are downloaded to the cache first.
  */

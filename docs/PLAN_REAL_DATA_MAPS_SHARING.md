@@ -111,3 +111,17 @@ day map; the trip route screen uses it; all trip maps credit Esri.
 ## 8. Test
 
 Backend, data-platform and mobile test suites; type check and lint; each part on the phone.
+
+## Status (5 Nov 2026, evening)
+
+| Part | State | Checked on the phone |
+|---|---|---|
+| 1 Every district plannable | Done: 64 districts + Kuakata, Sreemangal (65); 63 checked; 13 demo rows deleted, 30 kept hidden for saved trips; 215 unreviewed imports hidden | "Where to?" lists 65 |
+| 2 Road routes | Done: incomplete routes refetched every 30 s; leg-by-leg fallback | Rajshahi trip: all 15 legs get road lines from the server |
+| 3 District map renders | Done: 128 published renders served as JPEG (card / full), full screen with zoom, English / Bangla | Bandarban: map, full screen, Save, Share |
+| 4 Profile photos (ImgBB) | Done, needs `IMGBB_API_KEY` in backend/.env (until then the upload answers 503) | Not yet (no key) |
+| 5 Districts on the travel map | Done: `district` place type, 64 bundled outlines, coloured close up, tap to mark; country coloured from what's inside | Marking and colouring seen |
+| 6 Export and share | Done: poster Save + Share; friends comparison poster; district map Save + Share. Saved pictures land in DCIM (write-only access) | Save: in the gallery; Share: Facebook Story offered |
+| 7 Esri in trip planning | The trip screen's day map is the trip-planning map (Esri, Satellite, 3D); TripMap is unused | Yes |
+
+Open: re-plan the 15 saved trips that still use demo rows (owner's decision); an ImgBB key.
