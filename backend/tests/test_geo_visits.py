@@ -126,6 +126,24 @@ class TestVisits:
         assert rows.json()[0]["country_iso2"] == "BD"
         assert client.get(f"/api/v1/users/{user.id}/stats").json()["regions"] == 1
 
+    def test_a_bangladesh_district_can_be_marked(self, client, act_as):
+        from app.models.catalog import AdminUnit
+        with _ApiTestSession() as db:
+            if db.query(AdminUnit).filter_by(slug="bd-district-bandarban").first() is None:
+                db.add(AdminUnit(country_iso2="BD", level="district", slug="bd-district-bandarban", name_en="Bandarban",
+                                 status="published", field_status={}))
+                db.commit()
+        user = _user("dist")
+        act_as(user)
+        rows = client.put("/api/v1/me/visits", json={"visits": [
+            {"place_type": "district", "place_code": "BD-bandarban", "status": "lived"}]})
+        assert rows.status_code == 200, rows.text
+        assert rows.json()[0]["country_iso2"] == "BD"
+        assert client.get(f"/api/v1/users/{user.id}/stats").json()["districts"] == 1
+        bad = client.put("/api/v1/me/visits", json={"visits": [
+            {"place_type": "district", "place_code": "BD-atlantis", "status": "visited"}]})
+        assert bad.status_code == 422 and "district:BD-atlantis" in bad.json()["detail"]
+
     def test_unknown_places_and_bad_dates_are_rejected(self, client, act_as):
         act_as(_user("bad"))
         bad = client.put("/api/v1/me/visits", json={"visits": [

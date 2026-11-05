@@ -90,7 +90,7 @@ export default function SettingsScreen() {
             accessibilityLabel={`${me.display_name ?? me.username}, ${t('profile.edit')}`}
             testID="settings-profile"
           >
-            <Avatar name={me.display_name ?? me.username} id={me.id} size={56} />
+            <Avatar name={me.display_name ?? me.username} id={me.id} uri={me.avatar_url} size={56} />
             <View style={styles.profileText}>
               <Text style={styles.profileName} numberOfLines={1}>
                 {me.display_name ?? me.username}

@@ -34,7 +34,7 @@ import { usePreferences } from '../preferences/store';
 import { friendlyRange } from '../trips/plan/timeline';
 import { usePlanFormat } from '../trips/plan/usePlanFormat';
 import { durationDays, localToday } from '../trips/dates';
-import { homeRegionName } from './geoData';
+import { homeDistrictName, homeRegionName } from './geoData';
 import { regionWord } from './home';
 import { mapCountryName } from './mapCountries';
 import { useMarkPlace } from './useMarkPlace';
@@ -128,7 +128,9 @@ export function PlaceSheet({
   const name =
     place?.place_type === 'region'
       ? (homeRegionName(place.place_code, lang) ?? place.name)
-      : place?.place_type === 'country'
+      : place?.place_type === 'district'
+        ? (homeDistrictName(place.place_code, lang) ?? place.name)
+        : place?.place_type === 'country'
         ? mapCountryName(place.place_code, lang)
         : place?.name;
   const country = place?.country_iso2 ? mapCountryName(place.country_iso2, lang) : '';

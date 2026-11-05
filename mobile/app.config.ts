@@ -114,6 +114,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         microphonePermission: false,
       },
     ],
+    // Saving map posters and district maps to the gallery: write only, photos only
+    [
+      'expo-media-library',
+      {
+        photosPermission: 'Vromon lets you choose photos of the places you visit.',
+        savePhotosPermission: 'Vromon saves your map pictures to your gallery.',
+        isAccessMediaLocationEnabled: false,
+        granularPermissions: ['photo'],
+      },
+    ],
     [
       'expo-splash-screen',
       {

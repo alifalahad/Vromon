@@ -285,16 +285,35 @@ class RoadNetwork:
                         cache.commit()
                     except RoutingUnavailable as exc:
                         cache.rollback()
-                        self._forget()
-                        if exc.temporary:
-                            self._failed_at = time.monotonic()
-                        logger.warning("Road lines unavailable: %s", exc)
+                        # One stop the router can't reach fails the whole request: ask leg by leg
+                        got = self._lines_leg_by_leg(cache, todo) if len(todo) > 1 and not exc.temporary else 0
+                        if not got:
+                            self._forget()
+                            if exc.temporary:
+                                self._failed_at = time.monotonic()
+                        logger.warning("Road lines for the whole day unavailable (%s); %d legs found one by one", exc, got)
             self._load(db)
             # Only for legs whose road answer we believe (otherwise the map draws the estimate)
             return [
                 self._lines.get((a, b)) if a and b and self.pair(a, b).source == "road" else None
                 for a, b in legs
             ]
+
+    def _lines_leg_by_leg(self, db: "Session", legs) -> int:
+        """Each leg on its own (after the whole day was refused); the number found."""
+        found = 0
+        for a, b in legs:
+            try:
+                coords, leg_stats, way = self._get_provider().route([a, b])
+            except RoutingUnavailable as exc:
+                if exc.temporary:
+                    break
+                continue
+            self._store_lines(db, [a, b], coords, leg_stats, way)
+            found += 1
+        if found:
+            db.commit()
+        return found
 
     def _store_lines(self, db: "Session", pts, coords, leg_stats, way) -> None:
         from app.models.models import RouteCache

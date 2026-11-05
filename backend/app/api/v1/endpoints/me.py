@@ -12,7 +12,7 @@ from datetime import date, datetime, timezone
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -26,7 +26,7 @@ from app.models.models import Block, Device, FriendRequest, Photo, Trip, User, U
 from app.services.photos import StorageError, delete_photos, photos_out
 from app.services.photos.storage import PhotoStore, optional_photo_store
 from app.schemas.schemas import TripStatsOut
-from app.services import live
+from app.services import avatars, live
 from app.services.chat import delete_chat_data, export_chats, partners
 from app.services.rooms import delete_user_rooms
 from app.services.friends import delete_social_data, friend_ids
@@ -53,6 +53,7 @@ def _me_out(user: User) -> MeOut:
         email=user.email,
         username=user.username,
         display_name=user.display_name,
+        avatar_url=user.avatar_url,
         home_country_iso2=user.home_country_iso2,
         discoverable=user.discoverable,
         friend_code=user.friend_code,
@@ -89,6 +90,31 @@ def update_me(payload: MeUpdate, user: User = Depends(get_current_user), db: Ses
     except IntegrityError:  # claimed concurrently
         db.rollback()
         raise HTTPException(status_code=409, detail="That username is taken")
+    db.refresh(user)
+    return _me_out(user)
+
+
+@router.post("/me/avatar", response_model=MeOut)
+def upload_avatar(file: UploadFile = File(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """A new profile photo: cropped square, 512 px, metadata dropped, stored on ImgBB."""
+    try:
+        jpeg = avatars.square_jpeg(file.file.read(avatars.MAX_BYTES + 1))
+        user.avatar_url = avatars.upload(jpeg, f"vromon-{user.id.hex[:12]}")
+    except avatars.AvatarRejected as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except avatars.AvatarUnavailable as exc:
+        logger.warning("Profile photo upload failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Couldn't save the photo right now. Try again later.")
+    db.commit()
+    db.refresh(user)
+    return _me_out(user)
+
+
+@router.delete("/me/avatar", response_model=MeOut)
+def remove_avatar(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Back to initials. (The copy on ImgBB stays reachable by its URL; it's no longer linked.)"""
+    user.avatar_url = None
+    db.commit()
     db.refresh(user)
     return _me_out(user)
 

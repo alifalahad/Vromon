@@ -29,7 +29,7 @@ import { localToday } from '../trips/dates';
 import type { DockState, Idea } from './dockState';
 import { friendColor } from './friendGeo';
 import { initials } from '../../ui/Avatar';
-import { homeRegionName } from './geoData';
+import { homeDistrictName, homeRegionName } from './geoData';
 import { mapCountryName } from './mapCountries';
 import { useTripToday } from './useTripToday';
 
@@ -210,7 +210,11 @@ function IdeaCard({ ideas }: { ideas: Idea[] }) {
   const activeDot = ideas.length <= 5 ? index % ideas.length : Math.round(((index % ideas.length) / (ideas.length - 1)) * (dotCount - 1));
   const { destination, place } = idea;
   const placeName =
-    place.place_type === 'region' ? (homeRegionName(place.place_code, lang) ?? place.place_code) : mapCountryName(place.place_code, lang);
+    place.place_type === 'region'
+      ? (homeRegionName(place.place_code, lang) ?? place.place_code)
+      : place.place_type === 'district'
+        ? (homeDistrictName(place.place_code, lang) ?? place.place_code)
+        : mapCountryName(place.place_code, lang);
 
   return (
     <View style={styles.body}>

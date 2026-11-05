@@ -1,5 +1,5 @@
 /**
- * Edit profile: display name and username (live availability check).
+ * Edit profile: photo (ImgBB, via the server), display name and username (live availability check).
  * Home country has its own picker screen.
  */
 
@@ -9,6 +9,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text } from 'react-native';
 
+import { AvatarPicker } from '../../src/features/account/AvatarPicker';
 import { ME_QUERY_KEY, useMe } from '../../src/features/account/useMe';
 import { UsernameField } from '../../src/features/account/UsernameField';
 import { useUsernameCheck } from '../../src/features/account/useUsernameCheck';
@@ -56,6 +57,7 @@ export default function EditProfileScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {me ? <AvatarPicker me={me} /> : null}
       <TextField
         label={t('profile.displayName')}
         value={displayName}

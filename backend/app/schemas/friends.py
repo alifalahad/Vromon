@@ -19,7 +19,7 @@ class PublicProfile(BaseModel):
     id: uuid.UUID
     username: str
     display_name: Optional[str] = None
-    # Profile photos arrive in Phase 6
+    # Profile photo (ImgBB), when the person added one
     avatar_url: Optional[str] = None
 
 

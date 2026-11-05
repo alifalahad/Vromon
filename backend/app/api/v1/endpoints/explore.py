@@ -4,6 +4,8 @@ Vromon API v1 — Explore (public, read-only).
 GET /explore/bangladesh                 Bangladesh's facts, its divisions with their districts, GI foods
 GET /explore/districts/{slug}           one district: outline, neighbours, upazilas, GI foods and products,
                                         attractions, hotels with their published room rates
+GET /explore/districts/{slug}/map       the district's published map render (data platform, Phases 3 and 7)
+                                        as a JPEG: ?lang=en|bn, ?size=card (1080 px wide) | full (2160 px)
 GET /explore/continents                 continents with their countries' counts and largest countries
 GET /explore/countries?continent=       countries, largest population first
 GET /explore/countries/{iso2}           one country: facts and its largest cities
@@ -20,22 +22,25 @@ from __future__ import annotations
 
 import json
 import math
+import threading
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.catalog import (
     AdminAdjacency, AdminBoundary, AdminUnit, Attraction, AttractionMedia, CountryFacts, GeoMedia, LocalFood,
-    ServicePlace,
+    MapExport, ServicePlace,
 )
 from app.models.models import City, Country, Destination, Region
 from app.schemas.catalog import FoodOut, PhotoOut
 from app.schemas.explore import (
     BangladeshOut, CityCard, ContinentOut, CountryCard, CountryDetail, CountryFactsOut, DistrictCard, DistrictCounts,
-    DistrictDetail, DivisionOut, ExploreAttraction, ExplorePhoto, NamedUnit, SearchOut, TripDestination,
+    DistrictDetail, DistrictMapOut, DivisionOut, ExploreAttraction, ExplorePhoto, NamedUnit, SearchOut, TripDestination,
 )
 from app.api.v1.endpoints.catalog import _room_prices, _service_places
 
@@ -45,6 +50,10 @@ APPROVED = ("auto_approved", "approved")
 NOT_A_CONTINENT = "Seven seas (open ocean)"
 ESRI_EXPORT = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export"
 ESRI_CREDIT = "Esri, Vantor, Earthstar Geographics, and the GIS User Community"
+MAPS_DIR = Path(__file__).resolve().parents[5] / "data-platform" / "exports" / "maps"
+MAP_CACHE = MAPS_DIR / "web"
+MAP_WIDTHS = {"card": 1080, "full": 2160}
+_map_lock = threading.Lock()
 SOURCES = [
     "Districts and boundaries: geoBoundaries (CC BY 4.0), Bangladesh national portal",
     "GI foods and products: Department of Patents, Designs and Trademarks (DPDT), Bangladesh",
@@ -357,3 +366,66 @@ def search(q: str = Query(..., min_length=1, max_length=80), db: Session = Depen
                          .order_by(City.population.desc()).limit(10)).all()
     return SearchOut(districts=_district_cards(db, list(districts)), countries=_country_cards(db, list(countries_)),
                      cities=_city_cards(db, list(cities_)))
+
+
+# --- district map renders --------------------------------------------------------------------------
+
+def _published_maps(db: Session, district_id) -> dict[str, MapExport]:
+    """language → the newest published render of the district."""
+    out: dict[str, MapExport] = {}
+    for m in db.scalars(select(MapExport).where(MapExport.district_id == district_id, MapExport.status == "published",
+                                                MapExport.variant == "final").order_by(MapExport.created_at)):
+        out[m.language] = m
+    return out
+
+
+def _map_credits(m: MapExport) -> list[str]:
+    c = m.credits
+    if isinstance(c, str):
+        try:
+            c = json.loads(c)
+        except ValueError:
+            return [c]
+    if isinstance(c, dict):
+        return [str(x) for x in c.get("credits_on_map") or []]
+    return [str(x) for x in (c or [])]
+
+
+@router.get("/districts/{slug}/maps", response_model=DistrictMapOut)
+def district_maps(slug: str, response: Response, db: Session = Depends(get_db)):
+    """Which languages the district's map is published in, and its credits."""
+    d = db.scalar(select(AdminUnit).where(AdminUnit.slug == slug, AdminUnit.level == "district"))
+    if d is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    maps = _published_maps(db, d.id)
+    any_map = next(iter(maps.values()), None)
+    response.headers["Cache-Control"] = CACHE
+    return DistrictMapOut(languages=sorted(maps), width=2160, height=2700,
+                          credits=_map_credits(any_map) if any_map else [],
+                          made_on=any_map.created_at.date().isoformat() if any_map else None)
+
+
+@router.get("/districts/{slug}/map")
+def district_map(slug: str, lang: str = Query("en", pattern="^(en|bn)$"),
+                 size: str = Query("card", pattern="^(card|full)$"), db: Session = Depends(get_db)):
+    d = db.scalar(select(AdminUnit).where(AdminUnit.slug == slug, AdminUnit.level == "district"))
+    m = _published_maps(db, d.id).get(lang) if d is not None else None
+    src = MAPS_DIR / m.file_path if m is not None else None
+    if src is None or not src.is_file():
+        raise HTTPException(status_code=404, detail="No published map")
+    out = MAP_CACHE / f"{src.stem}-{m.sha256[:12]}-{size}.jpg"
+    if not out.is_file():
+        from PIL import Image
+        with _map_lock:
+            if not out.is_file():
+                MAP_CACHE.mkdir(parents=True, exist_ok=True)
+                with Image.open(src) as im:
+                    im = im.convert("RGB")
+                    w = MAP_WIDTHS[size]
+                    if im.width != w:
+                        im = im.resize((w, round(im.height * w / im.width)), Image.LANCZOS)
+                    tmp = out.with_suffix(".tmp")
+                    im.save(tmp, "JPEG", quality=86, optimize=True, progressive=True)
+                    tmp.replace(out)
+    # The file name carries the render's hash: a new render is a new URL
+    return FileResponse(out, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})

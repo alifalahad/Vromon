@@ -619,7 +619,7 @@ export default function ChatScreen() {
               }
               testID="chat-header"
             >
-              <Avatar name={name} id={chat.other?.id} size={40} />
+              <Avatar name={name} id={chat.other?.id} uri={chat.other?.avatar_url} size={40} />
               <View style={styles.whoText}>
                 <View style={styles.nameRow}>
                   <Text style={styles.name} numberOfLines={1} accessibilityRole="header">
@@ -675,7 +675,7 @@ export default function ChatScreen() {
           </View>
         ) : rows.length === 0 ? (
           <View style={styles.center} testID="chat-empty">
-            <Avatar name={name} id={chat?.other?.id} size={72} />
+            <Avatar name={name} id={chat?.other?.id} uri={chat?.other?.avatar_url} size={72} />
             <Text style={styles.centerText}>{roomTrip ? t('chat.room.empty') : t('chat.sayHello', { name })}</Text>
           </View>
         ) : (

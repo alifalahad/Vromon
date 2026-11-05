@@ -232,6 +232,8 @@ class User(Base):
     username: Mapped[Optional[str]] = mapped_column(String(20), unique=True, nullable=True)
     display_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     avatar_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # Profile photo: its public URL on ImgBB (uploaded by POST /me/avatar)
+    avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     home_country_iso2: Mapped[Optional[str]] = mapped_column(String(2), nullable=True)
     discoverable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Opaque, rotatable code for QR / invite links; never the internal id.

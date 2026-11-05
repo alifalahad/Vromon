@@ -22,6 +22,15 @@ Hotels and restaurants (service places) → `hotels`, `restaurants`:
     a rate under 3,000 Budget, otherwise Standard
   - a restaurant's meal cost and hours stay unknown
   - the demo hotels and restaurants (no source_ref) are hidden once real ones are published
+
+Districts → `destinations` (publish_destinations), so a trip can start in any district:
+  - one per district with a published attraction, named as the district, at its largest
+    GeoNames town inside the district's boundary (its headquarters, as a rule), else its centre;
+    a destination of the same name is reused (towns like Kuakata stay as they are)
+  - run before publish_places and publish_service_places, which fill them
+  - tidy_destinations, after those two: where a destination has reviewed catalog rows, its
+    older unreviewed imports (Wikivoyage, Wikidata) are hidden and it counts as checked; the
+    demo rows (source "curated") are deleted unless a saved trip still uses them (then hidden)
 """
 
 from __future__ import annotations
@@ -37,8 +46,9 @@ from app.db.destinations import (CATALOG_REF_PREFIX, DATA_DIR, NEUTRAL_RATING, U
                                   UNKNOWN_MEAL_HOURS)
 from app.models.catalog import (AdminUnit, Attraction, AttractionCategory, EntityExternalId, PriceObservation,
                                 ServicePlace, VerificationEvent)
-from app.models.models import Destination, Hotel, Place, Restaurant
-from vromon_data.geo import haversine_km
+from app.models.catalog import AdminBoundary
+from app.models.models import City, Destination, Hotel, ItineraryItem, Place, Restaurant, TripPreference
+from vromon_data.geo import haversine_km, load as load_geometry
 from vromon_data.text import name_similarity
 
 DEMO_DESTINATIONS = {"Cox's Bazar"}
@@ -225,6 +235,115 @@ def publish_service_places(session: Session, *, dry_run: bool = False) -> dict:
             row.is_active = False
             counts["demo_hidden"] += 1
 
+    counts["at"] = datetime.utcnow().isoformat(timespec="seconds")
+    if dry_run:
+        session.rollback()
+    else:
+        session.commit()
+    return counts
+
+
+DISTRICT_SOURCES = [
+    {"name": "Bangladesh district boundaries (geoBoundaries / BBS, OCHA)", "license": "CC BY 3.0 IGO",
+     "url": "https://www.geoboundaries.org/"},
+    {"name": "Vromon catalog: attractions (Wikidata, Bangladesh national portal), reviewed",
+     "license": "CC0 1.0 / public", "url": "https://www.wikidata.org/"},
+    {"name": "Towns: GeoNames", "license": "CC BY 4.0", "url": "https://www.geonames.org/"},
+]
+
+
+def _seat(session: Session, district: AdminUnit) -> tuple[float, float, str | None]:
+    """The district's largest GeoNames town inside its boundary, else its centre: (lat, lon, town)."""
+    from shapely.geometry import Point
+    g = session.scalar(select(AdminBoundary.geometry_geojson).where(AdminBoundary.admin_unit_id == district.id,
+                                                                    AdminBoundary.is_current.is_(True)))
+    if g:
+        outline, _ = load_geometry(json.loads(g))
+        minx, miny, maxx, maxy = outline.bounds
+        towns = session.scalars(select(City).where(City.country_iso2 == "BD", City.lon.between(minx, maxx),
+                                                   City.lat.between(miny, maxy)).order_by(City.population.desc()))
+        for town in towns:
+            if outline.contains(Point(town.lon, town.lat)):
+                return town.lat, town.lon, town.name
+    return district.centroid_lat, district.centroid_lon, None
+
+
+def publish_destinations(session: Session, *, dry_run: bool = False) -> dict:
+    counts = {"written": 0, "reused": 0, "no_attractions": 0}
+    with_sights = set(session.scalars(select(Attraction.district_id).where(Attraction.status == "published")))
+    divisions = dict(session.execute(
+        select(EntityExternalId.entity_id, EntityExternalId.external_id).where(
+            EntityExternalId.entity_type == "admin_unit", EntityExternalId.provider == "iso3166-2")).all())
+    existing = list(session.scalars(select(Destination)))
+    for d in session.scalars(select(AdminUnit).where(AdminUnit.country_iso2 == "BD", AdminUnit.level == "district",
+                                                     AdminUnit.status == "published").order_by(AdminUnit.name_en)):
+        if d.id not in with_sights:
+            counts["no_attractions"] += 1
+            continue
+        same = next((x for x in existing if name_similarity(x.name, d.name_en) >= 90), None)
+        if same is not None:
+            same.is_active = True
+            same.country_iso2 = same.country_iso2 or "BD"
+            same.region_code = divisions.get(d.parent_id) or same.region_code
+            counts["reused"] += 1
+            continue
+        lat, lon, town = _seat(session, d)
+        dest = Destination(name=d.name_en, country="Bangladesh", latitude=lat, longitude=lon, country_iso2="BD",
+                           region_code=divisions.get(d.parent_id), checked=True, is_active=True,
+                           sources_json=json.dumps(DISTRICT_SOURCES, ensure_ascii=False),
+                           attribution="Places, hotels and restaurants from the Vromon catalog (reviewed); centred on "
+                                       + (town or "the district centre") + " (GeoNames).")
+        session.add(dest)
+        existing.append(dest)
+        counts["written"] += 1
+    counts["at"] = datetime.utcnow().isoformat(timespec="seconds")
+    if dry_run:
+        session.rollback()
+    else:
+        session.commit()
+    return counts
+
+
+def tidy_destinations(session: Session, *, dry_run: bool = False) -> dict:
+    counts = {"unreviewed_hidden": 0, "demo_deleted": 0, "demo_kept_for_trips": 0, "checked": 0}
+    used = {
+        Place: set(session.scalars(select(ItineraryItem.place_id).where(ItineraryItem.place_id.isnot(None)))),
+        Restaurant: set(session.scalars(select(ItineraryItem.restaurant_id).where(ItineraryItem.restaurant_id.isnot(None)))),
+        Hotel: set(session.scalars(select(TripPreference.hotel_id).where(TripPreference.hotel_id.isnot(None)))),
+    }
+    # Places the app had from its own files that a reviewed attraction is linked to count as reviewed
+    linked = {int(x) for x in session.scalars(select(EntityExternalId.external_id).where(
+        EntityExternalId.entity_type == "attraction", EntityExternalId.provider == "app_place"))}
+    published = set(session.scalars(select(EntityExternalId.external_id).join(
+        Attraction, Attraction.id == EntityExternalId.entity_id).where(
+        EntityExternalId.provider == "app_place", Attraction.status == "published")))
+    for place in session.scalars(select(Place).where(Place.id.in_(linked))):
+        reviewed_link = str(place.id) in published
+        if reviewed_link and not (place.checked and place.is_active):
+            place.checked, place.is_active = True, True
+            counts["linked_reviewed"] = counts.get("linked_reviewed", 0) + 1
+    for dest in session.scalars(select(Destination).where(Destination.is_active.is_(True))):
+        unreviewed_left = False
+        for model in (Place, Hotel, Restaurant):
+            rows = list(session.scalars(select(model).where(model.destination_id == dest.id)))
+            reviewed = any(r.source == "catalog" and r.is_active for r in rows)
+            for r in rows:
+                if r.source == "curated" and r.source_ref is None:
+                    if r.id in used[model]:
+                        r.is_active = False
+                        counts["demo_kept_for_trips"] += 1
+                    else:
+                        session.delete(r)
+                        counts["demo_deleted"] += 1
+                elif not r.checked and r.is_active:
+                    if reviewed:
+                        r.is_active = False
+                        counts["unreviewed_hidden"] += 1
+                    else:
+                        unreviewed_left = True
+        if not unreviewed_left and not dest.checked:
+            dest.checked = True
+            counts["checked"] += 1
     counts["at"] = datetime.utcnow().isoformat(timespec="seconds")
     if dry_run:
         session.rollback()

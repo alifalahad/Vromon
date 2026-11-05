@@ -113,6 +113,9 @@ class Settings(BaseSettings):
     ors_base_url: str = "https://api.heigit.org/openrouteservice"   # was api.openrouteservice.org (deprecated)
     routing_timeout_seconds: float = 10.0
 
+    # --- Profile photos: uploaded to ImgBB (api.imgbb.com) with this key; empty = photos off ---
+    imgbb_api_key: str = ""
+
     # --- Server ---
     host: str = "0.0.0.0"
     port: int = 8000
