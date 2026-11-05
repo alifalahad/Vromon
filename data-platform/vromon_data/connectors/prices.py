@@ -146,7 +146,7 @@ class TcbRetailPrices(Connector):
 NOT_OWN_SITE = ("facebook.", "fb.com", "fb.me", "instagram.", "booking.com", "agoda.", "tripadvisor", "google.", "goo.gl",
                 "wa.me", "whatsapp", "youtube", "linktr", "bio.link", "expedia", "trip.com", "hotels.com", "airbnb",
                 "business.site", "ihg.com", "marriott.com", "hilton.com", "accor", "radissonhotels", "wyndhamhotels",
-                "bestwestern.com", "sharetrip", "gozayaan", "obokash")
+                "bestwestern.com", "sharetrip", "gozayaan", "obokash", "tripsilo.", "easybookingbd.", "resortsbd.")
 MAX_SUBPAGES = 4
 _RATE_LINK = re.compile(r"room|tariff|rate|price|accommodation|suite|cottage|ভাড়া|রুম", re.I)
 _BDT = r"BDT|Tk\.?|TK\.?|Taka|৳|টাকা"

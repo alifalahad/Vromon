@@ -131,7 +131,8 @@ def _report(args) -> int:
 def _publish(args) -> int:
     from vromon_data import publish
     with _session() as s:
-        print(json.dumps(publish.publish_places(s, dry_run=args.dry_run), indent=2, ensure_ascii=False))
+        run = publish.publish_places if args.what == "places" else publish.publish_service_places
+        print(json.dumps(run(s, dry_run=args.dry_run), indent=2, ensure_ascii=False))
     return 0
 
 
@@ -247,7 +248,7 @@ def build_parser() -> argparse.ArgumentParser:
     rp.set_defaults(func=_report)
 
     pb = sub.add_parser("publish", help="publish approved records to the app")
-    pb.add_argument("what", choices=["places"])
+    pb.add_argument("what", choices=["places", "service-places"])
     pb.add_argument("--dry-run", action="store_true")
     pb.set_defaults(func=_publish)
 

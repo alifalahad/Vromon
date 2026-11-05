@@ -42,6 +42,11 @@ def length_km(g: BaseGeometry) -> float:
     return GEOD.geometry_length(g) / 1000
 
 
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Distance between two points on the WGS84 ellipsoid (the name is kept for familiarity)."""
+    return GEOD.inv(lon1, lat1, lon2, lat2)[2] / 1000
+
+
 def label_point(g: BaseGeometry) -> tuple[float, float]:
     """(lat, lon): the centroid, or a point inside the shape when the centroid falls outside it."""
     c = g.centroid

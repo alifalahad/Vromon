@@ -3,7 +3,8 @@
  * meals) joined in visiting order: along the road where we have the road line,
  * otherwise by a dashed straight line (an estimate). Tapping a pin
  * selects that stop; selecting a stop elsewhere eases the camera to it.
- * `bottomPadding` keeps pins clear of the plan sheet.
+ * `bottomPadding` keeps pins clear of the plan sheet. Two buttons: satellite imagery or the
+ * street map, and 2D or 3D (the camera tilts, relief is shaded, buildings stand up).
  */
 
 import { Camera, GeoJSONSource, Layer, Map, type CameraRef } from '@maplibre/maplibre-react-native';
@@ -16,6 +17,7 @@ import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
 import { useReduceMotion } from '../../../ui/useReduceMotion';
 import { planColors } from './colors';
+import { PITCH_3D, Relief3D } from './Map3D';
 import { ESRI_CREDIT, useStreetStyle } from './mapStyle';
 import { localDigits } from './usePlanFormat';
 import type { Coord, StopKind } from './timeline';
@@ -59,13 +61,14 @@ export function DayMap({
   const camera = useRef<CameraRef>(null);
   const { t } = useTranslation();
   const [satellite, setSatellite] = React.useState(false);
+  const [is3d, setIs3d] = React.useState(false);
   const mapStyle = useStreetStyle(theme.scheme, satellite, lang);
   const padding = useMemo(() => ({ top: topPadding + 24, right: 48, bottom: bottomPadding + 24, left: 48 }), [topPadding, bottomPadding]);
   const bounds = useMemo(() => boundsFor(pins.map((p) => p.coord)), [pins]);
 
   // A new day: fit all of its stops
   useEffect(() => {
-    if (bounds) camera.current?.fitBounds(bounds, { padding, duration: reduceMotion ? 0 : 500 });
+    if (bounds) camera.current?.fitBounds(bounds, { padding, pitch: is3d ? PITCH_3D : 0, duration: reduceMotion ? 0 : 500 });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the day (or the sheet size) changes
   }, [fitKey, padding]);
 
@@ -75,6 +78,15 @@ export function DayMap({
     if (pin) camera.current?.easeTo({ center: [pin.coord.longitude, pin.coord.latitude], padding, duration: reduceMotion ? 0 : 400 });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the selection changes
   }, [selectedId]);
+
+  // 2D / 3D: the day's stops again with the camera tilted (the 3D layers show themselves); not on the first render
+  const tilted = useRef(false);
+  useEffect(() => {
+    if (!tilted.current && !is3d) return;
+    tilted.current = true;
+    if (bounds) camera.current?.fitBounds(bounds, { padding, pitch: is3d ? PITCH_3D : 0, duration: reduceMotion ? 0 : 600 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the switch changes
+  }, [is3d]);
 
   // Each leg: the road line when we have it; a boat crossing where no road goes; otherwise a straight segment (dashed)
   const [roads, line, water] = useMemo<[GeoJSON.FeatureCollection, GeoJSON.FeatureCollection, GeoJSON.FeatureCollection]>(() => {
@@ -130,11 +142,12 @@ export function DayMap({
 
   return (
     <View style={styles.wrap} accessible={false} accessibilityLabel={accessibilityLabel} testID="day-map">
-      <Map style={styles.map} mapStyle={mapStyle} logo={false} compass={false} touchPitch={false} attribution attributionPosition={{ top: topPadding + 8, right: 8 }}>
+      <Map style={styles.map} mapStyle={mapStyle} logo={false} compass={false} touchPitch={is3d} attribution attributionPosition={{ top: topPadding + 8, right: 8 }}>
         <Camera
           ref={camera}
           initialViewState={bounds ? { bounds, padding } : { center: DEFAULT_CENTER, zoom: 6 }}
         />
+        <Relief3D on={is3d} dark={theme.scheme === 'dark' && !satellite} />
         <GeoJSONSource id="day-road" data={roads}>
           <Layer
             id="day-road-casing"
@@ -221,19 +234,34 @@ export function DayMap({
           />
         </GeoJSONSource>
       </Map>
-      <PressableScale
-        pressEffect="opacity"
-        haptic="selection"
-        onPress={() => setSatellite((s) => !s)}
-        style={[styles.toggle, { top: topPadding + 8 }]}
-        accessibilityRole="switch"
-        accessibilityState={{ checked: satellite }}
-        accessibilityLabel={t('plan.mapSatellite')}
-        hitSlop={8}
-        testID="map-satellite-toggle"
-      >
-        <Text style={styles.toggleText}>{satellite ? t('plan.mapStreets') : t('plan.mapSatellite')}</Text>
-      </PressableScale>
+      <View style={[styles.toggles, { top: topPadding + 8 }]}>
+        <PressableScale
+          pressEffect="opacity"
+          haptic="selection"
+          onPress={() => setSatellite((s) => !s)}
+          style={styles.toggle}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: satellite }}
+          accessibilityLabel={t('plan.mapSatellite')}
+          hitSlop={8}
+          testID="map-satellite-toggle"
+        >
+          <Text style={styles.toggleText}>{satellite ? t('plan.mapStreets') : t('plan.mapSatellite')}</Text>
+        </PressableScale>
+        <PressableScale
+          pressEffect="opacity"
+          haptic="selection"
+          onPress={() => setIs3d((v) => !v)}
+          style={styles.toggle}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: is3d }}
+          accessibilityLabel={t('plan.map3d')}
+          hitSlop={8}
+          testID="map-3d-toggle"
+        >
+          <Text style={styles.toggleText}>{is3d ? '2D' : '3D'}</Text>
+        </PressableScale>
+      </View>
       <Text style={[styles.credit, { bottom: bottomPadding + 4 }]} accessibilityElementsHidden importantForAccessibility="no">
         {ESRI_CREDIT}
       </Text>
@@ -244,10 +272,11 @@ export function DayMap({
 const useStyles = makeStyles((t) => ({
   wrap: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: t.colors.surfaceInset },
   map: { flex: 1 },
+  toggles: { position: 'absolute', left: 12, flexDirection: 'row', gap: 8 },
   toggle: {
-    position: 'absolute',
-    left: 12,
     minHeight: 48,
+    minWidth: 48,
+    alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14,
     borderRadius: 24,
