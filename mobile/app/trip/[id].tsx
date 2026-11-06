@@ -716,6 +716,7 @@ export default function TripScreen() {
         topPadding={insets.top + 56}
         bottomPadding={fullMap ? insets.bottom + 96 : sheetLow}
         accessibilityLabel={t('plan.mapLabel', { n: f.n(day?.day_number ?? 1) })}
+        onFullMap={pins.length > 0 && !fullMap ? () => setFullMap(true) : undefined}
       />
 
       <View style={[styles.topBar, { top: insets.top + 8 }]} pointerEvents="box-none">
@@ -759,12 +760,6 @@ export default function TripScreen() {
           </View>
         ) : null}
         <View style={styles.topRight} pointerEvents="box-none">
-          {pins.length > 0 && !fullMap ? (
-            <PressableScale onPress={() => setFullMap(true)} style={styles.fullMapButton} accessibilityLabel={t('plan.fullMap')} testID="trip-full-map">
-              <MaterialCommunityIcons name="arrow-expand" size={18} color={theme.colors.textPrimary} />
-              <Text style={styles.fullMapText}>{t('plan.fullMap')}</Text>
-            </PressableScale>
-          ) : null}
           {pins.length > 1 && <RoundButton icon="arrow-expand-all" label={t('plan.showDay')} onPress={() => setFitCount((c) => c + 1)} testID="trip-fit" />}
           {mine && <RoundButton icon="dots-vertical" label={t('plan.more')} onPress={() => setMenuOpen(true)} testID="trip-menu" />}
         </View>
@@ -1203,21 +1198,6 @@ const useStyles = makeStyles((t) => {
     staleDot: { backgroundColor: t.colors.warning },
     updatedText: { ...t.type.footnote, color: t.colors.textSecondary },
     topRight: { flexDirection: 'row', gap: t.spacing.sm },
-    fullMapButton: {
-      minHeight: 48,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: 14,
-      borderRadius: 24,
-      backgroundColor: t.colors.surface,
-      shadowColor: t.colors.shadow,
-      shadowOpacity: 0.25,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 4,
-    },
-    fullMapText: { ...t.type.callout, fontWeight: '700', color: t.colors.textPrimary },
     showPlan: {
       position: 'absolute',
       alignSelf: 'center',

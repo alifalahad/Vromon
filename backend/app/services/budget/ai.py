@@ -53,7 +53,9 @@ SYSTEM = (
     "category a low-high range that a careful traveller could expect. Prefer the traveller's chosen "
     "accommodation level and the recommended way there. Never invent hotel names or prices that are "
     "not in the facts. If the trip's `from` is null, where the traveller starts is unknown: leave out "
-    "getting_there entirely (never assume a starting city). Write the basis of each category in one short sentence."
+    "getting_there entirely (never assume a starting city). Write the basis of each category in one short sentence. "
+    "In the basis and assumptions, name things in plain words a traveller uses (\"getting there\", \"local travel\"), "
+    "never field names like getting_there or room_rates_in_destination."
 )
 
 

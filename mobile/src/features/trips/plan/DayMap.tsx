@@ -7,6 +7,7 @@
  * street map, and 2D or 3D (the camera tilts, relief is shaded, buildings stand up).
  */
 
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Camera, GeoJSONSource, Layer, Map, type CameraRef } from '@maplibre/maplibre-react-native';
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,6 +40,7 @@ export function DayMap({
   topPadding,
   bottomPadding,
   accessibilityLabel,
+  onFullMap,
 }: {
   pins: MapPin[];
   selectedId: number | null;
@@ -52,6 +54,8 @@ export function DayMap({
   topPadding: number;
   bottomPadding: number;
   accessibilityLabel: string;
+  /** Shows a "Full map" button next to Satellite and 3D */
+  onFullMap?: () => void;
 }) {
   const styles = useStyles();
   const theme = useTheme();
@@ -269,6 +273,21 @@ export function DayMap({
         >
           <Text style={styles.toggleText}>{is3d ? '2D' : '3D'}</Text>
         </PressableScale>
+        {onFullMap ? (
+          <PressableScale
+            pressEffect="opacity"
+            haptic="selection"
+            onPress={onFullMap}
+            style={[styles.toggle, styles.toggleRow]}
+            accessibilityRole="button"
+            accessibilityLabel={t('plan.fullMap')}
+            hitSlop={8}
+            testID="trip-full-map"
+          >
+            <MaterialCommunityIcons name="arrow-expand" size={16} color={theme.colors.textPrimary} />
+            <Text style={styles.toggleText}>{t('plan.fullMap')}</Text>
+          </PressableScale>
+        ) : null}
       </View>
       {satellite ? (
         <Text style={[styles.credit, { bottom: bottomPadding + 4 }]} accessibilityElementsHidden importantForAccessibility="no">
@@ -293,6 +312,7 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.surface,
     elevation: 3,
   },
+  toggleRow: { flexDirection: 'row', gap: 6 },
   toggleText: { color: t.colors.textPrimary, fontSize: 14, fontWeight: '600' },
   credit: { position: 'absolute', left: 8, fontSize: 10, color: '#333333', backgroundColor: 'rgba(255,255,255,0.7)', paddingHorizontal: 4 },
 }));
