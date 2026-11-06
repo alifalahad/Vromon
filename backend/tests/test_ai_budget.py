@@ -74,3 +74,25 @@ def test_the_estimate_can_become_the_budget(client):
     assert r.status_code == 200 and r.json()["total_budget"] == 13000
     assert client.get(f"/api/v1/trips/{trip['id']}/budget").json()["total_budget"] == 13000
     assert client.patch(f"/api/v1/trips/{trip['id']}", json={"total_budget": 0}).status_code == 422
+
+
+def test_a_place_taken_out_of_the_catalog_doesnt_block_changes(client):
+    """A must-see whose place was later removed is dropped on the next change, not a 422."""
+    from app.models.models import Place, TripConstraint
+    from tests.test_phase10_editing import _Session
+    s = _Session()
+    pid = s.query(Place).filter(Place.destination_name == "Cox's Bazar", Place.is_active.is_(True)).first().id
+    s.close()
+    trip = create_trip(client, days=2, must=(pid,), generate=False)
+    s = _Session()
+    s.query(Place).filter(Place.id == pid).update({"is_active": False})
+    s.commit()
+    try:
+        r = client.patch(f"/api/v1/trips/{trip['id']}", json={"total_budget": 20000})
+        assert r.status_code == 200, r.text
+        assert r.json()["total_budget"] == 20000 and r.json()["constraints"]["must_visit"] == []
+        assert client.patch(f"/api/v1/trips/{trip['id']}", json={"constraints": {"must_visit": [999999]}}).status_code == 422
+    finally:
+        s.query(Place).filter(Place.id == pid).update({"is_active": True})
+        s.commit()
+        s.close()

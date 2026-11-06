@@ -152,6 +152,7 @@ def get_trip(trip_id: int, db: Session = Depends(get_db), user: User = Depends(g
 def update_trip(trip_id: int, payload: TripUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Update trip title, status, preferences, or constraints (only the fields sent)."""
     trip = _load_trip(db, trip_id, user)
+    _drop_gone_places(db, trip)
     if payload.title is not None:
         trip.title = payload.title
     if payload.status is not None:
@@ -584,6 +585,7 @@ def update_must_dos(trip_id: int, payload: MustDosIn, db: Session = Depends(get_
     `unplaced`, each with why and the nearest time that would fit.
     """
     trip = _load_trip(db, trip_id, user)
+    _drop_gone_places(db, trip)
     pref, cons = trip.preference, trip.constraints
     if pref is None or cons is None:
         raise HTTPException(status_code=409, detail="This trip has no preferences to change.")
@@ -1150,6 +1152,29 @@ def _budget(db: Session, trip: Trip) -> dict:
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
+
+def _drop_gone_places(db: Session, trip: Trip) -> None:
+    """
+    Must-sees and places to skip that are no longer listed (taken out of the catalog since the trip
+    was made) are dropped before a change, so they can't block it: they couldn't be planned anyway.
+    """
+    cons = trip.constraints
+    if cons is None:
+        return
+    ids = {m["place_id"] for m in cons.must_sees} | set(cons.excluded_places)
+    if not ids:
+        return
+    live = {
+        pid for (pid,) in db.query(Place.id).filter(
+            Place.id.in_(ids), Place.destination_name == trip.destination, Place.is_active == True  # noqa: E712
+        )
+    }
+    if ids <= live:
+        return
+    logger.info("Trip %s: dropping places no longer listed %s", trip.id, sorted(ids - live))
+    cons.must_sees = [m for m in cons.must_sees if m["place_id"] in live]
+    cons.excluded_places = [pid for pid in cons.excluded_places if pid in live]
+
 
 def _validate_trip(db: Session, trip: Trip) -> None:
     """The settings checks for a saved trip (after an update)."""
