@@ -12,6 +12,7 @@ import { supabase } from '../features/auth/supabase';
 import type {
   AdaptationType,
   AdaptResult,
+  AIBudget,
   Algorithm,
   AlternativesResult,
   BudgetBreakdown,
@@ -215,6 +216,9 @@ export const tripsApi = {
     api.post<LateResult>(`/trips/${tripId}/days/${dayId}/late`, { now, minutes, apply: true }).then((r) => r.data),
   undoLate: (tripId: number, dayId: number, undo: LateUndo) =>
     api.post<EditResult>(`/trips/${tripId}/days/${dayId}/late/undo`, { undo }).then((r) => r.data),
+  /** An AI estimate of the whole trip's cost (Gemini, from Vromon's data); it can take a while */
+  aiBudget: (id: number, lang: 'en' | 'bn') =>
+    api.post<AIBudget>(`/trips/${id}/budget/ai`, null, { params: { lang }, timeout: 90000 }).then((r) => r.data),
   /** Apply a way to save from the budget, or its undo */
   saveBudget: (id: number, action: SaveAction) =>
     api.post<SaveResult>(`/trips/${id}/budget/save`, { action }).then((r) => r.data),

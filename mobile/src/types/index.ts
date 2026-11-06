@@ -574,6 +574,31 @@ export interface AdaptResult {
   validation: ValidationReport;
 }
 
+// Matches POST /trips/{id}/budget/ai: an estimate from Gemini, grounded in Vromon's data (not saved)
+export interface AIBudgetCategory {
+  key: 'getting_there' | 'stay' | 'food' | 'tickets' | 'local' | 'other';
+  amount: number;
+  low: number;
+  high: number;
+  /** One sentence: which facts it comes from */
+  basis: string;
+}
+
+export interface AIBudget {
+  total: number;
+  low: number;
+  high: number;
+  per_person: number;
+  categories: AIBudgetCategory[];
+  assumptions: string[];
+  confidence: 'low' | 'medium' | 'high';
+  /** false: where you start isn't set, so getting there isn't counted */
+  start_known: boolean;
+  model: string;
+  made_on: string;
+  facts_used: { room_rates: number; market_prices: number; sights: number; ways_there: number };
+}
+
 // Matches GET /trips/{id}/budget
 export interface BudgetBreakdown {
   trip_id: number;

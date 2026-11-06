@@ -351,6 +351,7 @@ class TripUpdate(BaseModel):
     """Partial update: only fields present in the request are changed."""
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     status: Optional[Literal["draft", "generated", "saved"]] = None
+    total_budget: Optional[float] = Field(None, gt=0, le=100_000_000)   # by hand, or the AI estimate taken
     preference: Optional[TripPreferenceCreate] = None
     constraints: Optional[TripConstraintCreate] = None
 

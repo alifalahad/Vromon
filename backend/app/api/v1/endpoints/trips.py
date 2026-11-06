@@ -156,6 +156,8 @@ def update_trip(trip_id: int, payload: TripUpdate, db: Session = Depends(get_db)
         trip.title = payload.title
     if payload.status is not None:
         trip.status = payload.status
+    if payload.total_budget is not None:
+        trip.total_budget = round(payload.total_budget)
     if payload.preference and trip.preference:
         for field in payload.preference.model_fields_set:
             setattr(trip.preference, field, getattr(payload.preference, field))
@@ -997,6 +999,27 @@ def budget_breakdown(trip_id: int, db: Session = Depends(get_db), user: User = D
     """
     trip = _load_trip(db, trip_id, user, friends_may_read=True)
     return _budget(db, trip)
+
+
+@router.post("/{trip_id}/budget/ai")
+def ai_budget(trip_id: int, lang: Literal["en", "bn"] = "en", db: Session = Depends(get_db),
+              user: User = Depends(get_current_user)):
+    """A feasible budget estimated by the LLM from Vromon's own data (room rates, market prices, entry
+    fees, the ways there; services.budget.ai). Not saved: the traveller may use it as their budget.
+    503 when no LLM is configured."""
+    from app.services.budget import ai as ai_budget_service
+    from app.services.llm.provider import LLMNotConfiguredError, LLMProviderError
+    trip = _load_trip(db, trip_id, user, friends_may_read=True)
+    try:
+        journey_plan = _journey(db, trip)
+    except Exception:
+        journey_plan = None
+    try:
+        return ai_budget_service.estimate(db, trip, journey_plan, _budget(db, trip), lang=lang)
+    except LLMNotConfiguredError:
+        raise HTTPException(status_code=503, detail="The AI budget isn't set up on this server (no LLM key)")
+    except LLMProviderError as exc:
+        raise HTTPException(status_code=502, detail=f"The AI budget couldn't be made right now: {exc}")
 
 
 class SaveRequest(BaseModel):

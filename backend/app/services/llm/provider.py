@@ -16,7 +16,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Protocol, TypeVar
+from typing import Protocol, TypeVar, Sequence
 
 from pydantic import BaseModel, ValidationError
 
@@ -71,6 +71,7 @@ class GeminiLLMProvider:
         temperature: float = 0.2,
         timeout_seconds: float = 30.0,
         client=None,
+        fallback_models: Sequence[str] = (),
     ):
         if client is None:
             from google import genai  # type: ignore
@@ -81,6 +82,9 @@ class GeminiLLMProvider:
             )
         self._client = client
         self._model = model
+        # When the model is overloaded, the next of these is asked instead (the one that answered is
+        # then reported as model_name)
+        self._models = list(dict.fromkeys([model, *[m.strip() for m in fallback_models if m.strip()]]))
         self._temperature = temperature
 
     @property
@@ -90,22 +94,28 @@ class GeminiLLMProvider:
     def generate_structured(self, system: str, prompt: str, schema: type[T]) -> T:
         from google.genai import types  # type: ignore
 
-        try:
-            response = self._client.models.generate_content(
-                model=self._model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system,
-                    temperature=self._temperature,
-                    response_mime_type="application/json",
-                    response_schema=schema,
-                    # No tools are passed; disable AFC explicitly (avoids SDK warnings).
-                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-                ),
-            )
-        except Exception as exc:
-            logger.error(f"Gemini request failed: {type(exc).__name__}: {exc}")
-            raise LLMProviderError(f"LLM request failed: {describe_provider_error(exc)}") from exc
+        config = types.GenerateContentConfig(
+            system_instruction=system,
+            temperature=self._temperature,
+            response_mime_type="application/json",
+            response_schema=schema,
+            # No tools are passed; disable AFC explicitly (avoids SDK warnings).
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+        )
+        # An overloaded model (503) or one out of quota (429) is passed over for the next one
+        response = None
+        for i, model in enumerate(self._models):
+            try:
+                response = self._client.models.generate_content(model=model, contents=prompt, config=config)
+                self._model = model
+                break
+            except Exception as exc:
+                busy = getattr(exc, "code", None) in (429, 503)
+                if busy and i + 1 < len(self._models):
+                    logger.warning(f"Gemini {model} busy ({describe_provider_error(exc)}), trying {self._models[i + 1]}")
+                    continue
+                logger.error(f"Gemini request failed: {type(exc).__name__}: {exc}")
+                raise LLMProviderError(f"LLM request failed: {describe_provider_error(exc)}") from exc
 
         parsed = getattr(response, "parsed", None)
         if isinstance(parsed, schema):
@@ -145,6 +155,7 @@ def get_llm_provider() -> LLMProvider:
             model=settings.llm_model,
             temperature=settings.llm_temperature,
             timeout_seconds=settings.llm_timeout_seconds,
+            fallback_models=settings.llm_fallback_models.split(","),
         )
     except Exception as exc:
         raise LLMProviderError(f"Could not initialise LLM provider: {type(exc).__name__}") from exc

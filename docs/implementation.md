@@ -65,3 +65,23 @@ Changes from testing the app, put in the order they'll be built. Screenshots are
 
 1. **Redesign the plan rating.** It looks cheap and unprofessional; it should be better organised
    and look different.
+
+---
+
+## Status (6 Nov 2026)
+
+| Part | State | Notes |
+|---|---|---|
+| 1 | Done | Profile button opens Settings; tabs are Map · Explore · Trips · Friends |
+| 2 | Done | OpenFreeMap (OSM) streets, Esri imagery fading in (450 ms), "Full map" on the plan, routes drawn under the labels |
+| 3 | Done | All 128 maps re-rendered (template `district-map-2`): labels placed without overlap; the app asks for the new version |
+| 4 | Done | Kuakata 7 and Sreemangal 13 reviewed places (published attractions within 25 km of the town) |
+| 5 | Done | "From where I am", plane / train / bus / car multi-select or "Suggest by my budget"; door-to-door legs; trains by timetable with the other departures; old mode box removed |
+| 6 | Done | "AI estimate" card on the budget screen: Gemini, given the trip's facts (room rates, TCB market prices, entry fees, the ways there, local travel), returns each part with its basis, a range and its assumptions; the server checks it and adds up the total; "Use as my budget" sets it |
+| 7 | Done | Stars with a word, "What worked" / "What to improve" groups, a note, a saved summary with Edit |
+
+Limits, said in the app where they apply:
+
+- **Fares** for trains, flights and buses are estimates (`fare_kind: estimate`); only train *times* come from the timetable. The eastern timetable is still `needs_review`.
+- **Launch / boat**: no launch routes in the data yet, so a launch is never suggested; choosing it says so.
+- **AI estimate**: without a starting point, getting there is left out (it never guesses a city). It uses `gemini-3.6-flash`, falling back to `gemini-3.5-flash` and `gemini-3.1-flash-lite` when the model is busy (`LLM_FALLBACK_MODELS`).

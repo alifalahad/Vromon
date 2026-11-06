@@ -1819,5 +1819,29 @@
     "estimate": "estimate",
     "noLaunch": "Launch routes and timetables aren't in Vromon yet.",
     "honesty": "Train times are Bangladesh Railway's published timetable. Fares marked \"estimate\" and flight times are estimates: check before you book."
+  },
+  "aiBudget": {
+    "title": "AI estimate",
+    "sub": "Gemini reads the hotel rates here, today's market prices, entry fees and your ways there.",
+    "run": "Estimate with AI",
+    "retry": "Try again",
+    "reading": "Reading the prices…",
+    "range": "{{low}} – {{high}}",
+    "perPerson": "{{amount}} each",
+    "confidence": {
+      "low": "Rough guess",
+      "medium": "Fair estimate",
+      "high": "Close estimate"
+    },
+    "other": "Other (snacks, tips)",
+    "assumed": "What it assumed",
+    "noStart": "Getting there isn't counted: set where you start from.",
+    "use": "Use {{amount}} as my budget",
+    "isYours": "This is your budget",
+    "again": "Ask again",
+    "applied": "Your budget is now {{amount}}",
+    "footnote": "An estimate by {{model}} on {{date}}, from Vromon's data. Prices change: check before you go.",
+    "notSetUp": "The AI estimate isn't set up on this server.",
+    "failed": "The AI couldn't make an estimate right now."
   }
 }
