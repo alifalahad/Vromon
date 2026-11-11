@@ -340,6 +340,30 @@ class TestDoubtfulAnswers:
             s.close()
 
 
+    def test_one_unreachable_stop_leaves_the_other_legs_on_roads(self):
+        island = (21.40, 92.30)
+
+        class OneBadStop(FakeRoads):
+            def route(self, points):
+                if island in points:
+                    self.route_calls += 1
+                    raise RoutingUnavailable("Could not find routable point", temporary=False)
+                return super().route(points)
+
+        fake = OneBadStop()
+        ROADS.reset(provider=fake)
+        s = _Session()
+        try:
+            a, b, c = (21.4272, 92.0058), (21.44, 92.015), (21.45, 92.02)
+            pts = [a, b, c, island]
+            ROADS.prepare(s, pts)
+            lines = ROADS.lines(s, pts)
+            assert lines[0] and lines[1] and lines[2] is None      # asked leg by leg after the day was refused
+            assert ROADS.available
+        finally:
+            s.close()
+
+
 class TestModes:
 
     def test_times_and_fares(self):
@@ -393,3 +417,49 @@ class TestOrsAdapter:
         monkeypatch.setattr(ors.httpx, "post", lambda *a, **k: Resp())
         with pytest.raises(RoutingUnavailable, match="403"):
             OrsProvider("KEY").matrix([(21.4, 92.0)], [(21.42, 92.02)])
+
+
+class TestRiversAndCrossings:
+    """Routing fixes (2026-11-05): long river detours are real roads; no road at all can be a boat crossing."""
+
+    def test_a_long_detour_round_a_river_is_believed(self):
+        class RoundTheRiver(FakeRoads):
+            def matrix(self, sources, destinations):
+                km = [[haversine_km(a, b) * 4 for b in destinations] for a in sources]
+                return km, [[k / 30 * 60 for k in row] for row in km]
+
+        ROADS.reset(provider=RoundTheRiver())
+        s = _Session()
+        try:
+            a, b = (22.70, 90.35), (22.70, 90.45)           # ~10 km apart, the road goes round
+            ROADS.prepare(s, [a, b])
+            t = ROADS.travel(a, b)
+            assert t.source == "road" and t.km == pytest.approx(haversine_km(a, b) * 4)
+        finally:
+            s.close()
+
+    def test_no_road_becomes_a_boat_crossing_between_ghats(self):
+        from app.services.routing import water as W
+
+        class Island(FakeRoads):
+            def matrix(self, sources, destinations):
+                return [[None for _ in destinations] for _ in sources], [[None for _ in destinations] for _ in sources]
+
+        ROADS.reset(provider=Island())
+        s = _Session()
+        try:
+            mainland, island = (22.30, 90.80), (22.30, 91.00)
+            ROADS.prepare(s, [mainland, island])
+            ROADS._ghats = [W.Ghat("a-ghat", "Mainland ghat", 22.30, 90.83), W.Ghat("b-ghat", "Island ghat", 22.30, 90.97)]
+            t = ROADS.travel(mainland, island)
+            assert t.source == "water_estimate"
+            c = ROADS.crossing(mainland, island)
+            assert (c.start.slug, c.end.slug) == ("a-ghat", "b-ghat") and c.water_km > 10
+            assert t.minutes == c.minutes > W.BOARDING_MIN
+        finally:
+            s.close()
+
+    def test_short_town_hops_are_never_boats(self):
+        from app.services.routing import water as W
+        ghats = [W.Ghat("x", "x", 22.70, 90.35), W.Ghat("y", "y", 22.70, 90.37)]
+        assert W.plan((22.70, 90.351), (22.70, 90.362), ghats) is None

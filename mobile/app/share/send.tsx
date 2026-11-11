@@ -154,7 +154,7 @@ export default function SendToFriendsScreen() {
               accessibilityLabel={`${name}, @${item.username}`}
               testID={`send-friend-${item.username}`}
             >
-              <Avatar name={name} id={item.id} size={44} />
+              <Avatar name={name} id={item.id} uri={item.avatar_url} size={44} />
               <View style={styles.rowText}>
                 <Text style={styles.name} numberOfLines={1}>
                   {name}

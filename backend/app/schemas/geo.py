@@ -9,7 +9,8 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-PlaceType = Literal["country", "region", "city"]
+# district: Bangladesh's 64, coded "BD-<name>" (the catalog slug without "bd-district-")
+PlaceType = Literal["country", "region", "city", "district"]
 VisitStatus = Literal["visited", "want", "lived"]
 MAX_BATCH = 500
 
@@ -95,3 +96,4 @@ class StatsOut(BaseModel):
     world_total: int
     world_percent: float
     want_to_visit: int
+    districts: int = 0

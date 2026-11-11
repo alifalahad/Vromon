@@ -51,7 +51,7 @@ export default function FriendCodeScreen() {
         </View>
       ) : (
         <View style={styles.center} testID="code-preview">
-          <Avatar name={person.data.display_name ?? person.data.username} id={person.data.id} size={96} />
+          <Avatar name={person.data.display_name ?? person.data.username} id={person.data.id} uri={person.data.avatar_url} size={96} />
           <Text style={styles.title}>{person.data.display_name ?? person.data.username}</Text>
           <Text style={styles.body}>@{person.data.username}</Text>
           <Text style={styles.code}>{formatFriendCode(code)}</Text>

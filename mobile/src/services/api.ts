@@ -12,12 +12,15 @@ import { supabase } from '../features/auth/supabase';
 import type {
   AdaptationType,
   AdaptResult,
+  AIBudget,
   Algorithm,
   AlternativesResult,
   BudgetBreakdown,
   CardKind,
   ChatMessage,
   Conversation,
+  JourneyMode,
+  TripJourney,
   Destination,
   EditResult,
   Compare,
@@ -213,6 +216,9 @@ export const tripsApi = {
     api.post<LateResult>(`/trips/${tripId}/days/${dayId}/late`, { now, minutes, apply: true }).then((r) => r.data),
   undoLate: (tripId: number, dayId: number, undo: LateUndo) =>
     api.post<EditResult>(`/trips/${tripId}/days/${dayId}/late/undo`, { undo }).then((r) => r.data),
+  /** An AI estimate of the whole trip's cost (Gemini, from Vromon's data); it can take a while */
+  aiBudget: (id: number, lang: 'en' | 'bn') =>
+    api.post<AIBudget>(`/trips/${id}/budget/ai`, null, { params: { lang }, timeout: 90000 }).then((r) => r.data),
   /** Apply a way to save from the budget, or its undo */
   saveBudget: (id: number, action: SaveAction) =>
     api.post<SaveResult>(`/trips/${id}/budget/save`, { action }).then((r) => r.data),
@@ -236,6 +242,9 @@ export const tripsApi = {
     api.patch<EditResult>(`/trips/${tripId}/items/${itemId}`, changes).then((r) => r.data),
   // Roads (trip planner step 5): how to get to the next stop, and the day's road lines
   leg: (tripId: number, itemId: number) => api.get<LegOptions>(`/trips/${tripId}/items/${itemId}/leg`).then((r) => r.data),
+  journey: (tripId: number) => api.get<TripJourney>(`/trips/${tripId}/journey`).then((r) => r.data),
+  setJourneyPreferences: (tripId: number, prefs: { transport_modes: JourneyMode[]; transport_by_budget: boolean; origin_point?: { lat: number; lon: number; label?: string } | null }) =>
+    api.put<TripJourney>(`/trips/${tripId}/journey/preferences`, prefs).then((r) => r.data),
   dayRoute: (tripId: number, dayId: number) => api.get<DayRoute>(`/trips/${tripId}/days/${dayId}/route`).then((r) => r.data),
   // Live conditions (trip planner step 6): weather, sea, sun and usual traffic, with warnings per stop
   conditions: (tripId: number, refresh = false) =>
@@ -275,6 +284,15 @@ export const meApi = {
   putSettings: (settings: Omit<UserSettings, 'updated_at'>) => api.put<UserSettings>('/me/settings', settings).then((r) => r.data),
   usernameAvailable: (username: string) =>
     api.get<UsernameAvailability>(`/usernames/${encodeURIComponent(username)}/available`).then((r) => r.data),
+  /** A new profile photo (a square JPEG); the server stores it on ImgBB */
+  uploadAvatar: (uri: string) => {
+    const form = new FormData();
+    form.append('file', { uri, name: 'avatar.jpg', type: 'image/jpeg' } as unknown as Blob);
+    return api
+      .post<Me>('/me/avatar', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 })
+      .then((r) => r.data);
+  },
+  removeAvatar: () => api.delete<Me>('/me/avatar').then((r) => r.data),
 };
 
 // ---------------------------------------------------------------------------

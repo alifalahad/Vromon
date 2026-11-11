@@ -33,6 +33,7 @@ class TravelStats:
     world_percent: float
     want_to_visit: int
     continent_names: list[str] = field(default_factory=list)
+    districts: int = 0                      # Bangladesh's districts
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -64,18 +65,22 @@ def travel_stats(db: Session, user_id: uuid.UUID) -> TravelStats:
         world_percent=round(100 * in_world / total, 1) if total else 0.0,
         want_to_visit=sum(1 for _, _, s in visits if s == "want"),
         continent_names=continents,
+        districts=sum(1 for t, _ in visited if t == "district"),
     )
 
 
 def visits_with_country(db: Session, visits: list[Visit]) -> list[dict]:
-    """Visits as dicts with `country_iso2` filled in for regions and cities."""
+    """Visits as dicts with `country_iso2` filled in for regions, cities and districts."""
     region_codes = {v.place_code for v in visits if v.place_type == "region"}
     city_ids = {int(v.place_code) for v in visits if v.place_type == "city" and v.place_code.isdigit()}
     region_country = dict(db.execute(select(Region.code, Region.country_iso2).where(Region.code.in_(region_codes))).all()) if region_codes else {}
     city_country = {str(k): c for k, c in db.execute(select(City.geonameid, City.country_iso2).where(City.geonameid.in_(city_ids))).all()} if city_ids else {}
     out = []
     for v in visits:
-        country = v.place_code if v.place_type == "country" else (region_country if v.place_type == "region" else city_country).get(v.place_code)
+        if v.place_type == "district":
+            country = v.place_code[:2]                      # "BD-<name>"
+        else:
+            country = v.place_code if v.place_type == "country" else (region_country if v.place_type == "region" else city_country).get(v.place_code)
         out.append({
             "place_type": v.place_type, "place_code": v.place_code, "status": v.status,
             "first_visited_on": v.first_visited_on, "last_visited_on": v.last_visited_on,

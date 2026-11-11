@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     llm_provider: str = ""
     llm_api_key: str = ""
     llm_model: str = "gemini-3.6-flash"
+    # Asked in turn when the model is overloaded (503) or out of quota (429), comma-separated
+    llm_fallback_models: str = "gemini-3.5-flash,gemini-3.1-flash-lite"
     llm_temperature: float = 0.2
     llm_timeout_seconds: float = 30.0
 
@@ -112,6 +114,9 @@ class Settings(BaseSettings):
     ors_api_key: str = ""
     ors_base_url: str = "https://api.heigit.org/openrouteservice"   # was api.openrouteservice.org (deprecated)
     routing_timeout_seconds: float = 10.0
+
+    # --- Profile photos: uploaded to ImgBB (api.imgbb.com) with this key; empty = photos off ---
+    imgbb_api_key: str = ""
 
     # --- Server ---
     host: str = "0.0.0.0"

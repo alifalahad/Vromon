@@ -134,6 +134,8 @@ export default function TripScreen() {
   const [why, setWhy] = useState<ItineraryItem | null>(null);
   const [replacing, setReplacing] = useState<ItineraryItem | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Full map: the plan sheet steps aside and the map takes the whole screen
+  const [fullMap, setFullMap] = useState(false);
   const [fitCount, setFitCount] = useState(0);
   const [snack, setSnack] = useState<{ message: string; undo?: () => void } | null>(null);
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null);
@@ -270,16 +272,23 @@ export default function TripScreen() {
     }
   };
 
-  // Road lines for the map, a day at a time (kept on the server); legs without one are drawn straight
+  // Road lines for the map, a day at a time (kept on the server); legs without one are drawn straight.
+  // A day whose route is missing a leg (routing was down, or still working) is asked again every 30 s
   const stopOrder = pins.map((p) => p.id).join(',');
   const route = useQuery({
     queryKey: ['dayRoute', tripId, day?.id, stopOrder],
     queryFn: () => tripsApi.dayRoute(tripId, day!.id),
     enabled: !!day && pins.length > 1,
-    staleTime: Infinity,
+    staleTime: (q) => (routeComplete(q.state.data) ? Infinity : 0),
+    refetchInterval: (q) => (q.state.data && !routeComplete(q.state.data) ? 30_000 : false),
   });
   const roadLines = useMemo(
     () => Object.fromEntries((route.data?.legs ?? []).flatMap((l) => (l.line ? [[`${l.from_item_id}>${l.to_item_id}`, l.line]] : []))),
+    [route.data],
+  );
+  // Legs with no road: road to the ghat, across the water, road on
+  const crossings = useMemo(
+    () => Object.fromEntries((route.data?.legs ?? []).flatMap((l) => (l.segments ? [[`${l.from_item_id}>${l.to_item_id}`, l.segments]] : []))),
     [route.data],
   );
 
@@ -552,6 +561,7 @@ export default function TripScreen() {
             km={r.km}
             mode={r.mode}
             fare={r.fare}
+            crossing={r.crossing}
             note={
               dayConditions?.legs[String(r.itemId)]
                 ? t('conditions.slowLeg', {
@@ -702,9 +712,11 @@ export default function TripScreen() {
         onSelect={pickFromMap}
         fitKey={`${day?.id ?? 'none'}-${fitCount}`}
         roadLines={roadLines}
+        crossings={crossings}
         topPadding={insets.top + 56}
-        bottomPadding={sheetLow}
+        bottomPadding={fullMap ? insets.bottom + 96 : sheetLow}
         accessibilityLabel={t('plan.mapLabel', { n: f.n(day?.day_number ?? 1) })}
+        onFullMap={pins.length > 0 && !fullMap ? () => setFullMap(true) : undefined}
       />
 
       <View style={[styles.topBar, { top: insets.top + 8 }]} pointerEvents="box-none">
@@ -753,6 +765,20 @@ export default function TripScreen() {
         </View>
       </View>
 
+      {fullMap ? (
+        <PressableScale
+          haptic="selection"
+          onPress={() => setFullMap(false)}
+          style={[styles.showPlan, { bottom: insets.bottom + 24 }]}
+          accessibilityLabel={t('plan.showPlan')}
+          testID="trip-show-plan"
+        >
+          <MaterialCommunityIcons name="format-list-bulleted" size={20} color={theme.colors.onAccent} />
+          <Text style={styles.showPlanText}>{t('plan.showPlan')}</Text>
+        </PressableScale>
+      ) : null}
+
+      {fullMap ? null : (
       <BottomSheet
         ref={sheet}
         index={0}
@@ -903,7 +929,7 @@ export default function TripScreen() {
                   />
                 )}
 
-                {dayIndex === 0 && itinerary.data?.getting_there ? <GettingThere trip={itinerary.data.getting_there} /> : null}
+                {dayIndex === 0 && itinerary.data?.getting_there ? <GettingThere trip={itinerary.data.getting_there} tripId={tripId} /> : null}
 
                 {mine &&
                   unplaced.map((u) => (
@@ -998,6 +1024,7 @@ export default function TripScreen() {
           <TripDetails trip={data} ownerId={data.user_id ?? me.data?.id} mine={mine} hasPlan={hasPlan} />
         </BottomSheetScrollView>
       </BottomSheet>
+      )}
 
       {dragging && days.length > 1 && (
         <View pointerEvents="none" style={[styles.dropBar, { top: insets.top + 8 }]} testID="drop-days">
@@ -1171,6 +1198,19 @@ const useStyles = makeStyles((t) => {
     staleDot: { backgroundColor: t.colors.warning },
     updatedText: { ...t.type.footnote, color: t.colors.textSecondary },
     topRight: { flexDirection: 'row', gap: t.spacing.sm },
+    showPlan: {
+      position: 'absolute',
+      alignSelf: 'center',
+      minHeight: 52,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 22,
+      borderRadius: 26,
+      backgroundColor: t.colors.accentStrong,
+      elevation: 6,
+    },
+    showPlanText: { ...t.type.headline, color: t.colors.onAccent },
     round: {
       width: 48,
       height: 48,
@@ -1297,3 +1337,8 @@ const useStyles = makeStyles((t) => {
     dropChipText: { fontSize: 15, fontWeight: '700', color: t.colors.link },
   };
 });
+
+/** Every leg has its road line, or its boat crossing */
+function routeComplete(route: { legs: { line: unknown; segments?: unknown }[] } | undefined): boolean {
+  return !!route && route.legs.every((l) => l.line || l.segments);
+}

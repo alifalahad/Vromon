@@ -162,6 +162,11 @@ function ThemedStack() {
           <Stack.Protected guard={gate.inApp}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="destination/[id]" options={{ title: t('screens.destination') }} />
+            <Stack.Screen name="explore/district/[slug]" options={{ headerShown: false }} />
+            <Stack.Screen name="explore/district-map/[slug]" options={{ headerShown: false, animation: 'fade' }} />
+            <Stack.Screen name="explore/districts" options={{ title: t('explore.districtsTitle') }} />
+            <Stack.Screen name="explore/continent/[name]" options={{ title: '' }} />
+            <Stack.Screen name="explore/country/[iso2]" options={{ title: '' }} />
             <Stack.Screen name="trip/new" options={{ headerShown: false, title: t('screens.planTrip'), presentation: 'modal' }} />
             <Stack.Screen name="trip/must-dos/[id]" options={{ title: t('screens.mustDos') }} />
             <Stack.Screen name="trip/conditions/[id]" options={{ title: t('conditions.title') }} />
@@ -170,7 +175,9 @@ function ThemedStack() {
             <Stack.Screen name="trip/today/[id]" options={{ title: t('today.title') }} />
             <Stack.Screen name="itinerary/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="stats/trips" options={{ title: t('screens.tripStats') }} />
+            <Stack.Screen name="trip/journey/[id]" options={{ title: t('journey.title') }} />
             <Stack.Screen name="trip/route/[id]" options={{ title: t('screens.tripRoute') }} />
+            <Stack.Screen name="settings/index" options={{ title: t('settings.title') }} />
             <Stack.Screen name="settings/profile" options={{ title: t('profile.edit') }} />
             <Stack.Screen name="settings/home-country" options={{ title: t('profile.homeCountry') }} />
             <Stack.Screen name="settings/delete-account" options={{ title: t('deleteAccount.title') }} />

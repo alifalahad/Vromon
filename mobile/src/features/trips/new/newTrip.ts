@@ -6,7 +6,7 @@
  * step 1 has a default, so a plan can be built from step 1 alone.
  */
 
-import type { BusyTime, MustSee, MustSeeWhen, TransportMode, TripCreate } from '../../../types';
+import type { BusyTime, JourneyMode, MustSee, MustSeeWhen, TripCreate } from '../../../types';
 import { durationDays, localToday, parseDay } from '../dates';
 
 /** Same limit as the backend (schemas.py MAX_TRIP_DAYS). */
@@ -39,8 +39,10 @@ export type NewTrip = {
   arrive: string | null;
   /** Last day: when you leave (null = the usual end) */
   leave: string | null;
-  origin: { city_geonameid: number; label: string } | null;
-  mode: TransportMode | null;
+  /** Where the trip starts: a city, or the phone's location */
+  origin: { city_geonameid: number; label: string } | { here: true; lat: number; lon: number; label: string } | null;
+  /** How you like to travel there (any of them; tried first); none: Vromon suggests by budget */
+  modes: JourneyMode[];
   interests: string[];
   pace: Pace;
   tier: Tier;
@@ -85,7 +87,7 @@ export function defaultNewTrip(today = new Date(), destination = ''): NewTrip {
     arrive: null,
     leave: null,
     origin: null,
-    mode: null,
+    modes: [],
     interests: [],
     pace: 'Balanced',
     tier: 'Comfort',
@@ -159,8 +161,11 @@ export function toPayload(t: NewTrip): TripCreate {
       busy: t.busy,
       excluded_places: t.skip,
     },
-    origin: t.origin ? { city_geonameid: t.origin.city_geonameid } : null,
-    transport_mode: t.mode,
+    origin: t.origin && 'city_geonameid' in t.origin ? { city_geonameid: t.origin.city_geonameid } : null,
+    origin_point: t.origin && 'here' in t.origin ? { lat: t.origin.lat, lon: t.origin.lon, label: t.origin.label } : null,
+    transport_mode: null,
+    transport_modes: t.modes,
+    transport_by_budget: t.modes.length === 0,
   };
 }
 

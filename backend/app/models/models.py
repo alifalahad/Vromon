@@ -232,6 +232,8 @@ class User(Base):
     username: Mapped[Optional[str]] = mapped_column(String(20), unique=True, nullable=True)
     display_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     avatar_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # Profile photo: its public URL on ImgBB (uploaded by POST /me/avatar)
+    avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     home_country_iso2: Mapped[Optional[str]] = mapped_column(String(2), nullable=True)
     discoverable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Opaque, rotatable code for QR / invite links; never the internal id.
@@ -659,6 +661,21 @@ class TripPreference(Base):
     leave_time: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
     # The hotel the traveller chose (None = the best one at their accommodation level)
     hotel_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("hotels.id", ondelete="SET NULL"), nullable=True)
+    # Getting there: the transport the traveller prefers (any of plane / train / bus / car / launch),
+    # or none and `transport_by_budget` (the planner suggests by budget); where they start
+    transport_modes_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    transport_by_budget: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    origin_lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    origin_lon: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    origin_label: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+    @property
+    def transport_modes(self) -> list:
+        return _json_get(self.transport_modes_json)
+
+    @transport_modes.setter
+    def transport_modes(self, value):
+        self.transport_modes_json = _json_set(value)
 
     trip: Mapped["Trip"] = relationship("Trip", back_populates="preference")
 
@@ -853,6 +870,14 @@ class SourceDocument(Base):
     content_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     ingested_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Provenance (guideline §11): every chunk inherits these through its document
+    data_source_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    publisher: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    published_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    retrieved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    license: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    language: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    doc_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     chunks: Mapped[List["DocumentChunk"]] = relationship(
         "DocumentChunk", back_populates="source", cascade="all, delete-orphan"

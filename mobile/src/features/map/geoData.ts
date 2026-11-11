@@ -26,6 +26,18 @@ export const HOME_REGION_LABELS: GeoJSON.FeatureCollection<GeoJSON.Point> = {
   })),
 };
 
+// Bangladesh's 64 districts as areas (geoBoundaries ADM2, simplified ~200 m), to colour by your status
+export const HOME_DISTRICT_AREAS = require('../../../assets/geo/home-district-areas.json') as GeoJSON.FeatureCollection<
+  GeoJSON.Polygon | GeoJSON.MultiPolygon,
+  { code: string; name: string; name_bn: string; region: string; country: string }
+>;
+
+/** A district's name (Bangla when asked), from its code ("BD-bandarban"). */
+export function homeDistrictName(code: string, lang: 'en' | 'bn'): string | undefined {
+  const p = HOME_DISTRICT_AREAS.features.find((f) => f.properties.code === code)?.properties;
+  return p && (lang === 'bn' ? p.name_bn : p.name);
+}
+
 /** A bundled home region's name (Bangla when asked), or undefined for other regions. */
 export function homeRegionName(code: string, lang: 'en' | 'bn'): string | undefined {
   const p = HOME_REGIONS.features.find((f) => f.properties.code === code)?.properties;

@@ -1,0 +1,565 @@
+# Vromon source registry (guideline §4.4). One entry per source; `python -m vromon_data registry sync`
+# copies it into the data_sources table, `python -m vromon_data probe` tests every `probe` URL and
+# writes source-registry/probe-results.json.
+#
+# terms_review_status: not_reviewed | open_license | permission_required | reference_only | do_not_use
+# reliability_class:   official_government | official_operator | direct_human | licensed_provider |
+#                      community_geospatial | reputable_secondary | unverified_user | ai_extracted
+# recommended_use:     production | enrichment | discovery_only | reference_only | do_not_use
+# fetch_policy:        robots (default: web pages, robots.txt is obeyed) | usage_policy (documented API or
+#                      bulk download offered by the provider: its published usage policy and rate limits apply)
+
+sources:
+  # --- Administrative geography -------------------------------------------------------------
+  - source_id: geoboundaries_bgd
+    source_name: geoBoundaries gbOpen, Bangladesh ADM1-ADM3
+    organization: William & Mary geoLab (source data BBS / OCHA ROAP, Wikimedia Commons)
+    source_type: open_dataset
+    website_url: https://www.geoboundaries.org/
+    access_method: api
+    fetch_policy: usage_policy  # documented API/download: its usage policy applies, not crawler robots.txt
+    usage_policy_url: https://www.geoboundaries.org/api.html
+    license_name: per level (ADM1 CC0 1.0; ADM2 and ADM3 CC BY 3.0 IGO); read from the API metadata
+    license_url: https://www.geoboundaries.org/
+    attribution_text: "Boundaries: geoBoundaries (Runfola et al.), source Bangladesh Bureau of Statistics / OCHA ROAP"
+    terms_review_status: open_license
+    coverage: Bangladesh divisions, districts, upazilas
+    update_frequency: irregular releases
+    reliability_class: reputable_secondary
+    recommended_use: production
+    probe:
+      - https://www.geoboundaries.org/api/current/gbOpen/BGD/ADM1/
+      - https://www.geoboundaries.org/api/current/gbOpen/BGD/ADM2/
+      - https://www.geoboundaries.org/api/current/gbOpen/BGD/ADM3/
+
+  - source_id: hdx_cod_ab_bgd
+    source_name: Bangladesh subnational administrative boundaries (COD-AB)
+    organization: OCHA / Bangladesh Bureau of Statistics, on HDX
+    source_type: open_dataset
+    website_url: https://data.humdata.org/dataset/cod-ab-bgd
+    access_method: api
+    fetch_policy: usage_policy  # documented API/download: its usage policy applies, not crawler robots.txt
+    usage_policy_url: https://data.humdata.org/faqs/devs
+    license_name: read from the HDX package metadata
+    license_url: https://data.humdata.org/dataset/cod-ab-bgd
+    attribution_text: "Administrative boundaries: Bangladesh Bureau of Statistics, OCHA (HDX COD-AB)"
+    terms_review_status: not_reviewed
+    coverage: ADM0-ADM3 or ADM4 (to confirm)
+    update_frequency: reviewed periodically
+    reliability_class: official_government
+    recommended_use: production
+    probe:
+      - https://data.humdata.org/api/3/action/package_show?id=cod-ab-bgd
+
+  - source_id: vromon_curated
+    source_name: Vromon curated reference tables
+    organization: Vromon team
+    source_type: curated_table
+    website_url: null
+    access_method: repository_file
+    license_name: Vromon (own work)
+    terms_review_status: open_license
+    coverage: Bangladesh division and district names (official English spellings, Bangla names)
+    reliability_class: direct_human
+    recommended_use: production
+    notes: >-
+      BD_DISTRICTS in scripts/geo/prepare.py and the Bangladesh rows of data/geo/regions.json
+      (official spellings such as Chattogram, Cumilla, Barishal). Bangla names are verified
+      against the district and division portal titles (connector bd_portal_names).
+
+  # --- Tourist places -----------------------------------------------------------------------
+  - source_id: bd_district_portals
+    source_name: District portals, tourist spots (দর্শনীয় স্থান)
+    organization: District administrations, on the national portal (bangladesh.gov.bd; a2i / Cabinet Division)
+    source_type: official_web_pages
+    website_url: https://bangladesh.gov.bd/
+    access_method: permitted_scraping_pending
+    license_name: "© সর্বস্বত্ব সংরক্ষিত (all rights reserved)"
+    license_url: null
+    attribution_text: "Source: <district> district portal, bangladesh.gov.bd"
+    terms_review_status: permission_required
+    coverage: 64 districts (one table per district); upazila portals likely the same
+    update_frequency: updated by district offices
+    reliability_class: official_government
+    recommended_use: discovery_only
+    notes: Facts (names, upazila) may be checked against it; text and photos need written permission.
+    probe:
+      - https://gaibandha.gov.bd/pages/tourist-spot
+      - https://bandarban.gov.bd/pages/tourist-spot
+      - https://coxsbazar.gov.bd/pages/tourist-spot
+
+  - source_id: bd_tourism_board
+    source_name: Bangladesh Tourism Board
+    organization: Bangladesh Tourism Board (Ministry of Civil Aviation and Tourism)
+    source_type: official_website
+    website_url: https://tourismboard.gov.bd/
+    access_method: manual
+    license_name: unknown
+    terms_review_status: not_reviewed
+    coverage: national
+    reliability_class: official_government
+    recommended_use: discovery_only
+    probe:
+      - https://tourismboard.gov.bd/
+
+  - source_id: bd_parjatan
+    source_name: Bangladesh Parjatan Corporation
+    organization: Bangladesh Parjatan Corporation
+    source_type: official_website
+    website_url: https://parjatan.gov.bd/
+    access_method: manual
+    license_name: unknown
+    terms_review_status: not_reviewed
+    coverage: national; Parjatan's own motels
+    reliability_class: official_government
+    recommended_use: discovery_only
+    probe:
+      - https://parjatan.gov.bd/
+
+  - source_id: bd_archaeology
+    source_name: Department of Archaeology (protected monuments)
+    organization: Department of Archaeology, Ministry of Cultural Affairs
+    source_type: official_website
+    website_url: https://archaeology.gov.bd/
+    access_method: manual
+    license_name: unknown
+    terms_review_status: not_reviewed
+    reliability_class: official_government
+    recommended_use: enrichment
+    probe:
+      - https://archaeology.gov.bd/
+
+  - source_id: bd_forest_department
+    source_name: Bangladesh Forest Department (protected areas)
+    organization: Bangladesh Forest Department
+    source_type: official_website
+    website_url: https://bforest.gov.bd/
+    access_method: manual
+    license_name: unknown
+    terms_review_status: not_reviewed
+    reliability_class: official_government
+    recommended_use: enrichment
+    probe:
+      - https://bforest.gov.bd/
+
+  - source_id: wikidata
+    source_name: Wikidata
+    organization: Wikimedia Foundation (community)
+    source_type: open_dataset
+    website_url: https://www.wikidata.org/
+    access_method: api
+    fetch_policy: usage_policy  # documented API/download: its usage policy applies, not crawler robots.txt
+    usage_policy_url: https://www.mediawiki.org/wiki/Wikidata_Query_Service/User_Manual#Query_limits
+    license_name: CC0 1.0
+    license_url: https://creativecommons.org/publicdomain/zero/1.0/
+    attribution_text: "Wikidata (CC0)"
+    terms_review_status: open_license
+    coverage: global
+    update_frequency: continuous
+    reliability_class: community_geospatial
+    recommended_use: production
+    notes: Discovery and enrichment; never the sole authority for operational facts.
+    probe:
+      - https://query.wikidata.org/sparql?query=ASK%7B%7D&format=json
+
+  - source_id: wikivoyage
+    source_name: Wikivoyage (English)
+    organization: Wikimedia Foundation (community)
+    source_type: open_dataset
+    website_url: https://en.wikivoyage.org/
+    access_method: api
+    fetch_policy: usage_policy  # documented API/download: its usage policy applies, not crawler robots.txt
+    usage_policy_url: https://www.mediawiki.org/wiki/API:Etiquette
+    license_name: CC BY-SA 4.0
+    license_url: https://creativecommons.org/licenses/by-sa/4.0/
+    attribution_text: "Text from Wikivoyage contributors (CC BY-SA 4.0)"
+    terms_review_status: open_license
+    coverage: global
+    reliability_class: reputable_secondary
+    recommended_use: enrichment
+    probe:
+      - https://en.wikivoyage.org/w/api.php?action=query&meta=siteinfo&format=json
+
+  - source_id: osm_geofabrik_bd
+    source_name: OpenStreetMap, Geofabrik Bangladesh extract
+    organization: OpenStreetMap contributors; extract by Geofabrik
+    source_type: open_dataset
+    website_url: https://download.geofabrik.de/asia/bangladesh.html
+    access_method: download
+    fetch_policy: usage_policy  # documented API/download: its usage policy applies, not crawler robots.txt
+    usage_policy_url: https://download.geofabrik.de/technical.html
+    license_name: ODbL 1.0
+    license_url: https://www.openstreetmap.org/copyright
+    attribution_text: "© OpenStreetMap contributors (ODbL)"
+    terms_review_status: open_license
+    coverage: Bangladesh
+    update_frequency: daily
+    reliability_class: community_geospatial
+    recommended_use: enrichment
+    notes: Share-alike for derived databases (plan decision 3).
+    probe:
+      - https://download.geofabrik.de/asia/bangladesh.html
+
+  - source_id: osm_overpass
+    source_name: OpenStreetMap via the Overpass API
+    organization: OpenStreetMap contributors; overpass-api.de
+    source_type: open_dataset
+    website_url: https://overpass-api.de/
+    access_method: api
+    fetch_policy: usage_policy  # documented API/download: its usage policy applies, not crawler robots.txt
+    usage_policy_url: https://dev.overpass-api.de/overpass-doc/en/preface/commons.html
+    license_name: ODbL 1.0
+    license_url: https://www.openstreetmap.org/copyright
+    attribution_text: "© OpenStreetMap contributors (ODbL)"
+    terms_review_status: open_license
+    coverage: global
+    update_frequency: minutely
+    reliability_class: community_geospatial
+    recommended_use: enrichment
+    notes: Public instance has usage limits; small, well-scoped queries only.
+    probe:
+      - https://overpass-api.de/api/status
+
+  - source_id: overture_places
+    source_name: Overture Maps Places
+    organization: Overture Maps Foundation
+    source_type: open_dataset
+    website_url: https://docs.overturemaps.org/guides/places
+    access_method: download
+    license_name: CDLA-Permissive-2.0 (Foursquare rows Apache-2.0)
+    license_url: https://cdla.dev/permissive-2-0/
+    attribution_text: "Overture Maps Foundation (CDLA-Permissive-2.0)"
+    terms_review_status: open_license
+    coverage: global
+    update_frequency: monthly releases
+    reliability_class: licensed_provider
+    recommended_use: production
+    notes: Hotels and restaurants are published from it as business listings (not checked), with its confidence score.
+    probe:
+      - https://docs.overturemaps.org/guides/places
+
+  - source_id: wikimedia_commons
+    source_name: Wikimedia Commons
+    organization: Wikimedia Foundation (community)
+    source_type: open_dataset
+    website_url: https://commons.wikimedia.org/
+    access_method: api
+    fetch_policy: usage_policy  # documented API/download: its usage policy applies, not crawler robots.txt
+    usage_policy_url: https://www.mediawiki.org/wiki/API:Etiquette
+    license_name: per file
+    terms_review_status: open_license
+    coverage: global
+    reliability_class: community_geospatial
+    recommended_use: production
+    notes: Check each file's own license and author before display.
+    probe:
+      - https://commons.wikimedia.org/w/api.php?action=query&meta=siteinfo&format=json
+
+  - source_id: geonames
+    source_name: GeoNames
+    organization: GeoNames
+    source_type: open_dataset
+    website_url: https://www.geonames.org/
+    access_method: download
+    fetch_policy: usage_policy  # documented API/download: its usage policy applies, not crawler robots.txt
+    usage_policy_url: https://www.geonames.org/export/
+    license_name: CC BY 4.0
+    license_url: https://creativecommons.org/licenses/by/4.0/
+    attribution_text: "GeoNames (CC BY 4.0)"
+    terms_review_status: open_license
+    coverage: global
+    reliability_class: reputable_secondary
+    recommended_use: enrichment
+    probe:
+      - https://download.geonames.org/export/dump/
+
+  - source_id: mocat_hotels
+    source_name: Star-rated hotels (five, four, three star)
+    organization: Ministry of Civil Aviation and Tourism, Hotel & Restaurant Cell
+    source_type: official_web_pages
+    website_url: https://mocat.gov.bd/pages/static-pages/694032da35ce18e1c05636ee
+    access_method: html
+    license_name: "government publication (facts used: name, address, star class)"
+    terms_review_status: open_license
+    coverage: star-classified hotels in Bangladesh
+    reliability_class: official_government
+    recommended_use: production
+
+  - source_id: tcb_prices
+    source_name: Daily retail prices of essential commodities, Dhaka city
+    organization: Trading Corporation of Bangladesh (TCB)
+    source_type: official_spreadsheet
+    website_url: https://tcb.gov.bd/pages/daily-rmps
+    access_method: xlsx
+    license_name: "government publication (facts used: item, unit, lowest and highest price, date)"
+    terms_review_status: open_license
+    coverage: about 60 foods in seven Dhaka markets, published daily
+    reliability_class: official_government
+    recommended_use: production
+    notes: Market (grocery) prices, not restaurant meal prices.
+
+  - source_id: hotel_websites
+    source_name: Room rates published on hotels' own websites
+    organization: The hotels themselves (each listing's own website)
+    source_type: operator_websites
+    website_url: https://docs.overturemaps.org/guides/places
+    access_method: html
+    license_name: "facts used: room type, rate, currency, the page and date read; robots.txt and AI-agent opt-outs respected"
+    terms_review_status: not_reviewed
+    coverage: hotels whose website states rates as text
+    reliability_class: official_operator
+    recommended_use: production
+    notes: >-
+      Rack rates as each hotel publishes them; may be out of date, so the date read is shown.
+      hotels.gov.bd (Parjatan) is not read: its robots.txt shuts out AI agents.
+
+  - source_id: dpdt_gi
+    source_name: Geographical Indication register
+    organization: Department of Patents, Designs and Trademarks (DPDT)
+    source_type: official_website
+    website_url: https://dpdt.gov.bd/
+    access_method: manual
+    license_name: unknown
+    terms_review_status: not_reviewed
+    reliability_class: official_government
+    recommended_use: production
+    notes: Official evidence for district food and product associations.
+    probe:
+      - https://dpdt.gov.bd/
+
+  # --- Railway ------------------------------------------------------------------------------
+  - source_id: bd_railway
+    source_name: Bangladesh Railway timetables and fare charts
+    organization: Bangladesh Railway
+    source_type: official_web_pages
+    website_url: https://railway.gov.bd/
+    access_method: pdf
+    license_name: none stated (government publication)
+    terms_review_status: not_reviewed
+    coverage: all passenger trains
+    update_frequency: on each timetable revision
+    reliability_class: official_operator
+    recommended_use: production
+    probe:
+      - https://railway.gov.bd/pages/static-pages/691997d5933eb65569ddf8e2
+      - https://railway.gov.bd/pages/static-pages/691997bf933eb65569ddec51
+      - https://railway.gov.bd/pages/static-pages/691997b8933eb65569dde71d
+      - https://railway.gov.bd/pages/files/69199762933eb65569ddc6b9
+      - https://railway.gov.bd/pages/files/6919975d933eb65569ddc526
+
+  - source_id: bd_railway_eticket
+    source_name: Bangladesh Railway e-ticketing
+    organization: Bangladesh Railway (operated by Shohoz)
+    source_type: ticketing_platform
+    website_url: https://eticket.railway.gov.bd/
+    access_method: link_out
+    terms_review_status: reference_only
+    reliability_class: official_operator
+    recommended_use: reference_only
+    notes: Link out only; no scraping.
+    probe:
+      - https://eticket.railway.gov.bd/
+
+  - source_id: data_gov_bd_trains_2017
+    source_name: data.gov.bd Intercity Train Routes (2017)
+    organization: Bangladesh Open Data portal
+    source_type: open_dataset
+    website_url: https://data.gov.bd/dataset/intercity-train-routes-bangladesh
+    access_method: pdf
+    license_name: not specified
+    terms_review_status: do_not_use
+    reliability_class: official_government
+    recommended_use: do_not_use
+    notes: Last modified 2017-01-18; stale.
+
+  # --- Road and bus -------------------------------------------------------------------------
+  - source_id: bd_brta
+    source_name: BRTA bus fare charts
+    organization: Bangladesh Road Transport Authority
+    source_type: official_web_pages
+    website_url: https://brta.gov.bd/
+    access_method: pdf
+    license_name: none stated (government publication / gazette)
+    terms_review_status: not_reviewed
+    coverage: inter-district, long-distance and city routes (regulated non-AC fares)
+    update_frequency: on each gazette
+    reliability_class: official_government
+    recommended_use: production
+    probe:
+      - https://brta.gov.bd/pages/static-pages/6922de1b933eb65569e184a9
+
+  - source_id: bd_rhd_dmt
+    source_name: RHD Distance Matrix Tool
+    organization: Roads and Highways Department
+    source_type: official_tool
+    website_url: https://gis.rhd.gov.bd/dmt/
+    access_method: manual
+    license_name: unknown
+    terms_review_status: permission_required
+    reliability_class: official_government
+    recommended_use: reference_only
+    notes: Interactive only; ask RHD for the distance table or road network.
+    probe:
+      - https://gis.rhd.gov.bd/dmt/
+
+  - source_id: openrouteservice
+    source_name: openrouteservice (road distances and driving times)
+    organization: HeiGIT gGmbH; road data © OpenStreetMap contributors
+    source_type: routing_engine
+    website_url: https://openrouteservice.org/
+    access_method: api
+    fetch_policy: usage_policy  # documented API/download: its usage policy applies, not crawler robots.txt
+    usage_policy_url: https://openrouteservice.org/terms-of-service/
+    license_name: ORS terms; data ODbL (OpenStreetMap)
+    attribution_text: "Routes: openrouteservice.org by HeiGIT | © OpenStreetMap contributors"
+    terms_review_status: open_license
+    coverage: global road network
+    reliability_class: community_geospatial
+    recommended_use: enrichment
+    notes: Calculated journeys only, always labelled as estimates. Free key has daily limits; self-hosted OSRM planned.
+
+  - source_id: bus_ticket_platforms
+    source_name: Bus ticket platforms (Shohoz, BDTickets)
+    organization: Shohoz; BDTickets
+    source_type: ticketing_platform
+    website_url: https://www.shohoz.com/bus-tickets
+    access_method: partnership
+    terms_review_status: permission_required
+    reliability_class: licensed_provider
+    recommended_use: reference_only
+    notes: No public API; partnership needed for operator fares.
+
+  # --- Water --------------------------------------------------------------------------------
+  - source_id: bd_biwta
+    source_name: BIWTA (launch routes, river ports, fare notices)
+    organization: Bangladesh Inland Water Transport Authority
+    source_type: official_website
+    website_url: https://biwta.gov.bd/
+    access_method: manual
+    license_name: unknown
+    terms_review_status: not_reviewed
+    reliability_class: official_government
+    recommended_use: production
+    probe:
+      - https://biwta.gov.bd/
+
+  - source_id: bd_biwtc
+    source_name: BIWTC (ferries, coastal ships)
+    organization: Bangladesh Inland Water Transport Corporation
+    source_type: official_website
+    website_url: https://biwtc.gov.bd/
+    access_method: manual
+    license_name: unknown
+    terms_review_status: not_reviewed
+    reliability_class: official_operator
+    recommended_use: production
+    probe:
+      - https://biwtc.gov.bd/
+
+  # --- Air ----------------------------------------------------------------------------------
+  - source_id: bd_caab
+    source_name: Civil Aviation Authority of Bangladesh
+    organization: CAAB
+    source_type: official_website
+    website_url: https://caab.gov.bd/
+    access_method: manual
+    license_name: unknown
+    terms_review_status: not_reviewed
+    reliability_class: official_government
+    recommended_use: production
+    probe:
+      - https://caab.gov.bd/
+
+  - source_id: ourairports
+    source_name: OurAirports
+    organization: OurAirports (David Megginson and contributors)
+    source_type: open_dataset
+    website_url: https://ourairports.com/data/
+    access_method: csv
+    fetch_policy: usage_policy  # documented API/download: its usage policy applies, not crawler robots.txt
+    usage_policy_url: https://ourairports.com/data/
+    license_name: Public domain
+    license_url: https://ourairports.com/about.html#credits
+    attribution_text: "Airports: OurAirports (public domain)"
+    terms_review_status: open_license
+    coverage: global
+    update_frequency: nightly
+    reliability_class: community_geospatial
+    recommended_use: production
+    probe:
+      - https://davidmegginson.github.io/ourairports-data/airports.csv
+
+  - source_id: airline_schedules_bd
+    source_name: Domestic airline schedule pages
+    organization: US-Bangla Airlines; Novoair; Air Astra; Biman Bangladesh Airlines
+    source_type: official_operator_pages
+    website_url: https://usbair.com/flight-schedule
+    access_method: manual
+    license_name: unknown (airline website terms)
+    terms_review_status: not_reviewed
+    reliability_class: official_operator
+    recommended_use: production
+    notes: Schedules only, with a checked date. Fares are date-specific; link out.
+    probe:
+      - https://usbair.com/flight-schedule
+      - https://www.flynovoair.com/travelinfo/flight_schedules
+      - https://www.biman-airlines.com/
+
+  # --- Terrain ------------------------------------------------------------------------------
+  - source_id: copernicus_dem
+    source_name: Copernicus DEM GLO-30
+    organization: European Space Agency / Copernicus; hosted on AWS Open Data
+    source_type: open_dataset
+    website_url: https://registry.opendata.aws/copernicus-dem/
+    access_method: download
+    fetch_policy: usage_policy  # documented API/download: its usage policy applies, not crawler robots.txt
+    usage_policy_url: https://registry.opendata.aws/copernicus-dem/
+    license_name: Copernicus DEM licence (free, attribution required)
+    attribution_text: "© DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved"
+    terms_review_status: open_license
+    coverage: global, 30 m
+    reliability_class: licensed_provider
+    recommended_use: production
+    probe:
+      - https://copernicus-dem-30m.s3.amazonaws.com/readme.html
+
+  # --- World --------------------------------------------------------------------------------
+  - source_id: mobility_database
+    source_name: Mobility Database (GTFS catalog)
+    organization: MobilityData
+    source_type: open_catalog
+    website_url: https://mobilitydatabase.org/
+    access_method: api
+    license_name: per feed
+    terms_review_status: not_reviewed
+    coverage: ~6000 feeds, 99+ countries
+    reliability_class: official_operator
+    recommended_use: production
+    probe:
+      - https://github.com/MobilityData/mobility-database-catalogs
+
+  - source_id: unesco_whc
+    source_name: UNESCO World Heritage List
+    organization: UNESCO World Heritage Centre
+    source_type: official_website
+    website_url: https://whc.unesco.org/en/list/
+    access_method: download
+    license_name: check UNESCO terms
+    terms_review_status: not_reviewed
+    coverage: global
+    reliability_class: official_government
+    recommended_use: enrichment
+    probe:
+      - https://whc.unesco.org/en/list/
+
+  # --- Reference products (field ideas only; never a data source) ---------------------------
+  - source_id: ref_unseenbd
+    source_name: Unseen Bangladesh (unseenbd.com, unseenbangladesh.com)
+    organization: Unseen Bangladesh
+    source_type: reference_product
+    website_url: https://unseenbd.com/
+    access_method: none
+    terms_review_status: reference_only
+    reliability_class: reputable_secondary
+    recommended_use: reference_only
+    notes: Reviewed for which fields to model (plan §2a). Data, text, images and maps are not copied.

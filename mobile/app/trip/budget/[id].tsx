@@ -16,6 +16,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMe } from '../../../src/features/account/useMe';
+import { AIBudgetCard } from '../../../src/features/trips/budget/AIBudgetCard';
 import { dayParts } from '../../../src/features/trips/plan/timeline';
 import { usePlanFormat } from '../../../src/features/trips/plan/usePlanFormat';
 import { tripsApi } from '../../../src/services/api';
@@ -189,6 +190,9 @@ export default function TripBudgetScreen() {
             </View>
           ))}
         </View>
+
+        {/* What Gemini suggests from Vromon's prices; it can become the budget */}
+        <AIBudgetCard tripId={tripId} mine={mine} currentBudget={data.total_budget} onApplied={(message) => setSnack({ message })} />
 
         {/* By day */}
         {data.by_day.length > 0 && (

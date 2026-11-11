@@ -3,19 +3,24 @@
  * meals) joined in visiting order: along the road where we have the road line,
  * otherwise by a dashed straight line (an estimate). Tapping a pin
  * selects that stop; selecting a stop elsewhere eases the camera to it.
- * `bottomPadding` keeps pins clear of the plan sheet.
+ * `bottomPadding` keeps pins clear of the plan sheet. Two buttons: satellite imagery or the
+ * street map, and 2D or 3D (the camera tilts, relief is shaded, buildings stand up).
  */
 
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Camera, GeoJSONSource, Layer, Map, type CameraRef } from '@maplibre/maplibre-react-native';
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { boundsFor } from '../../../components/TripMap';
+import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
 import { useReduceMotion } from '../../../ui/useReduceMotion';
 import { planColors } from './colors';
-import { useStreetStyle } from './mapStyle';
+import { PITCH_3D, Relief3D } from './Map3D';
+import { ANCHORS, ESRI_CREDIT, useStreetStyle } from './mapStyle';
+import { SatelliteLayer } from './SatelliteLayer';
 import { localDigits } from './usePlanFormat';
 import type { Coord, StopKind } from './timeline';
 
@@ -31,9 +36,11 @@ export function DayMap({
   onSelect,
   fitKey,
   roadLines = {},
+  crossings = {},
   topPadding,
   bottomPadding,
   accessibilityLabel,
+  onFullMap,
 }: {
   pins: MapPin[];
   selectedId: number | null;
@@ -42,9 +49,13 @@ export function DayMap({
   fitKey: string;
   /** Road lines ([lon, lat] pairs) by "fromId>toId" */
   roadLines?: Record<string, number[][]>;
+  /** Legs with no road, by "fromId>toId": road to the ghat, across the water, road on */
+  crossings?: Record<string, { mode: 'road' | 'water'; line: number[][]; estimate: boolean }[]>;
   topPadding: number;
   bottomPadding: number;
   accessibilityLabel: string;
+  /** Shows a "Full map" button next to Satellite and 3D */
+  onFullMap?: () => void;
 }) {
   const styles = useStyles();
   const theme = useTheme();
@@ -53,13 +64,18 @@ export function DayMap({
   const { i18n } = useTranslation();
   const lang = i18n.language;
   const camera = useRef<CameraRef>(null);
+  const { t } = useTranslation();
+  const [satellite, setSatellite] = React.useState(false);
+  const [is3d, setIs3d] = React.useState(false);
   const mapStyle = useStreetStyle(theme.scheme);
+  // Our lines go under the map's labels, so road names stay readable
+  const under = ANCHORS[theme.scheme].route;
   const padding = useMemo(() => ({ top: topPadding + 24, right: 48, bottom: bottomPadding + 24, left: 48 }), [topPadding, bottomPadding]);
   const bounds = useMemo(() => boundsFor(pins.map((p) => p.coord)), [pins]);
 
   // A new day: fit all of its stops
   useEffect(() => {
-    if (bounds) camera.current?.fitBounds(bounds, { padding, duration: reduceMotion ? 0 : 500 });
+    if (bounds) camera.current?.fitBounds(bounds, { padding, pitch: is3d ? PITCH_3D : 0, duration: reduceMotion ? 0 : 500 });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the day (or the sheet size) changes
   }, [fitKey, padding]);
 
@@ -70,13 +86,34 @@ export function DayMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the selection changes
   }, [selectedId]);
 
-  // Each leg: the road line when we have it, otherwise a straight segment (drawn dashed)
-  const [roads, line] = useMemo<[GeoJSON.FeatureCollection, GeoJSON.FeatureCollection]>(() => {
+  // 2D / 3D: the day's stops again with the camera tilted (the 3D layers show themselves); not on the first render
+  const tilted = useRef(false);
+  useEffect(() => {
+    if (!tilted.current && !is3d) return;
+    tilted.current = true;
+    if (bounds) camera.current?.fitBounds(bounds, { padding, pitch: is3d ? PITCH_3D : 0, duration: reduceMotion ? 0 : 600 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the switch changes
+  }, [is3d]);
+
+  // Each leg: the road line when we have it; a boat crossing where no road goes; otherwise a straight segment (dashed)
+  const [roads, line, water] = useMemo<[GeoJSON.FeatureCollection, GeoJSON.FeatureCollection, GeoJSON.FeatureCollection]>(() => {
     const road: GeoJSON.Feature[] = [];
     const straight: GeoJSON.Feature[] = [];
+    const boat: GeoJSON.Feature[] = [];
     pins.forEach((p, i) => {
       const next = pins[i + 1];
       if (!next) return;
+      const parts = crossings[`${p.id}>${next.id}`];
+      if (parts) {
+        parts.forEach((s) => {
+          const feature: GeoJSON.Feature = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: s.line } };
+          if (s.mode === 'water') {
+            boat.push(feature);
+            s.line.forEach((c) => boat.push({ type: 'Feature', properties: { ghat: 1 }, geometry: { type: 'Point', coordinates: c } }));
+          } else (s.estimate ? straight : road).push(feature);
+        });
+        return;
+      }
       const known = roadLines[`${p.id}>${next.id}`];
       const coordinates = known ?? [
         [p.coord.longitude, p.coord.latitude],
@@ -87,8 +124,9 @@ export function DayMap({
     return [
       { type: 'FeatureCollection', features: road },
       { type: 'FeatureCollection', features: straight },
+      { type: 'FeatureCollection', features: boat },
     ];
-  }, [pins, roadLines]);
+  }, [pins, roadLines, crossings]);
   const points = useMemo<GeoJSON.FeatureCollection>(
     () => ({
       type: 'FeatureCollection',
@@ -111,23 +149,44 @@ export function DayMap({
 
   return (
     <View style={styles.wrap} accessible={false} accessibilityLabel={accessibilityLabel} testID="day-map">
-      <Map style={styles.map} mapStyle={mapStyle} logo={false} compass={false} touchPitch={false} attribution attributionPosition={{ top: topPadding + 8, right: 8 }}>
+      <Map style={styles.map} mapStyle={mapStyle} logo={false} compass={false} touchPitch={is3d} attribution attributionPosition={{ top: topPadding + 8, right: 8 }}>
         <Camera
           ref={camera}
           initialViewState={bounds ? { bounds, padding } : { center: DEFAULT_CENTER, zoom: 6 }}
         />
+        <SatelliteLayer on={satellite} scheme={theme.scheme} />
+        <Relief3D on={is3d} dark={theme.scheme === 'dark' && !satellite} beforeId={under} />
         <GeoJSONSource id="day-road" data={roads}>
           <Layer
             id="day-road-casing"
             type="line"
-            paint={{ 'line-color': '#FFFFFF', 'line-width': 7, 'line-opacity': theme.scheme === 'dark' ? 0.35 : 0.9 }}
+            beforeId={under}
+            paint={{ 'line-color': '#FFFFFF', 'line-width': 5, 'line-opacity': theme.scheme === 'dark' ? 0.3 : 0.8 }}
             layout={{ 'line-cap': 'round', 'line-join': 'round' }}
           />
           <Layer
             id="day-road"
             type="line"
-            paint={{ 'line-color': colors.visit, 'line-width': 4.5 }}
+            beforeId={under}
+            paint={{ 'line-color': colors.visit, 'line-width': 3, 'line-opacity': 0.9 }}
             layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+          />
+        </GeoJSONSource>
+        {/* Crossings by boat or ferry: a blue dashed line between the two ghats */}
+        <GeoJSONSource id="day-water" data={water}>
+          <Layer
+            id="day-water"
+            type="line"
+            beforeId={under}
+            filter={['==', ['geometry-type'], 'LineString']}
+            paint={{ 'line-color': '#1E88E5', 'line-width': 3.5, 'line-dasharray': [1.2, 1.2] }}
+            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+          />
+          <Layer
+            id="day-ghat"
+            type="circle"
+            filter={['==', ['geometry-type'], 'Point']}
+            paint={{ 'circle-radius': 5, 'circle-color': '#FFFFFF', 'circle-stroke-color': '#1E88E5', 'circle-stroke-width': 2.5 }}
           />
         </GeoJSONSource>
         {/* Legs without road data: faint dots, so they can't be mistaken for a road */}
@@ -135,6 +194,7 @@ export function DayMap({
           <Layer
             id="day-line"
             type="line"
+            beforeId={under}
             paint={{ 'line-color': colors.visit, 'line-width': 2.5, 'line-opacity': 0.7, 'line-dasharray': [0.1, 2.2] }}
             layout={{ 'line-cap': 'round', 'line-join': 'round' }}
           />
@@ -186,6 +246,54 @@ export function DayMap({
           />
         </GeoJSONSource>
       </Map>
+      <View style={[styles.toggles, { top: topPadding + 8 }]}>
+        <PressableScale
+          pressEffect="opacity"
+          haptic="selection"
+          onPress={() => setSatellite((s) => !s)}
+          style={styles.toggle}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: satellite }}
+          accessibilityLabel={t('plan.mapSatellite')}
+          hitSlop={8}
+          testID="map-satellite-toggle"
+        >
+          <Text style={styles.toggleText}>{satellite ? t('plan.mapStreets') : t('plan.mapSatellite')}</Text>
+        </PressableScale>
+        <PressableScale
+          pressEffect="opacity"
+          haptic="selection"
+          onPress={() => setIs3d((v) => !v)}
+          style={styles.toggle}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: is3d }}
+          accessibilityLabel={t('plan.map3d')}
+          hitSlop={8}
+          testID="map-3d-toggle"
+        >
+          <Text style={styles.toggleText}>{is3d ? '2D' : '3D'}</Text>
+        </PressableScale>
+        {onFullMap ? (
+          <PressableScale
+            pressEffect="opacity"
+            haptic="selection"
+            onPress={onFullMap}
+            style={[styles.toggle, styles.toggleRow]}
+            accessibilityRole="button"
+            accessibilityLabel={t('plan.fullMap')}
+            hitSlop={8}
+            testID="trip-full-map"
+          >
+            <MaterialCommunityIcons name="arrow-expand" size={16} color={theme.colors.textPrimary} />
+            <Text style={styles.toggleText}>{t('plan.fullMap')}</Text>
+          </PressableScale>
+        ) : null}
+      </View>
+      {satellite ? (
+        <Text style={[styles.credit, { bottom: bottomPadding + 4 }]} accessibilityElementsHidden importantForAccessibility="no">
+          {ESRI_CREDIT}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -193,4 +301,18 @@ export function DayMap({
 const useStyles = makeStyles((t) => ({
   wrap: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: t.colors.surfaceInset },
   map: { flex: 1 },
+  toggles: { position: 'absolute', left: 12, flexDirection: 'row', gap: 8 },
+  toggle: {
+    minHeight: 48,
+    minWidth: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 24,
+    backgroundColor: t.colors.surface,
+    elevation: 3,
+  },
+  toggleRow: { flexDirection: 'row', gap: 6 },
+  toggleText: { color: t.colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  credit: { position: 'absolute', left: 8, fontSize: 10, color: '#333333', backgroundColor: 'rgba(255,255,255,0.7)', paddingHorizontal: 4 },
 }));

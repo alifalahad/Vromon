@@ -601,6 +601,26 @@ class TestGeminiSdkWiring:
         with pytest.raises(LLMProviderError, match="429 RESOURCE_EXHAUSTED"):
             llm.generate_structured("s", "p", LLMGroundedOutput)
 
+    def test_an_overloaded_model_passes_to_the_next(self):
+        import json
+        import httpx
+
+        asked = []
+
+        def handler(request):
+            asked.append(str(request.url).rsplit("/", 1)[-1])
+            if "gemini-busy" in str(request.url):
+                return httpx.Response(503, json={"error": {"code": 503, "message": "high demand", "status": "UNAVAILABLE"}})
+            out = {"status": "answered", "claims": []}
+            return httpx.Response(200, json={"candidates": [{
+                "content": {"role": "model", "parts": [{"text": json.dumps(out)}]}, "finishReason": "STOP"}]})
+
+        llm = GeminiLLMProvider(api_key="unused", model="gemini-busy", client=self._client(handler),
+                                fallback_models=["gemini-free"])
+        llm.generate_structured("s", "p", LLMGroundedOutput)
+        assert asked == ["gemini-busy:generateContent", "gemini-free:generateContent"]
+        assert llm.model_name == "gemini-free"
+
     def test_embedding_request(self):
         import json
         import httpx

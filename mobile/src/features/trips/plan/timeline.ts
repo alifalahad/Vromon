@@ -24,6 +24,8 @@ export type PlanRow =
       mode: TravelMode | null;
       source: 'road' | 'estimate' | null;
       fare: number | null;
+      /** By boat or ferry between two ghats (no road) */
+      crossing: { from_ghat: string; to_ghat: string; water_km: number } | null;
     }
   | { kind: 'free'; key: string; start: string; minutes: number };
 
@@ -88,6 +90,7 @@ export function planRows(day: ItineraryDay, hidden: readonly number[] = []): Pla
         mode: item.travel_mode ?? null,
         source: item.travel_source ?? null,
         fare: item.travel_fare ?? null,
+        crossing: item.travel_crossing ?? null,
       });
     }
   });

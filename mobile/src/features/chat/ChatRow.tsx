@@ -72,7 +72,7 @@ export const ChatRow = React.memo(function ChatRow({
           <MaterialCommunityIcons name="map-marker-path" size={26} color={colors.onAccentSoft} />
         </View>
       ) : (
-        <Avatar name={name} id={conversation.other?.id} size={52} />
+        <Avatar name={name} id={conversation.other?.id} uri={conversation.other?.avatar_url} size={52} />
       )}
       <View style={styles.middle}>
         <View style={styles.line}>

@@ -21,7 +21,7 @@ const mockMe = { data: { id: 'me' } };
 jest.mock('../features/account/useMe', () => ({ ME_QUERY_KEY: ['me'], useMe: () => mockMe }));
 jest.mock('../services/api', () => ({
   ApiError: class ApiError extends Error {},
-  tripsApi: { get: jest.fn(), budget: jest.fn(), saveBudget: jest.fn() },
+  tripsApi: { get: jest.fn(), budget: jest.fn(), saveBudget: jest.fn(), aiBudget: jest.fn(), update: jest.fn() },
 }));
 
 const api = tripsApi as unknown as Record<string, jest.Mock>;
@@ -161,6 +161,44 @@ describe('Trip budget screen', () => {
     } finally {
       await i18n.changeLanguage('en');
     }
+  });
+});
+
+describe('The AI estimate', () => {
+  const AI = {
+    total: 21500, low: 18000, high: 26000, per_person: 10750, confidence: 'medium', start_known: true,
+    model: 'gemini-test', made_on: '2026-11-06', facts_used: { room_rates: 18, market_prices: 30, sights: 3, ways_there: 4 },
+    categories: [
+      { key: 'stay', amount: 7000, low: 6000, high: 9000, basis: 'Median room rate, 2 nights' },
+      { key: 'other', amount: 700, low: 400, high: 1200, basis: 'Snacks and tips' },
+    ],
+    assumptions: ['A meal costs about ৳300'],
+  };
+
+  it('is asked for on a tap, explained, and can become the budget', async () => {
+    setUp();
+    api.aiBudget.mockResolvedValue(AI);
+    api.update.mockResolvedValue({ ...TRIP, total_budget: 21500 });
+    await renderWithQuery(<BudgetScreen />);
+    fireEvent.press(await screen.findByTestId('ai-budget-run'));
+    expect(api.aiBudget).toHaveBeenCalledWith(5, 'en');
+    expect(await screen.findByTestId('ai-budget-total')).toHaveTextContent('≈ ৳21,500');
+    expect(screen.getByTestId('ai-budget-stay')).toHaveTextContent(/StayMedian room rate, 2 nights৳7,000৳6,000–৳9,000/);
+    expect(screen.getByTestId('ai-budget-other')).toHaveTextContent(/Other \(snacks, tips\)/);
+    expect(screen.getByText('A meal costs about ৳300')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('ai-budget-use'));
+    await waitFor(() => expect(api.update).toHaveBeenCalledWith(5, { total_budget: 21500 }));
+    expect(await screen.findByText('Your budget is now ৳21,500')).toBeTruthy();
+  });
+
+  it("says when it isn't set up, and a friend can't take it as the budget", async () => {
+    mockMe.data = { id: 'someone-else' };
+    setUp();
+    api.aiBudget.mockResolvedValue(AI);
+    await renderWithQuery(<BudgetScreen />);
+    fireEvent.press(await screen.findByTestId('ai-budget-run'));
+    await screen.findByTestId('ai-budget-total');
+    expect(screen.queryByTestId('ai-budget-use')).toBeNull();
   });
 });
 

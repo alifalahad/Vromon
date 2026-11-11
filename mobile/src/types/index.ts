@@ -104,7 +104,22 @@ export interface LegOptions {
 export interface DayRoute {
   day_id: number;
   provider: string | null;
-  legs: { from_item_id: number; to_item_id: number; line: number[][] | null }[];
+  legs: {
+    from_item_id: number;
+    to_item_id: number;
+    line: number[][] | null;
+    /** No road at all: by boat or ferry between two ghats (estimates) */
+    crossing?: LegCrossing & { from_ghat: { name: string; lat: number; lon: number }; to_ghat: { name: string; lat: number; lon: number } };
+    /** Road to the ghat, across the water, road on: [lon, lat] lines; `estimate` lines are straight */
+    segments?: { mode: 'road' | 'water'; line: number[][]; estimate: boolean }[];
+  }[];
+}
+
+/** A crossing by boat or ferry where no road goes (times are estimates, not a schedule) */
+export interface LegCrossing {
+  water_km: number;
+  minutes: number;
+  estimate: boolean;
 }
 
 /** From the trip's starting city to the destination (rough estimates) */
@@ -284,6 +299,11 @@ export interface TripCreate {
   constraints?: TripConstraintInput;
   origin?: TripStopInput | null;
   transport_mode?: TransportMode | null;
+  /** From the phone's location instead of a city */
+  origin_point?: { lat: number; lon: number; label?: string | null } | null;
+  /** How you like to travel there; none + transport_by_budget: Vromon suggests by budget */
+  transport_modes?: JourneyMode[];
+  transport_by_budget?: boolean;
 }
 
 // Matches _trip_summary_out / _trip_out in trips.py
@@ -358,6 +378,8 @@ export interface ItineraryItem {
   travel_mode_chosen?: boolean;
   /** "road": distance and time from road data; "estimate": straight line */
   travel_source?: 'road' | 'estimate' | null;
+  /** No road to the next stop: by boat or ferry between two ghats (estimates) */
+  travel_crossing?: (LegCrossing & { from_ghat: string; to_ghat: string }) | null;
   /** Fare per vehicle, an estimate (0 walking) */
   travel_fare?: number | null;
   place?: Place;
@@ -552,6 +574,31 @@ export interface AdaptResult {
   validation: ValidationReport;
 }
 
+// Matches POST /trips/{id}/budget/ai: an estimate from Gemini, grounded in Vromon's data (not saved)
+export interface AIBudgetCategory {
+  key: 'getting_there' | 'stay' | 'food' | 'tickets' | 'local' | 'other';
+  amount: number;
+  low: number;
+  high: number;
+  /** One sentence: which facts it comes from */
+  basis: string;
+}
+
+export interface AIBudget {
+  total: number;
+  low: number;
+  high: number;
+  per_person: number;
+  categories: AIBudgetCategory[];
+  assumptions: string[];
+  confidence: 'low' | 'medium' | 'high';
+  /** false: where you start isn't set, so getting there isn't counted */
+  start_known: boolean;
+  model: string;
+  made_on: string;
+  facts_used: { room_rates: number; market_prices: number; sights: number; ways_there: number };
+}
+
 // Matches GET /trips/{id}/budget
 export interface BudgetBreakdown {
   trip_id: number;
@@ -701,6 +748,8 @@ export interface Me {
   email: string | null;
   username: string | null;
   display_name: string | null;
+  /** Profile photo (ImgBB), when one was added */
+  avatar_url?: string | null;
   home_country_iso2: string | null;
   discoverable: boolean;
   friend_code: string;
@@ -745,7 +794,8 @@ export interface UserSettings {
 // Travel map (Android Phase 3)
 // ---------------------------------------------------------------------------
 
-export type PlaceType = 'country' | 'region' | 'city';
+/** district: Bangladesh's 64, coded "BD-<name>" */
+export type PlaceType = 'country' | 'region' | 'city' | 'district';
 export type VisitStatus = 'visited' | 'want' | 'lived';
 
 export interface Visit {
@@ -1184,4 +1234,45 @@ export interface LateResult extends LatePlan {
   day: ItineraryDay;
   validation: ValidationReport;
   undo: LateUndo;
+}
+
+/** Ways to get to a destination (door to door): the traveller's choice, tried first */
+export type JourneyMode = 'plane' | 'train' | 'bus' | 'car' | 'launch';
+
+export interface JourneyLeg {
+  mode: 'cng' | 'bus' | 'train' | 'plane' | 'car';
+  from: string;
+  to: string;
+  minutes: number;
+  km: number;
+  fare: number | null;
+  fare_per: 'person' | 'vehicle';
+  fare_kind: 'estimate' | 'official' | 'unknown';
+  depart: string | null;
+  arrive: string | null;
+  detail: string | null;
+  source: string | null;
+}
+
+export interface JourneyOption {
+  mode: Exclude<JourneyMode, 'launch'>;
+  minutes: number;
+  km: number;
+  cost_per_person: number;
+  all_official: boolean;
+  recommended: boolean;
+  preferred: boolean;
+  reason: string | null;
+  note: string | null;
+  legs: JourneyLeg[];
+  alternatives: { train: string; depart: string; arrive: string; minutes: number; off_day: string | null }[];
+}
+
+export interface TripJourney {
+  from: string;
+  to: string;
+  options: JourneyOption[];
+  missing: string[];
+  road_source: string;
+  preferences: { transport_modes: JourneyMode[]; transport_by_budget: boolean };
 }

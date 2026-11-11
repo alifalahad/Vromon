@@ -216,6 +216,19 @@ def _unsupported_numbers(claim_text: str, supporting_texts: list[str]) -> list[s
 # Prompting
 # ---------------------------------------------------------------------------
 
+# Current fares, timetables and distances come from the catalog's dated, versioned tables
+# (/api/v1/catalog/fares, /trains, /journeys), never from an older passage (guideline §11)
+_STRUCTURED = re.compile(r"(fare|fares|ticket price|price of (a|the) ticket|timetable|schedule|departs?|arrives?|"
+                         r"train times?|bus times?|how much (is|does) (the|a) (bus|train|launch|flight))|"
+                         r"ভাড়া|সময়সূচি|সময়সূচী|ছাড়ার সময়|পৌঁছার সময়", re.I)
+STRUCTURED_FACT_WARNING = ("Fares and timetables change: Vromon answers them from its dated, versioned tables "
+                           "(catalog fares and trains, with source and last-checked date), not from these passages.")
+
+
+def asks_for_structured_fact(question: str) -> bool:
+    return bool(_STRUCTURED.search(question or ""))
+
+
 SYSTEM_PROMPT = """You are Vromon's travel assistant. You answer ONLY from the evidence passages provided.
 
 Rules:
@@ -348,6 +361,8 @@ def answer_question(
     results = retriever(query=question, db=db, destination=destination, top_k=top_k)
     relevant = [r for r in results if r.get("score") is not None and r["score"] >= min_score]
     warnings: list[str] = []
+    if asks_for_structured_fact(question):
+        warnings.append(STRUCTURED_FACT_WARNING)
     if embedding_model.startswith("dummy"):
         warnings.append(
             "Embeddings are the dummy hash provider, so retrieval is not semantic. "

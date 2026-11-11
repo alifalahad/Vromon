@@ -1,0 +1,11 @@
+# Raw source snapshots and large outputs (manifests with checksums are committed instead)
+raw/
+processed/
+exports/*
+!exports/.gitkeep
+*.db
+
+# Backups (copy them off the machine; see docs/OPERATIONS_RUNBOOK.md)
+backups/
+quality-reports/scheduled-*.log
+exports/maps-*.log

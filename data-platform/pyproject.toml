@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vromon-data"
+version = "0.1.0"
+description = "Vromon data platform: source registry, ingestion connectors, provenance, review and publishing"
+requires-python = ">=3.11"
+
+# The backend (../backend, installed with `pip install -e ../backend`) provides the models and the
+# database settings. The GIS and parsing libraries stay here, out of the API's Docker image.
+dependencies = [
+    "vromon-backend",
+    "httpx>=0.28.1",
+    "truststore>=0.10",
+    "pyyaml>=6.0",
+    "shapely>=2.0",
+    "pyproj>=3.6",
+    "rapidfuzz>=3.9",
+    "pdfplumber>=0.11",
+    "pillow>=10.0",
+    "openpyxl>=3.1",
+    "pytest>=8.2.0",
+]
+
+[project.scripts]
+vromon-data = "vromon_data.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["vromon_data*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

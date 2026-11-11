@@ -1,6 +1,7 @@
 {
   "tabs": {
     "map": "Map",
+    "explore": "Explore",
     "trips": "Trips",
     "friends": "Friends",
     "settings": "Settings"
@@ -62,7 +63,8 @@
     "placeType": {
       "country": "Country",
       "region": "Region",
-      "city": "City"
+      "city": "City",
+      "district": "District"
     },
     "pending_one": "1 change waiting to sync",
     "pending_other": "{{count}} changes waiting to sync",
@@ -182,7 +184,8 @@
       "undatedPlaces_one": "No date yet: {{places}}, and {{n}} more",
       "undatedPlaces_other": "No date yet: {{places}}, and {{n}} more",
       "undatedPlacesOnly": "No date yet: {{places}}"
-    }
+    },
+    "openSettings": "Your profile and settings"
   },
   "mapTheme": {
     "title": "Map Theme",
@@ -403,7 +406,9 @@
       "tomorrow": "tomorrow",
       "hint": "Opens your chat. Hold to see their trip.",
       "openTrip": "Open their trip"
-    }
+    },
+    "exportCompare": "Save or share this map",
+    "posterTitle": "You and {{name}}"
   },
   "settings": {
     "title": "Settings",
@@ -538,7 +543,15 @@
     "username": "Username",
     "homeCountry": "Home country",
     "notSet": "Not set",
-    "email": "Email"
+    "email": "Email",
+    "addPhoto": "Add photo",
+    "changePhoto": "Change photo",
+    "takePhoto": "Take photo",
+    "removePhoto": "Remove",
+    "photoNote": "Everyone who sees your profile sees your photo. It's stored on ImgBB.",
+    "photoFailedTitle": "Couldn't save the photo",
+    "photoFailedBody": "Check your connection and try again.",
+    "cameraDenied": "Allow Vromon to use the camera in your phone's settings."
   },
   "deleteAccount": {
     "title": "Delete your account",
@@ -590,6 +603,10 @@
     "stops_other": "{{n}} stops",
     "perPerson": "{{amount}} each",
     "travelAbout": "about {{time}} travel",
+    "mapSatellite": "Satellite",
+    "mapStreets": "Map",
+    "legBoat": "By boat or ferry, {{from}} → {{to}} · about {{time}}",
+    "legBoatNote": "No road goes there. Boat times are estimates: check the local schedule at the ghat.",
     "legAbout": "About {{time}} · {{km}} km",
     "legA11y": "Travel to the next stop: about {{time}}, {{km}} kilometres",
     "freeTime": "Free time",
@@ -738,7 +755,11 @@
     "sourceNames": {
       "wikivoyage": "Wikivoyage",
       "wikidata": "Wikidata"
-    }
+    },
+    "map3d": "3D view",
+    "fullMap": "Full map",
+    "showPlan": "Show the plan",
+    "gettingAll": "See every way there, leg by leg"
   },
   "newTrip": {
     "title": "New trip",
@@ -890,6 +911,20 @@
       "nearDistrict": "Near {{district}} · {{km}} km",
       "otherPlaces": "Other places",
       "mustSeeAdded": "{{place}} is on your must-see list"
+    },
+    "fromHere": "Start from my current location",
+    "yourLocation": "your location",
+    "locationDenied": "Allow location for Vromon, or search for a city.",
+    "locationFailed": "Couldn't find your location. Search for a city instead.",
+    "howTravel": "How do you like to travel?",
+    "howTravelHint": "Pick one or more: Vromon plans with them first. Or let Vromon suggest by your budget.",
+    "byBudget": "Suggest by my budget",
+    "travelModes": {
+      "plane": "Plane",
+      "train": "Train",
+      "bus": "Bus",
+      "car": "Car",
+      "launch": "Launch / boat"
     }
   },
   "mustDos": {
@@ -1643,5 +1678,170 @@
     "open": "Trip room",
     "inviteMore": "Invite more friends",
     "together": "Trips together"
+  },
+  "explore": {
+    "searchPlaceholder": "Search districts, countries and cities",
+    "clearSearch": "Clear search",
+    "noResults": "Nothing found.",
+    "districtOf": "District of {{division}} Division",
+    "bangladesh": "Bangladesh",
+    "bdHeroLabel": "Bangladesh: all 64 districts",
+    "capital": "Capital",
+    "people": "people",
+    "bdCounts": "{{divisions}} divisions · {{districts}} districts",
+    "allDistricts": "See all districts",
+    "loadFailed": "Couldn't load this. Check your connection and try again.",
+    "retry": "Try again",
+    "districtsByDivision": "Districts by division",
+    "giFoods": "GI foods of Bangladesh",
+    "giNote": "Registered Geographical Indications (Department of Patents, Designs and Trademarks). Tap one to see its district.",
+    "allBangladesh": "All Bangladesh",
+    "byContinent": "Discover by continent",
+    "countriesCount_one": "{{n}} country",
+    "countriesCount_other": "{{n}} countries",
+    "populousCountries": "Most populous countries",
+    "largestCities": "Largest cities",
+    "sources": "Sources",
+    "satelliteCredit": "Satellite images: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+    "nSights_one": "{{n}} sight",
+    "nSights_other": "{{n}} sights",
+    "nHotels_one": "{{n}} hotel",
+    "nHotels_other": "{{n}} hotels",
+    "mapOf": "Map of {{name}} in 3D",
+    "km2": "km²",
+    "nUpazilas_one": "{{n}} upazila",
+    "nUpazilas_other": "{{n}} upazilas",
+    "planTrip": "Plan a trip to {{place}}",
+    "statSights": "Sights",
+    "statGi": "GI items",
+    "statHotels": "Hotels",
+    "statRestaurants": "Restaurants",
+    "giHere": "GI foods and products",
+    "giProducts": "Products",
+    "noGi": "No registered Geographical Indication names this district yet.",
+    "giRegistered": "GI registered",
+    "giNo": "No. {{n}}",
+    "giApplied": "applied {{year}}",
+    "sights": "Sights",
+    "hotels": "Hotels",
+    "hotelNote": "Room rates are as each hotel publishes them on its own website, on the date shown; confirm when you book.",
+    "fromPrice": "from {{price}}/night",
+    "checked": "checked {{date}}",
+    "noPrice": "Room rate not published",
+    "neighbours": "Neighbouring districts",
+    "upazilas": "Upazilas",
+    "districtSources": "Boundaries: geoBoundaries (CC BY 4.0). GI register: DPDT. Sights: Wikidata, Bangladesh national portal. Hotels: Overture Maps, Ministry of Civil Aviation and Tourism.",
+    "back": "Back",
+    "districtsTitle": "Districts of Bangladesh",
+    "allDivisions": "All",
+    "divisionTitle": "{{name}} Division",
+    "cities": "Cities",
+    "countries": "Countries",
+    "countriesNote": "Largest population first (Wikidata).",
+    "citiesNote": "Largest population first (GeoNames, places of 15,000 people or more).",
+    "population": "Population",
+    "area": "Area",
+    "currency": "Currency",
+    "languages": "Official languages",
+    "callingCode": "Calling code",
+    "continent": "Continent",
+    "unStatus": "United Nations",
+    "unYes": "Member or observer state",
+    "unNo": "Not a member ({{status}})",
+    "regions": "States / provinces",
+    "largestCitiesIn": "Largest cities in {{name}}",
+    "countrySources": "Facts: Wikidata (CC0). Cities: GeoNames (CC BY 4.0). Photos: Wikimedia Commons.",
+    "continents": {
+      "africa": "Africa",
+      "antarctica": "Antarctica",
+      "asia": "Asia",
+      "europe": "Europe",
+      "northAmerica": "N. America",
+      "oceania": "Oceania",
+      "southAmerica": "S. America"
+    },
+    "openMap": "Open the map of {{name}}",
+    "mapHint": "Tap to zoom, save or share",
+    "noDistrictMap": "This district's map isn't published yet.",
+    "mapCredits": "Map: {{credits}}"
+  },
+  "share": {
+    "save": "Save",
+    "share": "Share",
+    "savedTitle": "Saved",
+    "savedBody": "It's in your phone's gallery.",
+    "saveFailedTitle": "Couldn't save",
+    "deniedBody": "Allow Vromon to save photos in your phone's settings, then try again.",
+    "failedBody": "Something went wrong. Try again.",
+    "shareMapTitle": "Map of {{name}}",
+    "shareTitle": "Share your map",
+    "storyHint": "In Instagram or Facebook, choose Story."
+  },
+  "feedback": {
+    "title": "Rate this plan",
+    "subtitle": "Your rating helps Vromon plan better trips for you.",
+    "tapStar": "Tap a star",
+    "starLabel": "{{n}} of 5: {{word}}",
+    "words": {
+      "poor": "Poor",
+      "fair": "Fair",
+      "good": "Good",
+      "veryGood": "Very good",
+      "excellent": "Excellent"
+    },
+    "worked": "What worked",
+    "improve": "What to improve",
+    "tags": {
+      "places": "Great places",
+      "pacing": "Good pacing",
+      "value": "Good value",
+      "food": "Great food",
+      "rushed": "Too rushed",
+      "slow": "Too slow",
+      "budget": "Over budget",
+      "travel": "Too much travel"
+    },
+    "noteLabel": "Anything else",
+    "notePlaceholder": "What should we change next time? (optional)",
+    "submit": "Save rating",
+    "update": "Update rating",
+    "failed": "Couldn't save. Check your connection and try again.",
+    "thanks": "Thanks for rating this plan",
+    "edit": "Edit"
+  },
+  "journey": {
+    "title": "Getting there",
+    "noStart": "Set where you start from (in the trip's details) to see the ways there.",
+    "perPerson": "{{amount}} per person",
+    "best": "Best for you",
+    "otherTrains": "Other trains",
+    "offDay": "not on {{day}}",
+    "estimate": "estimate",
+    "noLaunch": "Launch routes and timetables aren't in Vromon yet.",
+    "honesty": "Train times are Bangladesh Railway's published timetable. Fares marked \"estimate\" and flight times are estimates: check before you book."
+  },
+  "aiBudget": {
+    "title": "AI estimate",
+    "sub": "Gemini reads the hotel rates here, today's market prices, entry fees and your ways there.",
+    "run": "Estimate with AI",
+    "retry": "Try again",
+    "reading": "Reading the prices…",
+    "range": "{{low}} – {{high}}",
+    "perPerson": "{{amount}} each",
+    "confidence": {
+      "low": "Rough guess",
+      "medium": "Fair estimate",
+      "high": "Close estimate"
+    },
+    "other": "Other (snacks, tips)",
+    "assumed": "What it assumed",
+    "noStart": "Getting there isn't counted: set where you start from.",
+    "use": "Use {{amount}} as my budget",
+    "isYours": "This is your budget",
+    "again": "Ask again",
+    "applied": "Your budget is now {{amount}}",
+    "footnote": "An estimate by {{model}} on {{date}}, from Vromon's data. Prices change: check before you go.",
+    "notSetUp": "The AI estimate isn't set up on this server.",
+    "failed": "The AI couldn't make an estimate right now."
   }
 }

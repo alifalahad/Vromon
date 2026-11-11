@@ -39,7 +39,7 @@ jest.mock('@maplibre/maplibre-react-native', () => {
   const R = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
   const Pass = ({ children }: { children?: React.ReactNode }) => R.createElement(View, null, children);
-  return { Map: Pass, Camera: () => null, GeoJSONSource: Pass, Layer: () => null };
+  return { Map: Pass, Camera: () => null, GeoJSONSource: Pass, RasterDEMSource: Pass, RasterSource: Pass, VectorSource: Pass, Layer: () => null };
 });
 jest.mock('../services/api', () => ({
   ApiError: class ApiError extends Error {},

@@ -6,23 +6,28 @@
  * - Regions / Cities: PMTiles served by the backend (needs a connection), except the
  *   bundled home regions (Bangladesh's divisions), which draw offline with their own
  *   inner borders and labels and are left out of the tiles.
+ * - Countries view, zoomed out (the globe): a country is coloured when you marked it or anything
+ *   in it. Zooming in, that colour fades out and only the places you marked show (Bangladesh's
+ *   districts and divisions; a country you marked with nothing marked inside keeps its colour).
+ *   Inside Bangladesh a tap then marks a district. Regions view: districts from closer in.
  * Colours come from the active map theme. Status colours are paint expressions
  * rebuilt from the visit list, so marking a place repaints one property instead
  * of reloading data, and switching a theme repaints without reloading the style.
  */
 
+import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { Camera, GeoJSONSource, Layer, Map, VectorSource, type CameraRef, type LngLatBounds, type MapRef } from '@maplibre/maplibre-react-native';
-import React, { forwardRef, useImperativeHandle, useRef } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 
 import { tilesUrl } from '../../services/api';
 import type { Visit } from '../../types';
 import type { ResolvedMapTheme } from '../mapThemes/resolve';
 import type { MapView } from '../preferences/store';
-import { HOME_DISTRICTS, HOME_REGION_BORDERS, HOME_REGION_LABELS, HOME_REGIONS } from './geoData';
+import { HOME_DISTRICT_AREAS, HOME_DISTRICTS, HOME_REGION_BORDERS, HOME_REGION_LABELS, HOME_REGIONS } from './geoData';
 import { BUNDLED_HOMES, countryBounds } from './home';
 import { CLOSE_UP_FADE, CountryLabels, CountryLayers, LAYER, TerrainLayer, WaterLayers, type FeaturePress } from './layers';
-import { DISTRICTS_FROM, LABEL_FONT, MAP_STYLE, markedCodes, PLACE_NAME_SIZE, placeNamePaint, statusColorExpression } from './style';
+import { countriesWithNothingInside, DISTRICTS_FROM, LABEL_FONT, MAP_STYLE, markedCodes, PLACE_NAME_SIZE, placeNamePaint, statusColorExpression, withImpliedCountries } from './style';
 import type { PlaceRef } from './visits';
 
 export type PressedPlace = PlaceRef & { name: string };
@@ -41,6 +46,11 @@ export type WorldMapHandle = {
 export type MapScope = 'home' | 'world';
 
 const WORLD_ZOOM = 1.6;
+// Countries view: the globe's country colours fade into your places between these zooms
+const GLOBE_UNTIL = 3.8;
+const PLACES_FROM = 4.6;
+// Regions view: districts take over from the divisions this close
+const DISTRICTS_IN_REGIONS = DISTRICTS_FROM - 1;
 // Closer than this counts as "home" (the toggle then offers the world)
 const HOME_SCOPE_ZOOM = 3.5;
 // Room for the story capsule above and the round buttons below
@@ -71,13 +81,15 @@ type Props = {
 
 // What a long press can mark, per view
 const PLACE_LAYERS: Record<MapView, string[]> = {
-  countries: [LAYER.countryFill],
-  regions: ['home-region-fill', 'region-fill'],
+  countries: ['home-district-area', LAYER.countryFill],
+  regions: ['home-district-area', 'home-region-fill', 'region-fill'],
   cities: ['city-dot-marked', 'city-dot'],
 };
 
 /** A place from a feature of one of the place layers. */
 function placeOf(view: MapView, p: Record<string, unknown>): PressedPlace | null {
+  // A district feature has its division as `region`
+  if (view !== 'cities' && p.code && p.region) return { place_type: 'district', place_code: String(p.code), country_iso2: String(p.country), name: String(p.name) };
   if (view === 'countries' && p.iso2) return { place_type: 'country', place_code: String(p.iso2), country_iso2: String(p.iso2), name: String(p.name) };
   if (view === 'regions' && p.code) return { place_type: 'region', place_code: String(p.code), country_iso2: String(p.country), name: String(p.name) };
   if (view === 'cities' && p.id) return { place_type: 'city', place_code: String(p.id), country_iso2: String(p.country), name: String(p.name) };
@@ -96,6 +108,10 @@ function firstProps(e: FeaturePress): Record<string, unknown> | null {
 export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ view, visits, theme, home, onPressPlace, onScopeChange, onUserMove, children, selected, onLongPressPlace, bottomInset = 0, namedPlaces = [] }, ref) {
   const camera = useRef<CameraRef>(null);
   const mapRef = useRef<MapRef>(null);
+  // Close up, districts take the taps (and show your marks) instead of the countries
+  const [zoom, setZoom] = useState(5);
+  const districtsFrom = view === 'countries' ? PLACES_FROM : DISTRICTS_IN_REGIONS;
+  const closeUp = zoom >= districtsFrom;
   const { base, status, outline } = theme;
   const homeBounds = countryBounds(home) ?? FALLBACK;
   const homePadding = { ...HOME_PADDING, bottom: Math.max(HOME_PADDING.bottom, bottomInset + 24) };
@@ -123,7 +139,28 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
   const outlined = Object.keys(outline) as (keyof typeof outline)[];
   const outlineColor = outlined.length ? outline[outlined[0]] : undefined;
 
-  const countryFill = view === 'countries' ? statusColorExpression(visits, 'country', 'iso2', base.land, status) : base.land;
+  // A smooth change of colour with the zoom: the globe's colours, then only the countries marked with nothing inside
+  const countryFill =
+    view === 'countries'
+      ? ([
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          GLOBE_UNTIL,
+          statusColorExpression(withImpliedCountries(visits), 'country', 'iso2', base.land, status),
+          PLACES_FROM,
+          statusColorExpression(countriesWithNothingInside(visits), 'country', 'iso2', base.land, status),
+        ] as unknown as ExpressionSpecification)
+      : base.land;
+  const markedRegions = markedCodes(visits, 'region');
+  const placesFade = ['interpolate', ['linear'], ['zoom'], districtsFrom - 0.6, 0, districtsFrom + 0.2, 0.85];
+  const districtFill = statusColorExpression(visits, 'district', 'code', 'rgba(0,0,0,0.01)', status);
+  const markedDistricts = markedCodes(visits, 'district');
+  const selectedDistrict = selected?.place_type === 'district' ? selected.place_code : '';
+  const districtPress = (e: FeaturePress) => {
+    const p = firstProps(e);
+    if (p?.code) onPressPlace({ place_type: 'district', place_code: String(p.code), country_iso2: 'BD', name: String(p.name) });
+  };
   const countryOutline = view === 'countries' ? markedCodes(visits, 'country', outlined) : [];
   const regionFill = statusColorExpression(visits, 'region', 'code', base.land, status);
   const regionOutline = markedCodes(visits, 'region', outlined);
@@ -148,6 +185,7 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
       compass={false}
       touchPitch={false}
       onRegionDidChange={(e) => {
+        setZoom(e.nativeEvent.zoom);
         onScopeChange?.(e.nativeEvent.zoom >= HOME_SCOPE_ZOOM ? 'home' : 'world');
         if (e.nativeEvent.userInteraction) onUserMove?.();
       }}
@@ -229,7 +267,7 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
         <>
           {/* Home regions from the app bundle: offline, and their fill stays under the
               country border, which draws the outer edge (the two outlines differ slightly) */}
-          <GeoJSONSource id="home-regions" data={HOME_REGIONS} onPress={regionPress}>
+          <GeoJSONSource id="home-regions" data={HOME_REGIONS} onPress={closeUp ? undefined : regionPress}>
             <Layer id="home-region-fill" type="fill" beforeId={belowBorders} paint={{ 'fill-color': regionFill as never, 'fill-opacity': CLOSE_UP_FADE }} />
             <Layer
               id="home-region-status-outline"
@@ -249,6 +287,52 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
             />
           </GeoJSONSource>
         </>
+      ) : null}
+
+      {/* Countries view, close up: Bangladesh's divisions you marked (under the districts) */}
+      {view === 'countries' ? (
+        <GeoJSONSource id="home-region-marks" data={HOME_REGIONS}>
+          <Layer
+            id="home-region-mark"
+            type="fill"
+            beforeId={belowBorders}
+            minzoom={districtsFrom - 0.6}
+            filter={['in', ['get', 'code'], ['literal', markedRegions]] as never}
+            paint={{ 'fill-color': regionFill as never, 'fill-opacity': placesFade as never }}
+          />
+        </GeoJSONSource>
+      ) : null}
+
+      {/* Bangladesh's districts, close up (Countries and Regions views): yours coloured by status,
+          every one tappable. Above the regions, so a tap close up marks the district */}
+      {view !== 'cities' ? (
+        // Above the country borders: inside Bangladesh, close up, the district is the topmost
+        // thing with a press handler, so it gets the tap; elsewhere the country does
+        <GeoJSONSource id="home-district-areas" data={HOME_DISTRICT_AREAS} onPress={closeUp ? districtPress : undefined}>
+          <Layer
+            id="home-district-area"
+            type="fill"
+            beforeId={LAYER.label}
+            minzoom={districtsFrom - 0.6}
+            paint={{ 'fill-color': districtFill as never, 'fill-opacity': placesFade as never }}
+          />
+          <Layer
+            id="home-district-marked-edge"
+            type="line"
+            beforeId={LAYER.label}
+            minzoom={districtsFrom - 0.6}
+            filter={['in', ['get', 'code'], ['literal', markedDistricts]] as never}
+            paint={{ 'line-color': base.label, 'line-width': 0.8, 'line-opacity': 0.5 }}
+          />
+          <Layer
+            id="home-district-selected"
+            type="line"
+            beforeId={LAYER.label}
+            layout={{ 'line-join': 'round' }}
+            filter={['==', ['get', 'code'], selectedDistrict] as never}
+            paint={{ 'line-color': base.label, 'line-width': 2.5 }}
+          />
+        </GeoJSONSource>
       ) : null}
 
       {/* Home country context in every view, like a real map: division lines and names at

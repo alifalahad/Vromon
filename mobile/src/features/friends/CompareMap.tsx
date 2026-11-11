@@ -1,11 +1,11 @@
 /**
  * Friend comparison map (07-theme-friends-compare-rustic.jpg): In common, only
  * You, only the friend, in the viewer's theme, for Countries, Regions or Cities.
- * Pan and zoom freely; nothing is editable.
+ * Pan and zoom freely; nothing is editable. `snapshot()` takes a picture of it, for the poster.
  */
 
-import { Camera, Layer, Map, VectorSource } from '@maplibre/maplibre-react-native';
-import React from 'react';
+import { Camera, Layer, Map, VectorSource, type MapRef } from '@maplibre/maplibre-react-native';
+import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 import { StyleSheet } from 'react-native';
 
 import { tilesUrl } from '../../services/api';
@@ -20,24 +20,29 @@ const codes = (v: CompareView) => ({
   theirs: [...v.in_common, ...v.only_them].map((p) => p.code),
 });
 
-export function CompareMap({
-  theme,
-  view,
-  data,
-  center,
-}: {
+export type CompareMapHandle = { snapshot: () => Promise<string | null> };
+
+export const CompareMap = forwardRef<CompareMapHandle, {
   theme: ResolvedMapTheme;
   view: MapView;
   data: CompareView;
   center: [number, number];
-}) {
+}>(function CompareMap({ theme, view, data, center }, ref) {
+  const mapRef = useRef<MapRef>(null);
+  useImperativeHandle(ref, () => ({
+    snapshot: async () => {
+      const uri = await mapRef.current?.createStaticMapImage({ output: 'file' });
+      if (!uri) return null;
+      return uri.startsWith('/') ? `file://${uri}` : uri;
+    },
+  }));
   const { base, compare } = theme;
   const { mine, theirs } = codes(data);
   const countryFill = view === 'countries' ? compareColorExpression(mine, theirs, 'country', 'iso2', base.land, compare) : base.land;
   const below = base.terrain ? 'terrain-hillshade' : LAYER.glow;
 
   return (
-    <Map style={StyleSheet.absoluteFill} mapStyle={MAP_STYLE} attribution={false} logo={false} compass={false} touchPitch={false} touchRotate={false}>
+    <Map ref={mapRef} style={StyleSheet.absoluteFill} mapStyle={MAP_STYLE} attribution={false} logo={false} compass={false} touchPitch={false} touchRotate={false}>
       <Camera initialViewState={{ center, zoom: 1.4 }} />
       <WaterLayers base={base} />
       <CountryLayers base={base} fill={countryFill} />
@@ -74,4 +79,4 @@ export function CompareMap({
       <CountryLabels base={base} />
     </Map>
   );
-}
+});

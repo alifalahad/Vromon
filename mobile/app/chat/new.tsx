@@ -96,7 +96,7 @@ export default function NewChatScreen() {
                 accessibilityLabel={t('chat.messageName', { name })}
                 testID={`new-chat-${item.username}`}
               >
-                <Avatar name={name} id={item.id} size={44} />
+                <Avatar name={name} id={item.id} uri={item.avatar_url} size={44} />
                 <View style={styles.rowText}>
                   <Text style={styles.name} numberOfLines={1}>
                     {name}

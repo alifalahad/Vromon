@@ -1,4 +1,12 @@
-import { compareColorExpression, MAP_STYLE, markedCodes, statusColorExpression, usedStatuses } from '../features/map/style';
+import {
+  compareColorExpression,
+  countriesWithNothingInside,
+  MAP_STYLE,
+  markedCodes,
+  statusColorExpression,
+  usedStatuses,
+  withImpliedCountries,
+} from '../features/map/style';
 import { readableOn } from '../features/mapThemes/color';
 import type { Visit } from '../types';
 
@@ -77,5 +85,20 @@ describe('readable text on status colours', () => {
     expect(readableOn(STATUS_COLORS.visited)).toBe('#FFFFFF'); // #B7268B
     expect(readableOn(STATUS_COLORS.lived)).toBe('#FFFFFF'); // #4712A2
     expect(readableOn(STATUS_COLORS.want)).toBe('#000000'); // #4094F6: white would be ~3.2:1
+  });
+});
+
+describe('globe and close-up colours', () => {
+  const inBD = (t: Visit['place_type'], code: string, status: Visit['status']): Visit => ({ ...visit(t, code, status), country_iso2: 'BD' });
+
+  it('on the globe a country shows what you marked inside it', () => {
+    const visits = [inBD('district', 'BD-chandpur', 'lived'), { ...visit('city', '1', 'want'), country_iso2: 'NP' }];
+    const countries = withImpliedCountries(visits).filter((v) => v.place_type === 'country');
+    expect(countries.map((v) => [v.place_code, v.status])).toEqual([['BD', 'lived']]); // wanting a city doesn't colour Nepal
+  });
+
+  it('close up, a country with places marked in it gives way to them', () => {
+    const visits = [visit('country', 'BD', 'visited'), inBD('district', 'BD-chandpur', 'lived'), visit('country', 'AU', 'visited')];
+    expect(countriesWithNothingInside(visits).map((v) => v.place_code)).toEqual(['AU']);
   });
 });
