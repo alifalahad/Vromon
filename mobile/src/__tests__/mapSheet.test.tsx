@@ -9,9 +9,6 @@ jest.mock('react-native-safe-area-context', () => jest.requireActual('react-nati
 
 const props = {
   open: true,
-  home: 'BD',
-  view: 'countries' as const,
-  onSelectView: jest.fn(),
   onAllThemes: jest.fn(),
   onClose: jest.fn(),
 };
@@ -23,18 +20,10 @@ beforeEach(async () => {
 });
 
 describe('Map sheet', () => {
-  it("names the regions option after the home country's regions", async () => {
+  it('has no Countries / Divisions / Cities switch: the map follows its zoom', async () => {
     await render(<MapSheet {...props} />);
-    expect(screen.getByText('Divisions')).toBeTruthy();
-    await render(<MapSheet {...props} home="IN" />);
-    expect(screen.getByText('Regions')).toBeTruthy();
-  });
-
-  it('chooses a view and closes', async () => {
-    await render(<MapSheet {...props} />);
-    await fireEvent.press(screen.getByTestId('map-view-regions'));
-    expect(props.onSelectView).toHaveBeenCalledWith('regions');
-    expect(props.onClose).toHaveBeenCalled();
+    expect(screen.queryByTestId('map-view')).toBeNull();
+    expect(screen.queryByText('Divisions')).toBeNull();
   });
 
   it('applies a theme at once and stays open', async () => {
@@ -53,7 +42,6 @@ describe('Map sheet', () => {
   it('speaks Bangla', async () => {
     await act(() => i18n.changeLanguage('bn'));
     await render(<MapSheet {...props} />);
-    expect(screen.getByText('বিভাগ')).toBeTruthy();
     expect(screen.getByText('সব থিম')).toBeTruthy();
   });
 });

@@ -42,7 +42,11 @@ name: 05 Plan a trip with must-sees, fix one that can't fit, see the plan
 
 # 2 Your style
 - tapOn:
+    id: interests-open
+- tapOn:
     id: interest-Beach
+- tapOn:
+    id: interests-done
 - tapOn:
     id: new-next
 

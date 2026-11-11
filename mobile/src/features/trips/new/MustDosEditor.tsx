@@ -7,7 +7,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Switch, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
 import type { BusyTime, MustSee, MustSeeWhen, Place } from '../../../types';
@@ -21,6 +21,7 @@ import { topicIcon } from './icons';
 import { timesBetween, WHENS, withTime } from './newTrip';
 import { PlacePickerSheet } from './PlacePickerSheet';
 import { useMustDoText } from './useMustDoText';
+import { Toggle } from '../../../ui/Toggle';
 
 export type MustDos = { mustSees: MustSee[]; busy: BusyTime[]; skip: number[]; avoidCrowds: boolean };
 
@@ -167,11 +168,9 @@ export function MustDosEditor({
               <Text style={styles.cardTitle}>{t('newTrip.avoidCrowds')}</Text>
               <Text style={styles.cardSub}>{t('newTrip.avoidCrowdsHint')}</Text>
             </View>
-            <Switch
+            <Toggle
               value={value.avoidCrowds}
               onValueChange={(v) => set({ avoidCrowds: v })}
-              trackColor={{ true: colors.accent, false: colors.surfaceRaised }}
-              thumbColor={colors.onAccent}
               importantForAccessibility="no"
             />
           </PressableScale>

@@ -185,7 +185,8 @@
       "undatedPlaces_other": "No date yet: {{places}}, and {{n}} more",
       "undatedPlacesOnly": "No date yet: {{places}}"
     },
-    "openSettings": "Your profile and settings"
+    "openSettings": "Your profile and settings",
+    "searchAll": "Search countries, divisions and cities"
   },
   "mapTheme": {
     "title": "Map Theme",
@@ -408,7 +409,8 @@
       "openTrip": "Open their trip"
     },
     "exportCompare": "Save or share this map",
-    "posterTitle": "You and {{name}}"
+    "posterTitle": "You and {{name}}",
+    "compareZoomHint": "Zoom the map in for regions, then cities"
   },
   "settings": {
     "title": "Settings",
@@ -777,6 +779,22 @@
     "errDestination": "Choose where you're going.",
     "errTooLong": "A trip can be at most 30 days.",
     "when": "When",
+    "dateFrom": "From",
+    "dateTo": "To",
+    "datePart": {
+      "dd": "DD",
+      "mm": "MM",
+      "yyyy": "YYYY",
+      "day": "day",
+      "month": "month",
+      "year": "year"
+    },
+    "dateProblem": {
+      "past": "Pick today or a later day.",
+      "beforeStart": "The last day can’t be before the first.",
+      "invalid": "That date doesn’t exist."
+    },
+    "calendarClose": "Close calendar",
     "days_one": "{{n}} day",
     "days_other": "{{n}} days",
     "nights_one": "{{n}} night",
@@ -804,6 +822,21 @@
     "fromWhere": "Where from?",
     "change": "Change",
     "enjoy": "What do you enjoy?",
+    "interestsAny": "Anything",
+    "interestsMix": "Vromon picks a mix",
+    "interestsFirst": "Your plan puts these first",
+    "interestsMore_one": "{{list}} +{{n}}",
+    "interestsMore_other": "{{list}} +{{n}}",
+    "interestsChoose": "Choose",
+    "interestsClear": "Clear",
+    "interestsHint": "Pick any. Your plan puts these first.",
+    "interestsDone_one": "Done · {{n}} picked",
+    "interestsDone_other": "Done · {{n}} picked",
+    "interestGroups": {
+      "outdoors": "Outdoors",
+      "culture": "History and culture",
+      "leisure": "Food and leisure"
+    },
     "pace": "Pace",
     "paces": {
       "Relaxed": "Relaxed",
@@ -815,7 +848,24 @@
       "Balanced": "Up to 4 stops a day",
       "Packed": "Up to 6 stops a day"
     },
+    "stopsADay_one": "{{n}} place a day",
+    "stopsADay_other": "{{n}} places a day",
+    "pacePerStop": "About {{time}} at each, getting there included, plus an hour for lunch",
+    "paceFeel": {
+      "Relaxed": "Slow mornings and long breaks · done by {{end}}",
+      "Balanced": "A full day with time to sit down · done by {{end}}",
+      "Packed": "On the move all day · done by {{end}}"
+    },
     "budget": "Budget",
+    "currency": "Currency",
+    "budgetType": "Type an amount",
+    "budgetAmount": "Budget in {{currency}}",
+    "fxLoading": "Getting today’s rate…",
+    "fxFailed": "Can’t get today’s exchange rate right now.",
+    "fxUseTaka": "Use taka",
+    "fxPlanning": "≈ {{amount}} for planning",
+    "fxSource": "Rates by {{source}}, {{date}}",
+    "fxSourceOld": "Rates by {{source}}, {{date}} (couldn’t update)",
     "budgetFor": "for {{travellers}}, {{nights}}",
     "tiers": {
       "Budget": "Budget",
@@ -1843,5 +1893,25 @@
     "footnote": "An estimate by {{model}} on {{date}}, from Vromon's data. Prices change: check before you go.",
     "notSetUp": "The AI estimate isn't set up on this server.",
     "failed": "The AI couldn't make an estimate right now."
+  },
+  "currencies": {
+    "BDT": "Bangladeshi taka",
+    "USD": "US dollar",
+    "EUR": "Euro",
+    "GBP": "British pound",
+    "INR": "Indian rupee",
+    "AED": "UAE dirham",
+    "SAR": "Saudi riyal",
+    "QAR": "Qatari riyal",
+    "KWD": "Kuwaiti dinar",
+    "OMR": "Omani rial",
+    "MYR": "Malaysian ringgit",
+    "SGD": "Singapore dollar",
+    "CAD": "Canadian dollar",
+    "AUD": "Australian dollar",
+    "JPY": "Japanese yen",
+    "KRW": "South Korean won",
+    "CNY": "Chinese yuan",
+    "NPR": "Nepalese rupee"
   }
 }

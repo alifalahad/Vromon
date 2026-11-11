@@ -10,7 +10,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMe } from '../../../src/features/account/useMe';
@@ -19,6 +19,7 @@ import { usePlanFormat } from '../../../src/features/trips/plan/usePlanFormat';
 import { Button } from '../../../src/ui/Button';
 import { PressableScale } from '../../../src/ui/PressableScale';
 import { makeStyles, useTheme } from '../../../src/ui/theme';
+import { Toggle } from '../../../src/ui/Toggle';
 
 const MAX_QUESTION = 200;
 const MAX_OPTION = 80;
@@ -104,10 +105,9 @@ export default function SharePollScreen() {
         ) : null}
         <View style={styles.switchRow}>
           <Text style={styles.switchText}>{t('chat.share.pollMultiple')}</Text>
-          <Switch
+          <Toggle
             value={multiple}
             onValueChange={setMultiple}
-            trackColor={{ true: colors.accentStrong, false: colors.surfaceRaised }}
             accessibilityLabel={t('chat.share.pollMultiple')}
             testID="poll-multiple"
           />

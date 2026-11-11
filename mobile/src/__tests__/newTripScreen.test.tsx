@@ -191,11 +191,22 @@ describe('planning a new trip', () => {
     expect(screen.getByTestId('travellers-value')).toHaveTextContent('3');
     await press(screen.getByTestId('new-next'));
 
-    // Step 2: style; the budget follows the level, and names the hotels it buys
-    expect(await screen.findByText('What do you enjoy?')).toBeTruthy();
-    await press(screen.getByTestId('interest-Beach'));
+    // Step 2: style (interests in a sheet, the pace on a slider); the budget follows the level,
+    // and names the hotels it buys
+    expect(await screen.findByTestId('interests-open')).toHaveTextContent(/What do you enjoy\? Anything|Anything/);
+    await press(screen.getByTestId('interests-open'));
+    await press(await screen.findByTestId('interest-Beach'));
+    await press(screen.getByTestId('interests-done'));
+    expect(screen.getByTestId('interests-open')).toHaveTextContent(/Beach/);
+    expect(screen.getByTestId('pace-value')).toHaveTextContent('4 places a day');
+    // As a screen reader moves it: two steps up
+    const stepUp = () => act(async () => fireEvent(screen.getByTestId('pace-slider'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } }));
+    await stepUp();
+    await stepUp();
+    expect(screen.getByTestId('pace-value')).toHaveTextContent('6 places a day');
+    expect(screen.getByText(/On the move all day/)).toBeTruthy();
     await press(screen.getByTestId('tier-Luxury'));
-    expect(screen.getByTestId('budget-total')).toHaveTextContent('৳72,000');
+    expect(screen.getByTestId('budget-total').props.value).toBe('72,000');
     expect(await screen.findByText(/resorts around ৳8,000 a night/)).toBeTruthy();
     await press(screen.getByTestId('tier-Comfort'));
     expect(await screen.findByText(/hotels around ৳2,800–৳3,500 a night/)).toBeTruthy();
@@ -216,8 +227,8 @@ describe('planning a new trip', () => {
         destination: "Cox's Bazar",
         num_travelers: 3,
         total_budget: 38000,
-        preference: expect.objectContaining({ interests: ['Beach'], travel_style: 'Balanced', accommodation_preference: 'Standard' }),
-        constraints: expect.objectContaining({ must_sees: [{ place_id: 16, day: 1, when: 'sunset', at: null }] }),
+        preference: expect.objectContaining({ interests: ['Beach'], travel_style: 'Packed', accommodation_preference: 'Standard' }),
+        constraints: expect.objectContaining({ max_activities_per_day: 6, must_sees: [{ place_id: 16, day: 1, when: 'sunset', at: null }] }),
       }),
     );
 
@@ -232,7 +243,7 @@ describe('planning a new trip', () => {
     expect(await screen.findByText('Himchari Hilltop Viewpoint is on day 1 at 16:00.')).toBeTruthy();
     await press(await screen.findByTestId('see-plan'));
     expect(mockReplace).toHaveBeenCalledWith({ pathname: '/trip/[id]', params: { id: 77 } });
-  });
+  }, 20_000);
 
   it('can build straight from step 2, and leave a must-see out', async () => {
     trips.create.mockResolvedValue({ id: 78 });

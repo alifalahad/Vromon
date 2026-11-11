@@ -149,7 +149,18 @@ export function DayMap({
 
   return (
     <View style={styles.wrap} accessible={false} accessibilityLabel={accessibilityLabel} testID="day-map">
-      <Map style={styles.map} mapStyle={mapStyle} logo={false} compass={false} touchPitch={is3d} attribution attributionPosition={{ top: topPadding + 8, right: 8 }}>
+      {/* A TextureView on Android: the default GLSurfaceView draws on a layer of its own, and the
+          plan sheet added over it after the map could end up invisible behind it */}
+      <Map
+        style={styles.map}
+        mapStyle={mapStyle}
+        androidView="texture"
+        logo={false}
+        compass={false}
+        touchPitch={is3d}
+        attribution
+        attributionPosition={{ top: topPadding + 8, right: 8 }}
+      >
         <Camera
           ref={camera}
           initialViewState={bounds ? { bounds, padding } : { center: DEFAULT_CENTER, zoom: 6 }}

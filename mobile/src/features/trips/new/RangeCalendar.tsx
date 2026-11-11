@@ -2,6 +2,9 @@
  * Pick the trip's dates on a month grid: tap the first day, then the last.
  * Tapping a day before the first starts again from there. Days before today
  * can't be picked.
+ *
+ * Under the From / To fields (DateRangeFields), the fields say which day a tap sets (`mode`) and
+ * get the tap (`onDay`); the grid shows the month of a day that changes.
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -17,11 +20,15 @@ import { localDigits } from '../plan/usePlanFormat';
 type Props = {
   start: string;
   end: string;
-  onChange: (range: { start: string; end: string }) => void;
+  onChange?: (range: { start: string; end: string }) => void;
   today?: string;
+  /** Set by the From / To fields: which day the next tap sets */
+  mode?: 'start' | 'end';
+  /** With `mode`: a day was tapped */
+  onDay?: (day: string) => void;
 };
 
-export function RangeCalendar({ start, end, onChange, today = localToday() }: Props) {
+export function RangeCalendar({ start, end, onChange, today = localToday(), mode, onDay }: Props) {
   const styles = useStyles();
   const { colors } = useTheme();
   const { t, i18n } = useTranslation();
@@ -30,7 +37,16 @@ export function RangeCalendar({ start, end, onChange, today = localToday() }: Pr
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   // The first tap picks the first day; the next one the last day
-  const [picking, setPicking] = useState<'start' | 'end'>('start');
+  const [ownPicking, setPicking] = useState<'start' | 'end'>('start');
+  const picking = mode ?? ownPicking;
+  // A date that changed (typed, or picked here) shows its month; switching from From to To doesn't
+  // move the grid, since the last day is usually near the first
+  const [seen, setSeen] = useState({ start, end });
+  if (mode && (start !== seen.start || end !== seen.end)) {
+    setSeen({ start, end });
+    const d = parseDay(start !== seen.start ? start : end);
+    if (month.getFullYear() !== d.getFullYear() || month.getMonth() !== d.getMonth()) setMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+  }
 
   const cells = useMemo(() => {
     const first = new Date(month.getFullYear(), month.getMonth(), 1);
@@ -50,6 +66,8 @@ export function RangeCalendar({ start, end, onChange, today = localToday() }: Pr
   const canGoBack = month > new Date(thisMonth.getFullYear(), thisMonth.getMonth(), 1);
 
   const tap = (day: string) => {
+    if (onDay) return onDay(day);
+    if (!onChange) return;
     if (picking === 'start' || day < start) {
       onChange({ start: day, end: day });
       setPicking('end');

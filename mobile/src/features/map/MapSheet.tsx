@@ -1,45 +1,34 @@
 /**
- * The Map sheet (map home step 2, mockup 8): what the map shows (Countries ·
- * Divisions · Cities, the middle word from the home country) and its theme (the
- * four preset themes, plus "All themes" for the full Map Theme screen). Replaces
- * the Map view sheet and the palette button.
+ * The Map sheet (map home step 2, mockup 8): the map's theme (the four preset themes, plus
+ * "All themes" for the full Map Theme screen) and the optional layers. What the map shows
+ * (countries, divisions, districts, cities) follows the zoom, so there's no view switch here.
  *
- * Choosing a view closes the sheet; choosing a theme applies it at once and keeps
- * the sheet open, so themes can be compared on the map behind it. "On the map"
- * switches the optional layers (`layers`: only those that exist are listed).
+ * Choosing a theme applies it at once and keeps the sheet open, so themes can be compared on
+ * the map behind it. "On the map" switches the optional layers (`layers`: only those that exist
+ * are listed).
  */
 
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView, type BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import React, { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Switch, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PressableScale } from '../../ui/PressableScale';
-import { SegmentedControl } from '../../ui/SegmentedControl';
 import { makeStyles, useTheme } from '../../ui/theme';
 import { useSheetPresentation } from '../../ui/useSheetPresentation';
 import { THEMES } from '../mapThemes/catalog';
 import { selectTheme } from '../mapThemes/resolve';
-import { usePreferences, type MapLayer, type MapView } from '../preferences/store';
-import { regionWord } from './home';
-
-const VIEWS: MapView[] = ['countries', 'regions', 'cities'];
+import { usePreferences, type MapLayer } from '../preferences/store';
+import { Toggle } from '../../ui/Toggle';
 
 export function MapSheet({
   open,
-  home,
-  view,
-  onSelectView,
   onAllThemes,
   onClose,
   layers = [],
 }: {
   open: boolean;
-  /** Home country: names the regions option ("Divisions" for Bangladesh) */
-  home: string;
-  view: MapView;
-  onSelectView: (v: MapView) => void;
   onAllThemes: () => void;
   onClose: () => void;
   /** The optional layers to offer, in order */
@@ -47,7 +36,7 @@ export function MapSheet({
 }) {
   const ref = useRef<BottomSheetModal>(null);
   const styles = useStyles();
-  const { scheme, colors } = useTheme();
+  const { scheme } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const themeId = usePreferences((s) => s.mapTheme.themeId);
@@ -61,8 +50,6 @@ export function MapSheet({
     (props: BottomSheetBackdropProps) => <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.3} pressBehavior="close" />,
     [],
   );
-
-  const label = (v: MapView) => t(`map.views.${v === 'regions' ? regionWord(home) : v}`);
 
   return (
     <BottomSheetModal
@@ -79,19 +66,6 @@ export function MapSheet({
           {t('map.sheetTitle')}
         </Text>
 
-        <View style={styles.section}>
-          <Text style={styles.heading}>{t('map.show')}</Text>
-          <SegmentedControl<MapView>
-            options={VIEWS.map((v) => ({ value: v, label: label(v) }))}
-            value={view}
-            onChange={(v) => {
-              onSelectView(v);
-              ref.current?.dismiss();
-            }}
-            testID="map-view"
-          />
-        </View>
-
         {layers.length > 0 ? (
           <View style={styles.section}>
             <Text style={styles.heading}>{t('map.layers.heading')}</Text>
@@ -101,11 +75,9 @@ export function MapSheet({
                   <Text style={styles.layerName}>{t(`map.layers.${layer}`)}</Text>
                   <Text style={styles.layerBody}>{t(`map.layers.${layer}Body`)}</Text>
                 </View>
-                <Switch
+                <Toggle
                   value={mapLayers[layer]}
                   onValueChange={(on) => setMapLayer(layer, on)}
-                  trackColor={{ true: colors.accentStrong, false: colors.surfaceRaised }}
-                  thumbColor="#FFFFFF"
                   accessibilityLabel={t(`map.layers.${layer}`)}
                   testID={`map-layer-${layer}`}
                 />

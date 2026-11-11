@@ -7,11 +7,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
-  BottomSheetView,
+  BottomSheetScrollView,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
 import React, { useCallback, useRef } from 'react';
-import { Text, View } from 'react-native';
+import { Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { haptics } from './haptics';
@@ -42,6 +42,8 @@ export function OptionSheet<T extends string>({
   const styles = useStyles();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  // A long list (currencies) stops below the status bar and scrolls
+  const { height } = useWindowDimensions();
 
   const handleDismiss = useSheetPresentation(ref, visible, onClose);
 
@@ -56,6 +58,7 @@ export function OptionSheet<T extends string>({
     <BottomSheetModal
       ref={ref}
       enableDynamicSizing
+      maxDynamicContentSize={height - insets.top - 24}
       onDismiss={handleDismiss}
       onChange={(index) => {
         if (index >= 0) haptics.selection();
@@ -65,7 +68,7 @@ export function OptionSheet<T extends string>({
       handleIndicatorStyle={styles.handle}
       accessibilityLabel={title}
     >
-      <BottomSheetView style={[styles.content, { paddingBottom: insets.bottom + 16 }]}>
+      <BottomSheetScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 16 }]}>
         <Text style={styles.title} accessibilityRole="header">
           {title}
         </Text>
@@ -94,7 +97,7 @@ export function OptionSheet<T extends string>({
           })}
         </View>
         {footnote ? <Text style={styles.footnote}>{footnote}</Text> : null}
-      </BottomSheetView>
+      </BottomSheetScrollView>
     </BottomSheetModal>
   );
 }

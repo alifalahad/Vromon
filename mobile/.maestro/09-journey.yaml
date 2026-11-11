@@ -32,8 +32,12 @@ name: 09 The whole journey - a trip from today, rearranged, its conditions, Toda
     id: where-hit-1
 - assertVisible:
     id: destination-chosen
-# The calendar opens on the month of the suggested dates (next weekend), which can be next
-# month: go back to this month for today, and on to the next for tomorrow on a month's last day
+# The calendar opens under the From field, on the month of the suggested dates (next weekend),
+# which can be next month: go back to this month for today, and on to the next for tomorrow on
+# a month's last day. Picking From moves to To; picking To closes the calendar.
+- tapOn:
+    id: date-start-d
+- hideKeyboard
 - scrollUntilVisible:
     element:
       id: cal-prev
@@ -65,7 +69,11 @@ name: 09 The whole journey - a trip from today, rearranged, its conditions, Toda
 
 # 2 Style, 3 a must-see (Inani Beach, any time)
 - tapOn:
+    id: interests-open
+- tapOn:
     id: interest-Beach
+- tapOn:
+    id: interests-done
 - tapOn:
     id: new-next
 - tapOn:

@@ -13,7 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Linking, Platform, ScrollView, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, ScrollView, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -38,6 +38,7 @@ import { Snackbar } from '../../../src/ui/Snackbar';
 import { makeStyles, useTheme } from '../../../src/ui/theme';
 import { ON_SUNSET, SUNSET_CARD } from '../../../src/ui/theme/cards';
 import { useReduceMotion } from '../../../src/ui/useReduceMotion';
+import { Toggle } from '../../../src/ui/Toggle';
 
 const SUNSET = SUNSET_CARD;
 const ON = ON_SUNSET;
@@ -298,10 +299,9 @@ export default function TodayScreen() {
                 {room ? (
                   <View style={styles.tellRow}>
                     <Text style={styles.tellText}>{t('today.tellRoom')}</Text>
-                    <Switch
+                    <Toggle
                       value={tellRoom}
                       onValueChange={setTellRoom}
-                      trackColor={{ true: theme.colors.accentStrong, false: theme.colors.surfaceRaised }}
                       accessibilityLabel={t('today.tellRoom')}
                       testID="today-tell-room"
                     />
@@ -488,7 +488,6 @@ function ToggleRow({
   last?: boolean;
 }) {
   const styles = useStyles();
-  const { colors } = useTheme();
   return (
     <PressableScale
       pressEffect="opacity"
@@ -505,14 +504,12 @@ function ToggleRow({
         <Text style={styles.toggleTitle}>{title}</Text>
         {sub ? <Text style={styles.toggleSub}>{sub}</Text> : null}
       </View>
-      <Switch
+      <Toggle
         testID={testID}
         importantForAccessibility="no-hide-descendants"
         accessibilityElementsHidden
         value={value}
         onValueChange={onChange}
-        trackColor={{ true: colors.accent, false: colors.surfaceRaised }}
-        thumbColor={colors.onAccent}
       />
     </PressableScale>
   );

@@ -13,7 +13,7 @@ import { AccessibilityActionEvent, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMe } from '../../src/features/account/useMe';
-import { HOME_REGIONS, homeRegionName } from '../../src/features/map/geoData';
+import { homeRegionName } from '../../src/features/map/geoData';
 import { DEFAULT_HOME, homeRegionProgress, regionWord } from '../../src/features/map/home';
 import { mapCountryName } from '../../src/features/map/mapCountries';
 import { replaySteps } from '../../src/features/map/story';
@@ -43,7 +43,6 @@ export default function ReplayScreen() {
   const reduceMotion = useReduceMotion();
   const mapTheme = useMapTheme();
   const lang = resolveLanguage(usePreferences((s) => s.language));
-  const view = usePreferences((s) => s.mapView);
   const { data: me } = useMe();
   const home = me?.home_country_iso2 ?? DEFAULT_HOME;
   const { data: visits = [] } = useVisits(me?.id);
@@ -88,14 +87,13 @@ export default function ReplayScreen() {
           ? t('map.replay.first', { places: named.join(t('map.replay.and')) })
           : t('map.replay.firstMore', { places: named.slice(0, 2).join(', '), count: step.added.length - Math.min(2, named.length), n: f.n(step.added.length - Math.min(2, named.length)) });
   const progress = step ? homeRegionProgress(step.visits, home) : null;
-  const hasHomeRegions = HOME_REGIONS.features.some((r) => r.properties.country === home);
 
   return (
     <View style={styles.container} testID="replay-screen">
       <Stack.Screen options={{ headerShown: false }} />
       {/* Framed on home; each step repaints the places, nothing reloads */}
-      {/* Divisions when the home country has them: replay is framed on home and counts them */}
-      <WorldMap view={hasHomeRegions ? 'regions' : view} visits={step?.visits ?? []} theme={mapTheme} home={home} onPressPlace={() => undefined} />
+      {/* Framed on home, where the map shows divisions (the zoom decides) */}
+      <WorldMap visits={step?.visits ?? []} theme={mapTheme} home={home} onPressPlace={() => undefined} />
 
       <View style={[styles.top, { top: insets.top + 12 }]} pointerEvents="box-none">
         <View style={styles.topRow}>

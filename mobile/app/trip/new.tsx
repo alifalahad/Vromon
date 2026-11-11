@@ -10,15 +10,14 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import * as Location from 'expo-location';
-import { ActivityIndicator, KeyboardAvoidingView, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, ScrollView, Text, View } from 'react-native';
 import Animated, { FadeInLeft, FadeInRight } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { INTERESTS } from '../../src/constants/trip';
 import { useMe } from '../../src/features/account/useMe';
 import { useVisits } from '../../src/features/map/visits';
 import { usePreferences } from '../../src/features/preferences/store';
@@ -29,8 +28,10 @@ import { canLocate, LocatorMap } from '../../src/features/trips/new/LocatorMap';
 import { destinationName } from '../../src/features/trips/new/whereSearch';
 import { homeRegionName } from '../../src/features/map/geoData';
 import { resolveLanguage } from '../../src/i18n';
+import { BudgetCard } from '../../src/features/trips/new/BudgetCard';
 import { Building, type BuildPhase } from '../../src/features/trips/new/Building';
-import { topicIcon } from '../../src/features/trips/new/icons';
+import { currencyFor, formatMoney, fromTaka, roundShown } from '../../src/features/trips/new/currency';
+import { InterestsRow, InterestsSheet } from '../../src/features/trips/new/InterestsSheet';
 import { MustDosEditor } from '../../src/features/trips/new/MustDosEditor';
 import {
   addMustSee,
@@ -39,27 +40,30 @@ import {
   END_TIMES,
   hotelLevel,
   LEAVE_TIMES,
+  MAX_STOPS,
   MAX_TRAVELLERS,
-  PACES,
+  MIN_STOPS,
+  minutesPerStop,
+  paceOf,
   START_TIMES,
-  TIERS,
   toPayload,
   tripLength,
   update,
   whereWhenError,
   type NewTrip,
 } from '../../src/features/trips/new/newTrip';
-import { RangeCalendar } from '../../src/features/trips/new/RangeCalendar';
+import { DateRangeFields } from '../../src/features/trips/new/DateRangeFields';
 import { useMustDoText } from '../../src/features/trips/new/useMustDoText';
 import { buildPlan } from '../../src/features/trips/plan/build';
 import { usePlanFormat } from '../../src/features/trips/plan/usePlanFormat';
 import { refreshTrips } from '../../src/features/trips/queries';
-import { destinationsApi, placesApi, roomsApi, tripsApi } from '../../src/services/api';
+import { destinationsApi, fxApi, placesApi, roomsApi, tripsApi } from '../../src/services/api';
 import type { Hotel, ItineraryDay, JourneyMode, MustSee, Trip, Unplaced } from '../../src/types';
 import { Button } from '../../src/ui/Button';
 import { haptics } from '../../src/ui/haptics';
 import { PressableScale } from '../../src/ui/PressableScale';
 import { makeStyles, useTheme } from '../../src/ui/theme';
+import { StepSlider } from '../../src/ui/StepSlider';
 import { TimeSheet } from '../../src/ui/TimeSheet';
 import { useReduceMotion } from '../../src/ui/useReduceMotion';
 
@@ -97,6 +101,17 @@ export default function NewTripScreen() {
   const [forward, setForward] = useState(true);
   const [showError, setShowError] = useState(false);
   const [timeField, setTimeField] = useState<TimeField | null>(null);
+  const [pickingInterests, setPickingInterests] = useState(false);
+  // While typing (dates, a city), the footer steps aside so what's typed and the calendar under it fit
+  const [keyboardUp, setKeyboardUp] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardUp(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardUp(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
   const [build, setBuild] = useState<Build | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const innerRef = useRef<View>(null);
@@ -126,6 +141,12 @@ export default function NewTripScreen() {
   const days = tripLength(trip);
   const nights = days - 1;
   const set = (change: Partial<NewTrip>) => setTrip((cur) => update(cur, change));
+  // Amounts in the trip's currency (the budget is kept in taka): today's rate, or taka until it's known
+  const fx = useQuery({ queryKey: ['fx-rates'], queryFn: () => fxApi.rates(), staleTime: 60 * 60_000, enabled: trip.currency !== 'BDT' });
+  const money = (taka: number) => {
+    const v = fromTaka(taka, trip.currency, fx.data?.rates);
+    return v === null ? f.money(taka) : formatMoney(roundShown(v, trip.currency), trip.currency, i18n.language);
+  };
   // Getting there from where you are: the phone's location once (asked for, never kept in the background)
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState<string | null>(null);
@@ -243,7 +264,7 @@ export default function NewTripScreen() {
           })
         : t('newTrip.stepFillAny'),
     );
-    out.push(t('newTrip.stepBudget', { amount: f.money(trip.budget) }));
+    out.push(t('newTrip.stepBudget', { amount: money(trip.budget) }));
     return out;
   };
 
@@ -400,7 +421,7 @@ export default function NewTripScreen() {
                   })}
                 </Text>
               </View>
-              <RangeCalendar start={trip.start} end={trip.end} onChange={(r) => set(r)} />
+              <DateRangeFields start={trip.start} end={trip.end} onChange={(r) => set(r)} reveal={reveal} />
               {showError && problem === 'tooLong' && <Text style={styles.error}>{t('newTrip.errTooLong')}</Text>}
 
               <View style={styles.rowCard}>
@@ -532,47 +553,42 @@ export default function NewTripScreen() {
               <Text style={styles.h2} accessibilityRole="header">
                 {t('newTrip.enjoy')}
               </Text>
-              <View style={styles.chips}>
-                {INTERESTS.map((i) => {
-                  const on = trip.interests.includes(i);
-                  return (
-                    <PressableScale
-                      key={i}
-                      haptic="selection"
-                      onPress={() => set({ interests: on ? trip.interests.filter((x) => x !== i) : [...trip.interests, i] })}
-                      style={[styles.interest, on && styles.interestOn]}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: on }}
-                      testID={`interest-${i}`}
-                    >
-                      <MaterialCommunityIcons name={topicIcon(i)} size={18} color={on ? colors.onAccent : colors.textSecondary} />
-                      <Text style={[styles.interestText, on && styles.onAccent]}>{t(`interests.${i}`)}</Text>
-                    </PressableScale>
-                  );
-                })}
-              </View>
+              {/* One row (it was every interest as a chip); the sheet has them in groups */}
+              <InterestsRow value={trip.interests} onPress={() => setPickingInterests(true)} />
 
-              <Text style={styles.h2} accessibilityRole="header">
-                {t('newTrip.pace')}
-              </Text>
-              <View style={styles.paces} accessibilityRole="radiogroup">
-                {PACES.map((p) => {
-                  const on = trip.pace === p;
-                  return (
-                    <PressableScale
-                      key={p}
-                      haptic="selection"
-                      onPress={() => set({ pace: p })}
-                      style={[styles.pace, on && styles.paceOn]}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: on }}
-                      testID={`pace-${p}`}
-                    >
-                      <Text style={styles.paceLabel}>{t(`newTrip.paces.${p}`)}</Text>
-                      <Text style={styles.paceDesc}>{t(`newTrip.paceDesc.${p}`)}</Text>
-                    </PressableScale>
-                  );
-                })}
+              <View style={styles.h2Row}>
+                <Text style={styles.h2} accessibilityRole="header">
+                  {t('newTrip.pace')}
+                </Text>
+                <Text style={styles.muted}>{t(`newTrip.paces.${paceOf(trip.stops)}`)}</Text>
+              </View>
+              {/* A slider of stops a day (it was three cards), and what such a day is like */}
+              <View style={styles.paceCard}>
+                <Text style={styles.paceBig} testID="pace-value">
+                  {t('newTrip.stopsADay', { count: trip.stops, n: f.n(trip.stops) })}
+                </Text>
+                <StepSlider
+                  min={MIN_STOPS}
+                  max={MAX_STOPS}
+                  value={trip.stops}
+                  onChange={(stops) => set({ stops })}
+                  label={t('newTrip.pace')}
+                  valueText={t('newTrip.stopsADay', { count: trip.stops, n: f.n(trip.stops) })}
+                  stepLabel={(n) => f.n(n)}
+                  testID="pace-slider"
+                />
+                <View style={styles.paceLine}>
+                  <MaterialCommunityIcons name="clock-outline" size={18} color={colors.textSecondary} />
+                  <Text style={[styles.paceText, styles.flex]}>
+                    {t('newTrip.pacePerStop', { time: f.duration(minutesPerStop(trip.stops, trip.dayStart, trip.dayEnd)) })}
+                  </Text>
+                </View>
+                <View style={styles.paceLine}>
+                  <MaterialCommunityIcons name={paceIcon(trip.stops)} size={18} color={colors.textSecondary} />
+                  <Text style={[styles.paceText, styles.flex]}>
+                    {t(`newTrip.paceFeel.${paceOf(trip.stops)}`, { end: f.time(trip.dayEnd) })}
+                  </Text>
+                </View>
               </View>
 
               <View style={styles.h2Row}>
@@ -586,44 +602,17 @@ export default function NewTripScreen() {
                   })}
                 </Text>
               </View>
-              <View style={styles.budgetCard}>
-                <View style={styles.budgetRow}>
-                  <Text style={styles.budgetTotal} testID="budget-total">
-                    {f.money(trip.budget)}
-                  </Text>
-                  <Stepper
-                    value={null}
-                    onLess={() => set({ budget: Math.max(1000, trip.budget - 1000), budgetByHand: true })}
-                    onMore={() => set({ budget: trip.budget + 1000, budgetByHand: true })}
-                    lessLabel={t('newTrip.lessBudget')}
-                    moreLabel={t('newTrip.moreBudget')}
-                    testID="budget"
-                  />
-                </View>
-                <View style={styles.segment} accessibilityRole="radiogroup">
-                  {TIERS.map((tier) => {
-                    const on = !trip.budgetByHand && trip.tier === tier;
-                    return (
-                      <PressableScale
-                        key={tier}
-                        haptic="selection"
-                        onPress={() => set({ tier, budgetByHand: false })}
-                        style={[styles.segmentPart, on && styles.segmentOn]}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: on }}
-                        testID={`tier-${tier}`}
-                      >
-                        <Text style={[styles.segmentText, on && styles.segmentTextOn]}>{t(`newTrip.tiers.${tier}`)}</Text>
-                      </PressableScale>
-                    );
-                  })}
-                </View>
-                <Text style={styles.muted}>
-                  {[t('newTrip.each', { amount: f.money(Math.round(trip.budget / trip.travellers / 50) * 50) }), hotelLine(hotels.data, hotelLevel(trip), t, f)]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </Text>
-              </View>
+              <BudgetCard
+                budget={trip.budget}
+                tier={trip.tier}
+                byHand={trip.budgetByHand}
+                travellers={trip.travellers}
+                currency={trip.currency}
+                hotelText={hotelLine(hotels.data, hotelLevel(trip), t, f)}
+                onBudget={(budget) => set({ budget, budgetByHand: true })}
+                onTier={(tier) => set({ tier, budgetByHand: false })}
+                onCurrency={(currency) => set({ currency, currencyByHand: true })}
+              />
 
               <View style={styles.h2Row}>
                 <Text style={styles.h2} accessibilityRole="header">
@@ -661,12 +650,12 @@ export default function NewTripScreen() {
         </Animated.View>
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }, keyboardUp && styles.footerAway]}>
         {step === 2 && (
           <View style={styles.summary} accessibilityRole="summary">
             <SummaryPart first text={t('newTrip.days', { count: days, n: f.n(days) })} onPress={() => go(0)} />
             <SummaryPart text={t('plan.travellers', { count: trip.travellers, n: f.n(trip.travellers) })} onPress={() => go(0)} />
-            <SummaryPart text={f.money(trip.budget)} onPress={() => go(1)} />
+            <SummaryPart text={money(trip.budget)} onPress={() => go(1)} />
             {trip.mustSees.length > 0 && <SummaryPart text={t('newTrip.mustSees', { count: trip.mustSees.length, n: f.n(trip.mustSees.length) })} />}
             {trip.busy.length > 0 && <SummaryPart text={t('newTrip.busyCount', { count: trip.busy.length, n: f.n(trip.busy.length) })} />}
           </View>
@@ -697,6 +686,12 @@ export default function NewTripScreen() {
           } else set({ [timeField]: value });
         }}
       />
+      <InterestsSheet
+        visible={pickingInterests}
+        value={trip.interests}
+        onChange={(interests) => set({ interests })}
+        onClose={() => setPickingInterests(false)}
+      />
       {searching && destinations.data ? (
         <DestinationSearch
           destinations={destinations.data}
@@ -708,7 +703,12 @@ export default function NewTripScreen() {
           onPick={(d, placeId) => {
             const place = placeId != null ? allPlaces.data?.find((p) => p.id === placeId) : undefined;
             setTrip((cur) => {
-              const next = update(cur, d.name === cur.destination ? {} : { destination: d.name, mustSees: [], skip: [] });
+              const next = update(
+                cur,
+                d.name === cur.destination
+                  ? {}
+                  : { destination: d.name, mustSees: [], skip: [], ...(cur.currencyByHand ? {} : { currency: currencyFor(d.country_iso2) }) },
+              );
               return place ? addMustSee(next, place.id) : next;
             });
             setMustSeeAdded(place ? place.name : null);
@@ -720,6 +720,11 @@ export default function NewTripScreen() {
       ) : null}
     </KeyboardAvoidingView>
   );
+}
+
+/** An icon for how the day feels at this many stops */
+function paceIcon(stops: number): React.ComponentProps<typeof MaterialCommunityIcons>['name'] {
+  return stops <= 3 ? 'coffee-outline' : stops <= 5 ? 'walk' : 'run-fast';
 }
 
 /** Where a must-see ended up in the trip's plan (the trip includes its days). */
@@ -749,7 +754,8 @@ function timeSheetFor(field: TimeField | null, trip: NewTrip, t: TFunction) {
 
 /** "hotels around ৳2,800–4,200 a night", from the destination's hotels at that level. */
 function hotelLine(hotels: Hotel[] | undefined, level: string, t: TFunction, f: ReturnType<typeof usePlanFormat>) {
-  const prices = (hotels ?? []).filter((h) => h.category === level).map((h) => h.price_per_night);
+  // A hotel without a listed price comes as 0: it says nothing about the range
+  const prices = (hotels ?? []).filter((h) => h.category === level && h.price_per_night > 0).map((h) => h.price_per_night);
   if (!prices.length) return null;
   const lo = Math.min(...prices);
   const hi = Math.max(...prices);
@@ -991,41 +997,10 @@ const useStyles = makeStyles((t) => ({
   },
   modeOn: { backgroundColor: t.colors.accent },
   modeText: { ...t.type.caption, fontWeight: '600', color: t.colors.textSecondary },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm },
-  interest: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: 44,
-    paddingHorizontal: 14,
-    borderRadius: t.radius.chip,
-    backgroundColor: t.colors.surface,
-  },
-  interestOn: { backgroundColor: t.colors.accent },
-  interestText: { ...t.type.callout, fontSize: 14, fontWeight: '600', color: t.colors.textPrimary },
-  paces: { flexDirection: 'row', gap: t.spacing.sm },
-  pace: {
-    flex: 1,
-    minHeight: 76,
-    borderRadius: 16,
-    backgroundColor: t.colors.surface,
-    padding: t.spacing.md,
-    gap: 4,
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  paceOn: { borderColor: t.colors.accent, backgroundColor: t.colors.accentSoft },
-  paceLabel: { ...t.type.callout, fontWeight: '700', color: t.colors.textPrimary },
-  paceDesc: { ...t.type.caption, color: t.colors.textSecondary },
-  budgetCard: { backgroundColor: t.colors.surface, borderRadius: 20, padding: t.spacing.lg, gap: t.spacing.md },
-  budgetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  budgetTotal: { fontSize: 30, fontWeight: '700', color: t.colors.textPrimary },
-  segment: { flexDirection: 'row', backgroundColor: t.colors.surfaceInset, borderRadius: t.radius.control, padding: 3 },
-  segmentPart: { flex: 1, minHeight: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  segmentOn: { backgroundColor: t.colors.segmentThumb },
-  segmentText: { ...t.type.callout, fontWeight: '600', color: t.colors.textSecondary },
-  segmentTextOn: { color: t.colors.textPrimary },
+  paceCard: { backgroundColor: t.colors.surface, borderRadius: 20, padding: t.spacing.lg, gap: t.spacing.sm },
+  paceBig: { ...t.type.headline, fontSize: 20, color: t.colors.textPrimary },
+  paceLine: { flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.sm },
+  paceText: { ...t.type.callout, color: t.colors.textSecondary },
   dayRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1039,6 +1014,7 @@ const useStyles = makeStyles((t) => ({
   stepperButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: t.colors.surfaceInset, alignItems: 'center', justifyContent: 'center' },
   stepperValue: { ...t.type.headline, minWidth: 28, textAlign: 'center', color: t.colors.textPrimary },
   footer: { paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.sm, backgroundColor: t.colors.bg },
+  footerAway: { display: 'none' },
   buildNow: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: t.spacing.lg },
   summary: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 6, rowGap: 2 },
   summaryItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },

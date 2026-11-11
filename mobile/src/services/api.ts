@@ -428,6 +428,12 @@ export const photosApi = {
   remove: (photoId: string) => api.delete(`/me/photos/${photoId}`).then(() => undefined),
 };
 
+/** Exchange rates from taka (a budget typed in another currency): `rates.USD` is what one taka buys */
+export type FxRates = { base: string; rates: Record<string, number>; updated_at: string; fetched_at: string; stale: boolean; source: string; source_url: string };
+export const fxApi = {
+  rates: () => api.get<FxRates>('/fx/rates').then((r) => r.data),
+};
+
 export const geoApi = {
   regions: (country: string) => api.get<GeoRegion[]>('/geo/regions', { params: { country } }).then((r) => r.data),
   cities: (q: string, country?: string) => api.get<GeoCity[]>('/geo/cities', { params: { q, country } }).then((r) => r.data),

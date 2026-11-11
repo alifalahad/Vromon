@@ -9,7 +9,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { Visit } from '../../types';
 import type { ResolvedMapTheme } from '../mapThemes/resolve';
-import type { MapView } from '../preferences/store';
+import type { MapLevel } from './levels';
 import type { PlaceRef } from './visits';
 
 export type PressedPlace = PlaceRef & { name: string };
@@ -17,7 +17,6 @@ export type WorldMapHandle = { home: () => void; world: () => void; fit: (bounds
 export type MapScope = 'home' | 'world';
 
 type Props = {
-  view: MapView;
   visits: readonly Visit[];
   theme: ResolvedMapTheme;
   home: string;
@@ -29,6 +28,7 @@ type Props = {
   selected?: PlaceRef | null;
   namedPlaces?: readonly string[];
   onLongPressPlace?: (place: PressedPlace, point: [number, number]) => void;
+  onLevelChange?: (level: MapLevel) => void;
 };
 
 export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ visits }, ref) {

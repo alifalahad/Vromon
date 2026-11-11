@@ -1,7 +1,7 @@
 appId: ${APP_ID}
 env:
   APP_ID: com.vromon.app.dev
-name: 02 Mark Bangladesh visited (Countries view)
+name: 02 Mark Bangladesh visited
 ---
 # Every flow starts fresh on the Map tab, so one failure can't leave the next on another screen
 - runFlow: subflows/launch.yaml
@@ -9,17 +9,7 @@ name: 02 Mark Bangladesh visited (Countries view)
     visible:
       id: tab-index
     timeout: 60000
-- tapOn:
-    id: map-sheet-button
-- tapOn:
-    id: map-view-countries
-# Choosing a view closes the Map sheet; it stays open when Countries was already shown
-- runFlow:
-    when:
-      visible:
-        id: map-sheet
-    commands:
-      - pressKey: back
+# One search for countries, divisions and cities (the map follows its zoom; no view to pick)
 - tapOn:
     id: add-place-fab
 - tapOn:

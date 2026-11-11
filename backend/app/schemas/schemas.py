@@ -693,3 +693,14 @@ class GenerationMeta(BaseModel):
     estimated_total_cost: float
     algorithm: str = "heuristic_v1"
     warnings: List[str] = []
+
+
+class FxRatesOut(BaseModel):
+    """GET /fx/rates: how much of each currency one `base` (taka) buys."""
+    base: str
+    rates: Dict[str, float]
+    updated_at: datetime
+    fetched_at: datetime
+    stale: bool = False
+    source: str
+    source_url: str

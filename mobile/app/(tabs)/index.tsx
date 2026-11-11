@@ -14,7 +14,6 @@ import { useNavigation, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMe } from '../../src/features/account/useMe';
@@ -40,9 +39,10 @@ import { TripLayers, type TripLayerData } from '../../src/features/map/TripLayer
 import { useMarkPlace } from '../../src/features/map/useMarkPlace';
 import { clearVisit, statusOf, useTravelStats, useVisitOutbox, useVisits } from '../../src/features/map/visits';
 import { useTripToday } from '../../src/features/map/useTripToday';
+import type { MapLevel } from '../../src/features/map/levels';
 import { WorldMap, type MapScope, type PressedPlace, type WorldMapHandle } from '../../src/features/map/WorldMap';
 import { useMapTheme } from '../../src/features/mapThemes/useMapTheme';
-import { usePreferences, type MapView } from '../../src/features/preferences/store';
+import { usePreferences } from '../../src/features/preferences/store';
 import { localToday } from '../../src/features/trips/dates';
 import { useTrips, useTripStats } from '../../src/features/trips/queries';
 import { usePlanFormat } from '../../src/features/trips/plan/usePlanFormat';
@@ -72,8 +72,8 @@ export default function MapScreen() {
   const home = me?.home_country_iso2 ?? DEFAULT_HOME;
   const { data: visits = [] } = useVisits(me?.id);
   const pending = useVisitOutbox((s) => (s.userId === me?.id ? s.ops.length : 0));
-  const view = usePreferences((s) => s.mapView);
-  const setView = usePreferences((s) => s.setMapView);
+  // What the map shows at its zoom (countries, divisions, districts, cities): friends' footprints follow it
+  const [level, setLevel] = useState<MapLevel>('region');
   const language = usePreferences((s) => s.language);
   const [place, setPlace] = useState<PressedPlace | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -91,7 +91,8 @@ export default function MapScreen() {
   const { data: friendsList } = useFriends(!!me);
   const hasFriends = (friendsList?.length ?? 0) > 0;
   const friendsOn = mapLayers.friends && hasFriends && !poster;
-  const layerType = view === 'countries' ? 'country' : view === 'regions' ? 'region' : null;
+  // Friends' footprints are by country and region: closer in than regions, their regions still show
+  const layerType = level === 'country' ? 'country' : 'region';
   const { data: footprints } = useFootprints(layerType, friendsOn);
   // Friends' footprints are by country and region (no districts)
   const placeType = place && (place.place_type === 'country' || place.place_type === 'region') ? place.place_type : null;
@@ -177,15 +178,6 @@ export default function MapScreen() {
     };
   }, [dock, visits, destinations, trips, today, home]);
 
-  // Short crossfade when the view changes
-  const opacity = useSharedValue(1);
-  const fade = useAnimatedStyle(() => ({ opacity: opacity.value }));
-  const changeView = (next: MapView) => {
-    if (next === view) return;
-    opacity.set(withSequence(withTiming(0.35, { duration: 120 }), withTiming(1, { duration: 220 })));
-    setView(next);
-  };
-
   // Re-tapping the Map tab flies back home
   useEffect(() => {
     const unsubscribe = navigation.addListener('tabPress' as never, () => {
@@ -230,14 +222,14 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container} testID="map-screen">
-      <Animated.View style={[styles.map, fade]}>
+      <View style={styles.map}>
         <WorldMap
           ref={map}
-          view={view}
           visits={visits}
           theme={mapTheme}
           home={home}
           onScopeChange={setScope}
+          onLevelChange={setLevel}
           onUserMove={() => (userMoved.current = true)}
           bottomInset={DOCK_GAP}
           selected={place ?? quick?.place ?? null}
@@ -284,7 +276,7 @@ export default function MapScreen() {
             <TodayLayers legs={todayData.legs} pins={todayData.pins} here={poster ? null : here} base={mapTheme.base} dark={theme.scheme === 'dark'} />
           ) : null}
         </WorldMap>
-      </Animated.View>
+      </View>
 
       <View style={[styles.topLeft, { top }]} pointerEvents="box-none">
         <StoryCapsule
@@ -362,7 +354,7 @@ export default function MapScreen() {
         <PressableScale
           haptic="medium"
           style={[styles.round, styles.mark]}
-          onPress={() => router.push({ pathname: '/map/add-place', params: { view } })}
+          onPress={() => router.push('/map/add-place')}
           accessibilityLabel={t('map.addPlace')}
           testID="add-place-fab"
         >
@@ -380,9 +372,6 @@ export default function MapScreen() {
 
       <MapSheet
         open={sheetOpen}
-        home={home}
-        view={view}
-        onSelectView={changeView}
         onAllThemes={() => {
           setSheetOpen(false);
           router.push('/map/theme');

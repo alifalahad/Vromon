@@ -14,7 +14,6 @@ import { DEFAULT_USER_MAP_THEME, normalizeUserMapTheme, type UserMapTheme } from
 export type Appearance = 'system' | 'light' | 'dark';
 export type Language = 'en' | 'bn';
 export type DistanceUnits = 'km' | 'mi';
-export type MapView = 'countries' | 'regions' | 'cities';
 /** Optional map layers (map home: the Map sheet's "On the map") */
 export type MapLayer = 'trails' | 'plannable' | 'friends';
 
@@ -29,7 +28,6 @@ export type Preferences = {
   haptics: boolean;
   units: DistanceUnits;
   /** Last map view (Countries / Regions / Cities) */
-  mapView: MapView;
   /** Offer to mark the country when a region or city in it is marked */
   askMarkCountry: boolean;
   /** Which optional layers the map draws */
@@ -63,7 +61,6 @@ type PreferencesState = Preferences & {
   setLanguage: (v: Language) => void;
   setHaptics: (v: boolean) => void;
   setUnits: (v: DistanceUnits) => void;
-  setMapView: (v: MapView) => void;
   setAskMarkCountry: (v: boolean) => void;
   setMapLayer: (layer: MapLayer, on: boolean) => void;
   setMarkHintSeen: () => void;
@@ -83,7 +80,6 @@ export const DEFAULT_PREFERENCES: Preferences = {
   language: null,
   haptics: true,
   units: 'km',
-  mapView: 'countries',
   askMarkCountry: true,
   mapLayers: { trails: true, plannable: true, friends: false },
   markHintSeen: false,
@@ -107,7 +103,6 @@ export const usePreferences = create<PreferencesState>()(
       setLanguage: (language) => set({ language }),
       setHaptics: (haptics) => set({ haptics }),
       setUnits: (units) => set({ units }),
-      setMapView: (mapView) => set({ mapView }),
       setAskMarkCountry: (askMarkCountry) => set({ askMarkCountry }),
       setMapLayer: (layer, on) => set((s) => ({ mapLayers: { ...s.mapLayers, [layer]: on } })),
       setMarkHintSeen: () => set({ markHintSeen: true }),
@@ -127,7 +122,6 @@ export const usePreferences = create<PreferencesState>()(
         language,
         haptics,
         units,
-        mapView,
         askMarkCountry,
         mapLayers,
         markHintSeen,
@@ -146,7 +140,6 @@ export const usePreferences = create<PreferencesState>()(
         language,
         haptics,
         units,
-        mapView,
         askMarkCountry,
         mapLayers,
         markHintSeen,

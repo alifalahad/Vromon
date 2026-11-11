@@ -16,26 +16,28 @@ import { CompareMap, type CompareMapHandle } from '../../../src/features/friends
 import { PosterPreview } from '../../../src/features/map/Poster';
 import { friendKeys } from '../../../src/features/friends/queries';
 import { flagEmoji } from '../../../src/features/geo/countries';
+import { useMe } from '../../../src/features/account/useMe';
 import { countryLabelPoint } from '../../../src/features/map/geoData';
+import { regionWord } from '../../../src/features/map/home';
+import type { MapLevel } from '../../../src/features/map/levels';
 import { useMapTheme } from '../../../src/features/mapThemes/useMapTheme';
-import type { MapView } from '../../../src/features/preferences/store';
 import { friendsApi } from '../../../src/services/api';
 import type { ComparePlace } from '../../../src/types';
 import { PressableScale } from '../../../src/ui/PressableScale';
-import { SegmentedControl } from '../../../src/ui/SegmentedControl';
 import { makeStyles, useTheme } from '../../../src/ui/theme';
 
-type Group = 'in_common' | 'only_me' | 'only_them';
-const VIEWS: MapView[] = ['countries', 'regions', 'cities'];
-const BANGLADESH: [number, number] = [90.35, 23.7];
+type Group = 'in_common' | 'only_me' | 'only_them';const BANGLADESH: [number, number] = [90.35, 23.7];
 
 export default function CompareScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { data: me } = useMe();
   const theme = useMapTheme();
-  const [view, setView] = useState<MapView>('countries');
+  // The lists follow the map's zoom: countries zoomed out, regions closer in, cities closest
+  const [level, setLevel] = useState<MapLevel>('country');
+  const view = level === 'country' ? 'countries' : level === 'city' ? 'cities' : 'regions';
   const [open, setOpen] = useState<Group | null>(null);
   // Export: a story-sized poster of the comparison map, to save or share
   const mapRef = useRef<CompareMapHandle>(null);
@@ -90,18 +92,26 @@ export default function CompareScreen() {
         ))}
       </View>
 
-      <View style={styles.map}>{data ? <CompareMap ref={mapRef} theme={theme} view={view} data={data} center={center} /> : null}</View>
+      <View style={styles.map}>
+        {compare.data ? (
+          <CompareMap
+            ref={mapRef}
+            theme={theme}
+            data={compare.data}
+            center={center}
+            onLevelChange={(l) => {
+              setLevel(l);
+              setOpen(null);
+            }}
+          />
+        ) : null}
+      </View>
 
       <ScrollView style={styles.panel} contentContainerStyle={styles.panelContent}>
-        <SegmentedControl<MapView>
-          options={VIEWS.map((v) => ({ value: v, label: t(`map.views.${v}`) }))}
-          value={view}
-          onChange={(v) => {
-            setView(v);
-            setOpen(null);
-          }}
-          testID="compare-view"
-        />
+        <Text style={styles.levelTitle} accessibilityRole="header" testID="compare-level">
+          {t(`map.views.${view === 'regions' ? regionWord(me?.home_country_iso2 ?? 'BD') : view}`)}
+        </Text>
+        <Text style={styles.levelHint}>{t('friends.compareZoomHint')}</Text>
         {groups.map(([group, label]) => {
           const expanded = open === group;
           const places = data?.[group] ?? [];
@@ -156,6 +166,8 @@ const useStyles = makeStyles((t) => ({
   map: { flex: 1, minHeight: 260, backgroundColor: t.colors.surface },
   panel: { flexGrow: 0, maxHeight: '45%' },
   panelContent: { padding: t.spacing.lg + 2, gap: t.spacing.xs },
+  levelTitle: { ...t.type.title, color: t.colors.textPrimary },
+  levelHint: { ...t.type.footnote, color: t.colors.textSecondary, marginBottom: t.spacing.xs },
   groupRow: { flexDirection: 'row', alignItems: 'center', minHeight: 52 },
   groupLabel: { ...t.type.headline, color: t.colors.textPrimary, flex: 1 },
   place: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, minHeight: 40, paddingLeft: t.spacing.sm },

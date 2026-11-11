@@ -20,7 +20,7 @@ from app.core.config import settings
 from app.db import get_db
 from app.db.geo_seed import seed_geo
 from app.main import app
-from app.models.models import Block, Device, FriendRequest, Friendship, User
+from app.models.models import Block, Device, FriendRequest, Friendship, User, Visit
 from app.services import push as push_service
 from tests.conftest import _ApiTestSession
 
@@ -351,6 +351,24 @@ def test_compare_maps_by_view(client, act_as):
     codes = {k: [p["code"] for p in v] for k, v in c.items()}
     assert codes == {"in_common": ["BD"], "only_me": ["NP"], "only_them": ["FR", "IN"]}
     assert c["in_common"][0]["name"] == "Bangladesh"
+
+
+def test_compare_maps_with_a_district_marked(client, act_as):
+    # A district marked on the home map isn't compared, and doesn't break the comparison
+    a, b = _user("cmpda"), _user("cmpdb")
+    act_as(a)
+    client.put("/api/v1/me/visits", json={"visits": [{"place_type": "country", "place_code": "BD", "status": "visited"}]})
+    act_as(b)
+    client.put("/api/v1/me/visits", json={"visits": [{"place_type": "country", "place_code": "BD", "status": "visited"}]})
+    # Written straight in: the API checks the district against the catalog, empty in tests
+    with _ApiTestSession() as db:
+        db.add(Visit(user_id=b.id, place_type="district", place_code="BD-13", status="visited"))
+        db.commit()
+    _befriend(client, act_as, a, b)
+    act_as(a)
+    r = client.get(f"/api/v1/users/{b.id}/compare")
+    assert r.status_code == 200
+    assert [p["code"] for p in r.json()["countries"]["in_common"]] == ["BD"]
 
 
 # ---------------------------------------------------------------------------

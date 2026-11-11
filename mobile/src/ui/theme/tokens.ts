@@ -53,6 +53,8 @@ export type ThemeColors = {
   cardEyebrowMine: string;
   /** Buttons on a card you sent ("Open plan"), with `textPrimary` text */
   cardButtonMine: string;
+  /** A switch's track when off: 3:1 against `surface` (and `bg`), so the white thumb shows on a card */
+  switchOff: string;
   shadow: string;
 };
 
@@ -94,6 +96,7 @@ export const darkColors: ThemeColors = {
   cardMineText2: '#C9D6EE',
   cardEyebrowMine: '#A9C6FA',
   cardButtonMine: 'rgba(255, 255, 255, 0.12)',
+  switchOff: '#8A8A8A',
   shadow: '#000000',
 };
 
@@ -130,6 +133,7 @@ export const lightColors: ThemeColors = {
   cardMineText2: '#5C5C5C',
   cardEyebrowMine: '#1F55C0',
   cardButtonMine: '#FFFFFF',
+  switchOff: '#8E8E93',
   shadow: '#000000',
 };
 

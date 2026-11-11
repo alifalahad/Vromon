@@ -118,6 +118,10 @@ class Settings(BaseSettings):
     # --- Profile photos: uploaded to ImgBB (api.imgbb.com) with this key; empty = photos off ---
     imgbb_api_key: str = ""
 
+    # --- Exchange rates (a budget typed in another currency): ExchangeRate-API open access, no key ---
+    fx_rates_url: str = "https://open.er-api.com/v6/latest/BDT"
+    fx_cache_hours: float = 12.0
+
     # --- Server ---
     host: str = "0.0.0.0"
     port: int = 8000

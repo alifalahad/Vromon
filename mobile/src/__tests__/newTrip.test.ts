@@ -3,6 +3,8 @@ import {
   addSkip,
   defaultNewTrip,
   hotelLevel,
+  minutesPerStop,
+  paceOf,
   tierBudget,
   timesBetween,
   toPayload,
@@ -74,20 +76,27 @@ describe('the new-trip answers', () => {
     expect(withTime(m, { day: 2 })).toEqual({ ...m, day: 2 });
   });
 
-  it('sends must-sees, busy times, arrival and leaving, and lets the pace set the stops a day', () => {
+  it('sends must-sees, busy times, arrival and leaving, and the stops a day from the pace slider', () => {
     const t = {
       ...defaultNewTrip(TODAY, "Cox's Bazar"),
       arrive: '14:00',
       leave: '11:00',
-      pace: 'Packed' as const,
+      stops: 6,
       mustSees: [{ place_id: 4, day: 1, when: 'sunset' as const, at: null }],
       busy: [{ day: 2, start: '18:00', end: '21:00', label: 'Wedding' }],
       skip: [25],
     };
     const p = toPayload(t);
     expect(p.preference).toMatchObject({ travel_style: 'Packed', arrive_time: '14:00', leave_time: '11:00', accommodation_preference: 'Standard' });
-    expect(p.constraints).toEqual({ avoid_crowded: false, must_sees: t.mustSees, busy: t.busy, excluded_places: [25] });
-    expect(p.constraints).not.toHaveProperty('max_activities_per_day');
+    expect(p.constraints).toEqual({ max_activities_per_day: 6, avoid_crowded: false, must_sees: t.mustSees, busy: t.busy, excluded_places: [25] });
+  });
+
+  it('names the pace from the stops a day, and shares the day out between them', () => {
+    expect([2, 3, 4, 5, 6, 7].map(paceOf)).toEqual(['Relaxed', 'Relaxed', 'Balanced', 'Balanced', 'Packed', 'Packed']);
+    // 09:00–20:00 is 11 hours; an hour for lunch leaves 600 minutes
+    expect(minutesPerStop(4, '09:00', '20:00')).toBe(150);
+    expect(minutesPerStop(7, '09:00', '20:00')).toBe(90);
+    expect(minutesPerStop(3, '10:00', '17:00')).toBe(120);
   });
 
   it('lists half-hour times', () => {

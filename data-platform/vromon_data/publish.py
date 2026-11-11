@@ -52,7 +52,7 @@ from app.models.catalog import (AdminUnit, Attraction, AttractionCategory, Entit
 from app.models.catalog import AdminBoundary
 from app.models.models import City, Destination, Hotel, ItineraryItem, Place, Restaurant, TripPreference
 from vromon_data.geo import haversine_km, load as load_geometry
-from vromon_data.text import name_similarity
+from vromon_data.text import match_key, name_similarity
 
 DEMO_DESTINATIONS = {"Cox's Bazar"}
 TOWN_RADIUS_KM = 25.0
@@ -62,6 +62,9 @@ ACTIVITY = {"Nature": "High", "Beach": "Medium", "History": "Medium", "Culture":
 
 
 def _destination_for(session: Session, district: AdminUnit, destinations: list[Destination]) -> Destination | None:
+    own = next((d for d in destinations if match_key(d.name) == match_key(district.name_en)), None)
+    if own is not None:
+        return own
     best = max(destinations, key=lambda d: name_similarity(d.name, district.name_en), default=None)
     return best if best is not None and name_similarity(best.name, district.name_en) >= 90 else None
 
@@ -300,7 +303,9 @@ DISTRICT_SOURCES = [
 
 
 def _seat(session: Session, district: AdminUnit) -> tuple[float, float, str | None]:
-    """The district's largest GeoNames town inside its boundary, else its centre: (lat, lon, town)."""
+    """The district's headquarters: the GeoNames town inside its boundary named as the district
+    ("Bogra" for Bogura), else its largest town there, else its centre: (lat, lon, town). By size
+    alone, Shibganj (GeoNames gives it its sub-district's 378,701 people) beat Bogra (210,000)."""
     from shapely.geometry import Point
     g = session.scalar(select(AdminBoundary.geometry_geojson).where(AdminBoundary.admin_unit_id == district.id,
                                                                     AdminBoundary.is_current.is_(True)))
@@ -309,9 +314,10 @@ def _seat(session: Session, district: AdminUnit) -> tuple[float, float, str | No
         minx, miny, maxx, maxy = outline.bounds
         towns = session.scalars(select(City).where(City.country_iso2 == "BD", City.lon.between(minx, maxx),
                                                    City.lat.between(miny, maxy)).order_by(City.population.desc()))
-        for town in towns:
-            if outline.contains(Point(town.lon, town.lat)):
-                return town.lat, town.lon, town.name
+        inside = [t for t in towns if outline.contains(Point(t.lon, t.lat))]
+        town = next((t for t in inside if name_similarity(t.name, district.name_en) >= 90), inside[0] if inside else None)
+        if town is not None:
+            return town.lat, town.lon, town.name
     return district.centroid_lat, district.centroid_lon, None
 
 
@@ -322,12 +328,27 @@ def publish_destinations(session: Session, *, dry_run: bool = False) -> dict:
         select(EntityExternalId.entity_id, EntityExternalId.external_id).where(
             EntityExternalId.entity_type == "admin_unit", EntityExternalId.provider == "iso3166-2")).all())
     existing = list(session.scalars(select(Destination)))
-    for d in session.scalars(select(AdminUnit).where(AdminUnit.country_iso2 == "BD", AdminUnit.level == "district",
-                                                     AdminUnit.status == "published").order_by(AdminUnit.name_en)):
+    districts = list(session.scalars(select(AdminUnit).where(AdminUnit.country_iso2 == "BD", AdminUnit.level == "district",
+                                                             AdminUnit.status == "published").order_by(AdminUnit.name_en)))
+    # A destination is one district's: its own name first, then a near spelling no other district
+    # has claimed. Near spellings alone glued Bogura onto Bagerhat ("bagara" / "bagarat", 92 %), which
+    # put Bagerhat in Rajshahi division, Bogura's sights in Bagerhat, and left Bogura out
+    claimed: set[int] = set()
+    exact: dict = {}
+    for d in districts:
+        own = next((x for x in existing if match_key(x.name) == match_key(d.name_en)), None)
+        if own is not None:
+            exact[d.id] = own
+            claimed.add(id(own))
+    for d in districts:
         if d.id not in with_sights:
             counts["no_attractions"] += 1
             continue
-        same = next((x for x in existing if name_similarity(x.name, d.name_en) >= 90), None)
+        same = exact.get(d.id)
+        if same is None:
+            same = next((x for x in existing if id(x) not in claimed and name_similarity(x.name, d.name_en) >= 90), None)
+            if same is not None:
+                claimed.add(id(same))
         if same is not None:
             same.is_active = True
             same.country_iso2 = same.country_iso2 or "BD"
@@ -342,6 +363,7 @@ def publish_destinations(session: Session, *, dry_run: bool = False) -> dict:
                                        + (town or "the district centre") + " (GeoNames).")
         session.add(dest)
         existing.append(dest)
+        claimed.add(id(dest))
         counts["written"] += 1
     counts["at"] = datetime.utcnow().isoformat(timespec="seconds")
     if dry_run:

@@ -3,10 +3,10 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import type { CompareView } from '../../types';
+import type { Compare } from '../../types';
 import type { ResolvedMapTheme } from '../mapThemes/resolve';
-import type { MapView } from '../preferences/store';
+import type { MapLevel } from '../map/levels';
 
-export function CompareMap({ theme }: { theme: ResolvedMapTheme; view: MapView; data: CompareView; center: [number, number] }) {
+export function CompareMap({ theme }: { theme: ResolvedMapTheme; data: Compare; center: [number, number]; onLevelChange?: (level: MapLevel) => void }) {
   return <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.base.water }]} />;
 }

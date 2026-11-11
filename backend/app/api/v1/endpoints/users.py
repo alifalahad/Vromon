@@ -80,7 +80,9 @@ def _visited_codes(db: Session, user_id) -> dict[str, set[str]]:
     rows = db.execute(select(Visit.place_type, Visit.place_code).where(Visit.user_id == user_id, Visit.status.in_(VISITED))).all()
     out: dict[str, set[str]] = {"country": set(), "region": set(), "city": set()}
     for t, c in rows:
-        out[t].add(c)
+        # Districts (marked on the home map) aren't compared: a KeyError here failed the whole comparison
+        if t in out:
+            out[t].add(c)
     return out
 
 

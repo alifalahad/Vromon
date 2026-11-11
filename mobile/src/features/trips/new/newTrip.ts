@@ -8,6 +8,7 @@
 
 import type { BusyTime, JourneyMode, MustSee, MustSeeWhen, TripCreate } from '../../../types';
 import { durationDays, localToday, parseDay } from '../dates';
+import type { Currency } from './currency';
 
 /** Same limit as the backend (schemas.py MAX_TRIP_DAYS). */
 export const MAX_TRIP_DAYS = 30;
@@ -17,6 +18,21 @@ export type Pace = 'Relaxed' | 'Balanced' | 'Packed';
 export type Tier = 'Budget' | 'Comfort' | 'Luxury';
 
 export const PACES: Pace[] = ['Relaxed', 'Balanced', 'Packed'];
+/** The pace slider: stops a day (the planner takes 1–10; fewer than 2 or more than 7 makes no sense for a day out) */
+export const MIN_STOPS = 2;
+export const MAX_STOPS = 7;
+
+/** The pace a number of stops a day is called (and sent as, for the ranking): 2–3 Relaxed, 4–5 Balanced, 6–7 Packed. */
+export function paceOf(stops: number): Pace {
+  return stops <= 3 ? 'Relaxed' : stops <= 5 ? 'Balanced' : 'Packed';
+}
+
+/** About how long each stop gets, getting there included, after an hour for lunch: rounded to 15 minutes. */
+export function minutesPerStop(stops: number, dayStart: string, dayEnd: string): number {
+  const toMin = (hm: string) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+  const free = Math.max(60, toMin(dayEnd) - toMin(dayStart) - 60);
+  return Math.max(15, Math.round(free / Math.max(1, stops) / 15) * 15);
+}
 export const TIERS: Tier[] = ['Budget', 'Comfort', 'Luxury'];
 export const WHENS: MustSeeWhen[] = ['morning', 'afternoon', 'sunset', 'evening'];
 
@@ -44,11 +60,16 @@ export type NewTrip = {
   /** How you like to travel there (any of them; tried first); none: Vromon suggests by budget */
   modes: JourneyMode[];
   interests: string[];
-  pace: Pace;
+  /** Stops a day (the pace slider); the pace's name comes from it */
+  stops: number;
   tier: Tier;
   /** Total for the group; follows the tier until it's changed by hand */
   budget: number;
   budgetByHand: boolean;
+  /** What the budget is typed and shown in (the budget itself stays in taka, for the planner) */
+  currency: Currency;
+  /** Picked by hand: a new destination no longer changes it */
+  currencyByHand: boolean;
   dayStart: string;
   dayEnd: string;
   mustSees: MustSee[];
@@ -89,10 +110,12 @@ export function defaultNewTrip(today = new Date(), destination = ''): NewTrip {
     origin: null,
     modes: [],
     interests: [],
-    pace: 'Balanced',
+    stops: 4,
     tier: 'Comfort',
     budget: tierBudget('Comfort', 2, 3),
     budgetByHand: false,
+    currency: 'BDT',
+    currencyByHand: false,
     dayStart: '09:00',
     dayEnd: '20:00',
     mustSees: [],
@@ -146,7 +169,7 @@ export function toPayload(t: NewTrip): TripCreate {
     total_budget: t.budget,
     preference: {
       interests: t.interests,
-      travel_style: t.pace,
+      travel_style: paceOf(t.stops),
       activity_level: 'Medium',
       accommodation_preference: hotelLevel(t),
       preferred_start_time: t.dayStart,
@@ -154,8 +177,9 @@ export function toPayload(t: NewTrip): TripCreate {
       arrive_time: t.arrive,
       leave_time: t.leave,
     },
-    // Stops a day follow the pace on the server
+    // Exactly the stops a day picked on the slider (the server would otherwise take them from the pace)
     constraints: {
+      max_activities_per_day: t.stops,
       avoid_crowded: t.avoidCrowds,
       must_sees: t.mustSees,
       busy: t.busy,

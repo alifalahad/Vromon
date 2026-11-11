@@ -1,12 +1,13 @@
 /**
- * Add place: search a country, region or city (matching the map view), choose
- * Visited / Want to visit / Lived, optionally the first visit date, and save.
+ * Add place: one search for a country, a division of your home country or a city (the map
+ * follows its zoom, so there's no view to match any more); a country's row also opens its
+ * regions. Choose Visited / Want to visit / Lived, optionally the first visit date, and save.
  * Saving works offline (the edit is queued); region and city search need a connection.
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, FlatList, Text, TextInput, View } from 'react-native';
@@ -20,10 +21,11 @@ import { statusOf, useVisits, type PlaceRef } from '../../src/features/map/visit
 import { readableOn } from '../../src/features/mapThemes/color';
 import { StatusSwatch } from '../../src/features/mapThemes/StatusSwatch';
 import { useMapTheme } from '../../src/features/mapThemes/useMapTheme';
-import { usePreferences, type MapView } from '../../src/features/preferences/store';
+import { regionWord } from '../../src/features/map/home';
+import { usePreferences } from '../../src/features/preferences/store';
 import { resolveLanguage } from '../../src/i18n';
 import { geoApi } from '../../src/services/api';
-import type { VisitStatus } from '../../src/types';
+import type { GeoRegion, VisitStatus } from '../../src/types';
 import { Button } from '../../src/ui/Button';
 import { haptics } from '../../src/ui/haptics';
 import { PressableScale } from '../../src/ui/PressableScale';
@@ -52,10 +54,9 @@ export default function AddPlaceScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const lang = resolveLanguage(usePreferences((s) => s.language));
-  const params = useLocalSearchParams<{ view?: MapView }>();
-  const view: MapView = params.view === 'regions' || params.view === 'cities' ? params.view : 'countries';
 
   const { data: me } = useMe();
+  const home = me?.home_country_iso2 ?? 'BD';
   const { data: visits = [] } = useVisits(me?.id);
   const markPlace = useMarkPlace(me?.id ?? '', visits);
 
@@ -68,57 +69,57 @@ export default function AddPlaceScreen() {
   const debounced = useDebounced(q, 300);
 
   const countries = useMemo(() => mapCountries(lang), [lang]);
+  // Your home country's divisions are always searched; another country's regions once it's opened
+  const regionsOf = regionCountry ?? home;
   const regions = useQuery({
-    queryKey: ['geo-regions', regionCountry],
-    queryFn: () => geoApi.regions(regionCountry!),
-    enabled: view === 'regions' && !!regionCountry,
+    queryKey: ['geo-regions', regionsOf],
+    queryFn: () => geoApi.regions(regionsOf),
     staleTime: Infinity,
   });
   const cities = useQuery({
     queryKey: ['geo-cities', debounced],
     queryFn: () => geoApi.cities(debounced),
-    enabled: view === 'cities' && debounced.length >= 2,
+    enabled: !regionCountry && debounced.length >= 2,
     staleTime: 60_000,
   });
 
   const candidates: Candidate[] = useMemo(() => {
-    const country = (code: string) => ({ place_type: 'country' as const, place_code: code, country_iso2: code });
-    if (view === 'countries' || (view === 'regions' && !regionCountry)) {
-      return countries
-        .filter((c) => !q || c.name.toLocaleLowerCase().includes(q) || c.code.toLowerCase() === q)
-        .map((c) => ({ ...country(c.code), name: c.name, detail: '', flag: c.flag }));
-    }
-    if (view === 'regions') {
-      return (regions.data ?? [])
-        .filter((r) => !q || r.name.toLocaleLowerCase().includes(q) || (r.name_bn ?? '').includes(query.trim()))
-        .map((r) => ({
-          place_type: 'region',
-          place_code: r.code,
-          country_iso2: r.country_iso2,
-          name: (lang === 'bn' && r.name_bn) || r.name,
-          detail: r.type ?? '',
-          flag: '',
-        }));
-    }
-    return (cities.data ?? []).map((c) => ({
-      place_type: 'city',
-      place_code: String(c.geonameid),
-      country_iso2: c.country_iso2,
-      name: c.name,
-      detail: mapCountryName(c.country_iso2, lang),
+    const region = (r: GeoRegion): Candidate => ({
+      place_type: 'region',
+      place_code: r.code,
+      country_iso2: r.country_iso2,
+      name: (lang === 'bn' && r.name_bn) || r.name,
+      detail: [r.type, mapCountryName(r.country_iso2, lang)].filter(Boolean).join(' · '),
       flag: '',
-    }));
-  }, [view, regionCountry, countries, q, query, regions.data, cities.data, lang]);
+    });
+    const regionHits = (regions.data ?? []).filter((r) => !q || r.name.toLocaleLowerCase().includes(q) || (r.name_bn ?? '').includes(query.trim()));
+    if (regionCountry) return regionHits.map(region);
+    const countryHits = countries
+      .filter((c) => !q || c.name.toLocaleLowerCase().includes(q) || c.code.toLowerCase() === q)
+      .map((c): Candidate => ({ place_type: 'country', place_code: c.code, country_iso2: c.code, name: c.name, detail: '', flag: c.flag }));
+    if (!q) return countryHits;
+    const cityHits = (cities.data ?? []).map(
+      (c): Candidate => ({
+        place_type: 'city',
+        place_code: String(c.geonameid),
+        country_iso2: c.country_iso2,
+        name: c.name,
+        detail: mapCountryName(c.country_iso2, lang),
+        flag: '',
+      }),
+    );
+    return [...regionHits.map(region), ...countryHits, ...cityHits];
+  }, [regionCountry, countries, q, query, regions.data, cities.data, lang]);
 
   const pick = (c: Candidate) => {
     haptics.selection();
-    if (view === 'regions' && !regionCountry) {
-      setRegionCountry(c.place_code);
-      setQuery('');
-      return;
-    }
     setChosen(c);
     setStatus(statusOf(visits, c.place_type, c.place_code) ?? 'visited');
+  };
+  const openRegions = (code: string) => {
+    haptics.selection();
+    setRegionCountry(code);
+    setQuery('');
   };
 
   const save = () => {
@@ -131,10 +132,9 @@ export default function AddPlaceScreen() {
     router.back();
   };
 
-  const searchLabel =
-    view === 'cities' ? t('map.searchCities') : view === 'regions' && regionCountry ? t('map.searchRegions') : t('map.searchCountries');
-  const loading = (view === 'regions' && regions.isFetching) || (view === 'cities' && cities.isFetching);
-  const failed = (view === 'regions' && regions.isError) || (view === 'cities' && cities.isError);
+  const searchLabel = regionCountry ? t('map.searchRegions') : t('map.searchAll');
+  const loading = regions.isFetching || cities.isFetching;
+  const failed = (!!regionCountry && regions.isError) || cities.isError;
 
   if (chosen) {
     return (
@@ -177,7 +177,7 @@ export default function AddPlaceScreen() {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title: t('map.addPlace') }} />
-      {view === 'regions' && regionCountry ? (
+      {regionCountry ? (
         <PressableScale pressEffect="opacity" style={styles.crumb} onPress={() => setRegionCountry(null)} accessibilityLabel={t('map.pickCountryFirst')}>
           <MaterialCommunityIcons name="chevron-left" size={22} color={colors.link} />
           <Text style={styles.crumbText}>{mapCountryName(regionCountry, lang)}</Text>
@@ -199,7 +199,6 @@ export default function AddPlaceScreen() {
         />
         {loading ? <ActivityIndicator color={colors.link} /> : null}
       </View>
-      {view === 'regions' && !regionCountry ? <Text style={styles.hint}>{t('map.pickCountryFirst')}</Text> : null}
       {failed ? <Text style={styles.error}>{t('map.tilesUnavailable')}</Text> : null}
       <FlatList
         data={candidates}
@@ -207,7 +206,7 @@ export default function AddPlaceScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         ListEmptyComponent={
-          !loading && (view !== 'cities' || debounced.length >= 2) ? <Text style={styles.hint}>{t('map.noResults')}</Text> : null
+          !loading ? <Text style={styles.hint}>{t('map.noResults')}</Text> : null
         }
         renderItem={({ item }) => {
           const s = statusOf(visits, item.place_type, item.place_code);
@@ -224,6 +223,21 @@ export default function AddPlaceScreen() {
                 <View accessible accessibilityLabel={t(`map.status.${s}`)}>
                   <StatusSwatch theme={mapTheme} status={s} />
                 </View>
+              ) : null}
+              {item.place_type === 'country' && !regionCountry ? (
+                <PressableScale
+                  pressEffect="opacity"
+                  haptic="none"
+                  onPress={() => openRegions(item.place_code)}
+                  hitSlop={8}
+                  style={styles.regionsButton}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.name}: ${t(`map.views.${regionWord(item.place_code)}`)}`}
+                  testID={`add-place-regions-${item.place_code}`}
+                >
+                  <Text style={styles.regionsText}>{t(`map.views.${regionWord(item.place_code)}`)}</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={18} color={colors.link} />
+                </PressableScale>
               ) : null}
             </PressableScale>
           );
@@ -246,6 +260,8 @@ const useStyles = makeStyles((t) => ({
   rowText: { flex: 1 },
   rowName: { ...t.type.body, color: t.colors.textPrimary },
   rowDetail: { ...t.type.footnote, color: t.colors.textSecondary },
+  regionsButton: { flexDirection: 'row', alignItems: 'center', minHeight: 40, paddingLeft: t.spacing.sm },
+  regionsText: { ...t.type.footnote, fontWeight: '600', color: t.colors.link },
   chosen: { ...t.type.title, color: t.colors.textPrimary },
   detail: { ...t.type.callout, color: t.colors.textSecondary, marginTop: -8 },
   label: { ...t.type.callout, color: t.colors.textSecondary, marginTop: t.spacing.md },

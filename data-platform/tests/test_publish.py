@@ -170,6 +170,52 @@ def test_every_district_with_sights_becomes_a_destination_at_its_largest_town(se
     assert session.get(Place, reviewed.id).is_active
 
 
+def test_alike_district_names_keep_their_own_destinations(session):
+    # "Bogura" folds to "bagara" and "Bagerhat" to "bagarat" (92 % alike): Bogura took over the
+    # Bagerhat destination, which put Bagerhat in Rajshahi division and Bogura's sights in Bagerhat
+    import uuid as _uuid
+
+    from app.models.catalog import AdminBoundary, AdminUnit, Attraction, EntityExternalId
+    from app.models.models import City, Destination, Place
+
+    khulna, rajshahi, bagerhat, bogura = (_uuid.uuid4() for _ in range(4))
+    session.add_all([
+        AdminUnit(id=khulna, country_iso2="BD", level="division", slug="x-khulna", name_en="Khulna", status="published"),
+        AdminUnit(id=rajshahi, country_iso2="BD", level="division", slug="x-rajshahi", name_en="Rajshahi", status="published"),
+        AdminUnit(id=bagerhat, country_iso2="BD", level="district", slug="x-bagerhat", name_en="Bagerhat", parent_id=khulna,
+                  centroid_lat=22.65, centroid_lon=89.78, status="published"),
+        AdminUnit(id=bogura, country_iso2="BD", level="district", slug="x-bogura", name_en="Bogura", parent_id=rajshahi,
+                  centroid_lat=24.85, centroid_lon=89.37, status="published"),
+    ])
+    session.flush()
+    session.add_all([
+        EntityExternalId(entity_type="admin_unit", entity_id=khulna, provider="iso3166-2", external_id="BD-D", source_id="iso"),
+        EntityExternalId(entity_type="admin_unit", entity_id=rajshahi, provider="iso3166-2", external_id="BD-E", source_id="iso"),
+        Attraction(slug="x-sixty-dome", canonical_name_en="Sixty Dome Mosque", district_id=bagerhat, status="published",
+                   latitude=22.67, longitude=89.74, field_status={}),
+        Attraction(slug="x-mahasthangarh", canonical_name_en="Mahasthangarh", district_id=bogura, status="published",
+                   latitude=24.96, longitude=89.34, field_status={}),
+        Destination(name="Bagerhat", latitude=22.65, longitude=89.78, country_iso2="BD", region_code="BD-E"),
+        # GeoNames gives Shibganj its sub-district's people: by size alone it would be Bogura's seat
+        AdminBoundary(admin_unit_id=bogura, source_id="t", simplify_tolerance_deg=0.0005, min_lon=89.0, min_lat=24.6,
+                      max_lon=89.7, max_lat=25.2, geometry_geojson='{"type":"Polygon","coordinates":[[[89.0,24.6],'
+                      '[89.7,24.6],[89.7,25.2],[89.0,25.2],[89.0,24.6]]]}'),
+        City(geonameid=1185107, country_iso2="BD", name="Shibganj", lat=25.00146, lon=89.32266, population=378_701),
+        City(geonameid=1337233, country_iso2="BD", name="Bogra", lat=24.85098, lon=89.37108, population=210_000),
+    ])
+    session.commit()
+
+    report = publish.publish_destinations(session)
+    assert report["written"] == 1 and report["reused"] == 1          # Bogura gets its own
+    dests = {d.name: d for d in session.scalars(select(Destination))}
+    assert dests["Bagerhat"].region_code == "BD-D"                    # back in Khulna division
+    assert dests["Bogura"].region_code == "BD-E"
+    assert (dests["Bogura"].latitude, dests["Bogura"].longitude) == (24.85098, 89.37108)   # Bogra, the headquarters
+    publish.publish_places(session)
+    where = {p.name: p.destination_name for p in session.scalars(select(Place))}
+    assert where == {"Sixty Dome Mosque": "Bagerhat", "Mahasthangarh": "Bogura"}
+
+
 def test_a_town_that_isnt_a_district_gets_the_reviewed_sights_around_it(session):
     import uuid as _uuid
 

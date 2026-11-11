@@ -5,11 +5,12 @@
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
-import { Switch, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { haptics } from './haptics';
 import { PressableScale } from './PressableScale';
 import { makeStyles, useTheme } from './theme';
+import { Toggle } from './Toggle';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
@@ -127,14 +128,12 @@ export function SettingsSwitchRow({
         <Text style={styles.title} numberOfLines={2}>
           {title}
         </Text>
-        <Switch
+        <Toggle
           testID={testID}
           importantForAccessibility="no-hide-descendants"
           accessibilityElementsHidden
           value={value}
           onValueChange={toggle}
-          trackColor={{ true: colors.accent, false: colors.surfaceRaised }}
-          thumbColor={colors.onAccent}
         />
       </View>
     </PressableScale>

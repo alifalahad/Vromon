@@ -35,25 +35,6 @@ name: 10 Map home - story, divisions, press and hold to mark
     visible:
       id: map-sheet-button
     timeout: 10000
-- tapOn:
-    id: map-sheet-button
-- tapOn:
-    id: map-view-regions
-- waitForAnimationToEnd:
-    timeout: 3000
-# Already on Divisions (a run that stopped halfway): picking it again leaves the sheet open,
-# so close it from its backdrop, between the top capsule and the sheet
-- runFlow:
-    when:
-      visible:
-        id: map-sheet
-    commands:
-      - tapOn:
-          point: 50%, 20%
-- extendedWaitUntil:
-    notVisible:
-      id: map-sheet
-    timeout: 5000
 # Frame Bangladesh: out to the world and back home (on a trip day the map starts on the trip,
 # zoomed in too far to find a division under a long press)
 - tapOn:
@@ -64,7 +45,7 @@ name: 10 Map home - story, divisions, press and hold to mark
     id: map-home-toggle
 - waitForAnimationToEnd:
     timeout: 3000
-# Framed on Bangladesh, the middle of the screen is in a division (Dhaka)
+# Framed on Bangladesh the map shows divisions (it follows its zoom): the middle of the screen is in one (Dhaka)
 - longPressOn:
     point: 50%, 42%
 - extendedWaitUntil:
@@ -75,8 +56,3 @@ name: 10 Map home - story, divisions, press and hold to mark
     id: quick-mark-want
 - assertNotVisible:
     id: quick-mark
-# Back to Countries for the other flows
-- tapOn:
-    id: map-sheet-button
-- tapOn:
-    id: map-view-countries
