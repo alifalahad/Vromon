@@ -18,10 +18,26 @@ import { Button } from '../../../ui/Button';
 import { makeStyles, useTheme } from '../../../ui/theme';
 import { PhotoStrip } from '../../photos/PhotoStrip';
 import { useMustDoText } from '../new/useMustDoText';
+import { localToday } from '../dates';
+import { canRate } from '../review/review';
+import { TripReviewCard } from '../review/TripReviewCard';
 import { StopList } from '../TripCard';
 import { usePlanFormat } from './usePlanFormat';
 
-export function TripDetails({ trip, ownerId, mine, hasPlan }: { trip: Trip; ownerId: string | undefined; mine: boolean; hasPlan: boolean }) {
+export function TripDetails({
+  trip,
+  ownerId,
+  mine,
+  hasPlan,
+  went = mine,
+}: {
+  trip: Trip;
+  ownerId: string | undefined;
+  mine: boolean;
+  hasPlan: boolean;
+  /** The owner or a member of the trip's room: they rate it (trip upgrades step 7, D8) */
+  went?: boolean;
+}) {
   const styles = useStyles();
   const { t } = useTranslation();
   const router = useRouter();
@@ -121,6 +137,9 @@ export function TripDetails({ trip, ownerId, mine, hasPlan }: { trip: Trip; owne
       <PhotoStrip ownerId={ownerId} filter={photoTarget} target={photoTarget} canEdit={mine} />
 
       {mine && hasPlan && <FeedbackForm tripId={trip.id} />}
+
+      {/* "How was your trip?" from its first day (trip upgrades step 7) */}
+      {went && canRate(trip, localToday()) ? <TripReviewCard trip={trip} /> : null}
     </View>
   );
 }

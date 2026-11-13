@@ -31,6 +31,7 @@ from app.services.itinerary.itinerary_service import (
 )
 from app.services.itinerary.trip_rules import Block, MustSee, TripRules, in_window, load_rules, place_timed, rules_for
 from app.services.conditions.service import planning_weather
+from app.services import meals
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -66,8 +67,22 @@ def sorted_items(day: Itinerary) -> list[ItineraryItem]:
     return sorted(day.items, key=lambda i: (_time_to_minutes(i.start_time), i.order_index))
 
 
+def sequence(day: Itinerary) -> list[ItineraryItem]:
+    """The day's stops and meals in order, without breakfast and dinner where you stay (they aren't moved: step 3)."""
+    return [i for i in sorted_items(day) if not meals.is_stay(i)]
+
+
 def recompute_day(day: Itinerary, hotel=None) -> None:
-    """Recalculate order, travel legs between consecutive activities and day totals."""
+    """
+    Recalculate order, travel legs between consecutive activities and day totals. `hotel` is the
+    trip's bases (stays.bases), or one hotel from older callers: the first leg comes from where the
+    day starts, and the way back to where the traveller sleeps counts in the day's travel (D3).
+    """
+    from app.services.itinerary.itinerary_service import way_back_minutes
+    from app.services.stays import end_of, start_of
+    start, end = start_of(hotel, day.day_number), end_of(hotel, day.day_number)
+    # Breakfast and dinner where you stay follow when the traveller leaves and gets back (step 3)
+    meals.sync_stay_meals(day, start, end)
     items = sorted_items(day)
     activities = [i for i in items if i.item_type == "activity" and i.place is not None]
     for i, item in enumerate(items):
@@ -77,8 +92,9 @@ def recompute_day(day: Itinerary, hotel=None) -> None:
             item.distance_to_next = 0.0
 
     total_travel = 0.0
-    if activities and hotel is not None:
-        total_travel += _travel_minutes(hotel, activities[0].place)[0]
+    if activities and start is not None:
+        total_travel += _travel_minutes(start, activities[0].place)[0]
+        total_travel += way_back_minutes(items, end)
     for prev, nxt in zip(activities, activities[1:]):
         minutes, km = _travel_minutes(prev.place, nxt.place, prev.travel_mode)
         prev.travel_time_to_next = round(minutes, 1)
@@ -104,7 +120,7 @@ def copy_item(src: ItineraryItem) -> ItineraryItem:
         title=src.title, start_time=src.start_time, end_time=src.end_time,
         duration_minutes=src.duration_minutes, cost=src.cost, travel_time_to_next=0.0,
         distance_to_next=0.0, notes=src.notes, recommendation_score=src.recommendation_score,
-        order_index=src.order_index, pinned=bool(src.pinned),
+        order_index=src.order_index, pinned=bool(src.pinned), meal_source=src.meal_source,
     )
     item.recommendation_reasons = src.recommendation_reasons
     return item
@@ -336,8 +352,15 @@ def add_best_activity(db: "Session", trip: Trip, day: Itinerary, hotel=None) -> 
 # long you stay, add a place. Each re-times the day with apply_order().
 # ---------------------------------------------------------------------------
 
-# Meals don't start before their usual time when moved around the day
+# Meals don't start before their usual time when moved around the day (your own food: meals.OWN_EARLIEST)
 MEAL_EARLIEST = {"Lunch": 12 * 60, "Dinner": 19 * 60}
+
+
+def meal_earliest(item: ItineraryItem) -> int:
+    slot = meals.slot_of(item)
+    if meals.source_of(item) == "own":
+        return meals.OWN_EARLIEST.get(slot, 0)
+    return MEAL_EARLIEST.get(slot, 0)
 
 
 def _opening_min(item: ItineraryItem) -> int:
@@ -350,7 +373,7 @@ def day_start_of(day: Itinerary, trip: Trip) -> int:
     When the day begins: the preferred start, or the first stop if it starts earlier.
     (Not just the first stop: after lunch is moved first, the morning must not be lost.)
     """
-    starts = [_time_to_minutes(i.start_time) for i in day.items if i.start_time]
+    starts = [_time_to_minutes(i.start_time) for i in day.items if i.start_time and not meals.is_stay(i)]
     return min([day_window(trip, day.day_number)[0], *starts])
 
 
@@ -372,6 +395,9 @@ def apply_order(
     Returns notes about pinned items that had to move.
     """
     notes: list[str] = []
+    # Meals where you stay aren't in the day's sequence: they follow leaving and getting back (recompute_day)
+    from_index -= sum(1 for i in ordered[:from_index] if meals.is_stay(i))
+    ordered = [i for i in ordered if not meals.is_stay(i)]
     from_index = max(0, min(from_index, len(ordered)))
     cursor = day_start
     prev_activity: Optional[ItineraryItem] = None
@@ -389,7 +415,7 @@ def apply_order(
             earliest = max(cursor, _time_to_minutes(prev_activity.end_time) + travel_minutes(prev_activity, item, prev_activity.travel_mode))
         start = max(earliest, _opening_min(item))
         if item.item_type == "meal":
-            start = max(start, MEAL_EARLIEST.get(item.title.split(" at ")[0], 0))
+            start = max(start, meal_earliest(item))
         start = after_busy(start, item.duration_minutes, busy)
         if item.pinned:
             kept = _time_to_minutes(item.start_time)
@@ -421,7 +447,10 @@ def first_difference(old: list[ItineraryItem], new: list[ItineraryItem]) -> int:
 
 
 def reorder_day(day: Itinerary, trip: Trip, item_ids: list[int], hotel=None) -> list[str]:
-    current = sorted_items(day)
+    current = sequence(day)
+    # Meals where you stay may be listed or left out: they keep their place either way
+    stay_ids = {i.id for i in day.items if meals.is_stay(i)}
+    item_ids = [i for i in item_ids if i not in stay_ids]
     if sorted(item_ids) != sorted(i.id for i in current):
         raise EditError("The new order must list every stop of this day exactly once.", 422)
     by_id = {i.id: i for i in current}
@@ -433,10 +462,12 @@ def move_to_day(db: "Session", trip: Trip, item: ItineraryItem, target: Itinerar
     source = item.itinerary
     if target.id == source.id:
         raise EditError("The stop is already on that day.", 422)
-    src_before = sorted_items(source)
+    if meals.is_stay(item):
+        raise EditError("A meal where you stay belongs to its day.", 422)
+    src_before = sequence(source)
     src_start, dst_start = day_start_of(source, trip), day_start_of(target, trip)
     removed_at = src_before.index(item)
-    dst_order = sorted_items(target)
+    dst_order = sequence(target)
     pos = len(dst_order) if position is None else max(0, min(position, len(dst_order)))
     source.items.remove(item)
     target.items.append(item)
@@ -457,8 +488,11 @@ def set_duration(day: Itinerary, trip: Trip, item: ItineraryItem, minutes: int, 
     return apply_order(day, ordered, day_start_of(day, trip), hotel, idx + 1, busy_of(trip, day))
 
 
-def add_place(db: "Session", trip: Trip, day: Itinerary, place: Place, position: Optional[int], hotel=None) -> tuple[ItineraryItem, list[str]]:
-    if place.destination_name != trip.destination:
+def add_place(
+    db: "Session", trip: Trip, day: Itinerary, place: Place, position: Optional[int], hotel=None, *, nearby_ok: bool = False,
+) -> tuple[ItineraryItem, list[str]]:
+    """`nearby_ok`: a place of another destination the day can reach (found by search, step 6)."""
+    if place.destination_name != trip.destination and not nearby_ok:
         raise EditError(f"'{place.name}' isn't in {trip.destination}.", 422)
     if trip.constraints and place.id in set(trip.constraints.excluded_places):
         raise EditError(f"You excluded '{place.name}' from this trip.", 409)
@@ -466,7 +500,7 @@ def add_place(db: "Session", trip: Trip, day: Itinerary, place: Place, position:
         raise EditError(f"'{place.name}' is already in your trip.", 409)
     ranked = {p.id: (s, r) for p, s, r in ranked_places(db, trip)}
     score, reasons = ranked.get(place.id, (0.0, []))
-    ordered = sorted_items(day)
+    ordered = sequence(day)
     pos = len(ordered) if position is None else max(0, min(position, len(ordered)))
     start = day_start_of(day, trip)
     minutes = int(round(place.average_visit_duration * 60))
@@ -591,6 +625,67 @@ def apply_day(db: "Session", day: Itinerary, new_day: Itinerary, keep: list[Itin
         db.expunge(new_day)
     db.flush()
     recompute_day(day, hotel)
+
+
+def rebuild_meals(db: "Session", trip: Trip, day: Itinerary, hotel=None, rules: Optional[TripRules] = None) -> list[str]:
+    """
+    After the meal plan changes (trip upgrades step 3): only this day's meals change. A meal that
+    moves to or from a restaurant or your own food takes the old one's place in the day; breakfast
+    and dinner where you stay go before leaving and after getting back. The stops keep their order;
+    the day is re-timed from the first meal that changed. Returns notes about pinned stops that moved.
+    """
+    from app.services.itinerary.itinerary_service import ItineraryService, _meal_seed
+    rules = rules or load_rules(db, trip)
+    n = day.day_number
+    ordered = sorted_items(day)
+    have = {meals.slot_of(i): i for i in ordered if i.item_type == "meal"}
+    window_start, _ = rules.window(n)
+    can_stay_breakfast, can_stay_dinner = meals.stay_days(rules, n)
+    svc, seed = ItineraryService(), _meal_seed(trip, n)
+    first_change: Optional[int] = None
+    for slot in meals.SLOTS:
+        want = rules.meal_source(n, slot)
+        old = have.get(slot)
+        if old is not None and meals.source_of(old) == want:
+            continue
+        if old is None and slot == "Lunch":
+            continue  # the day had no room for lunch: it still hasn't
+        if old is None and slot == "Breakfast" and not rules.has_breakfast(n):
+            continue
+        if want == "stay" and not (can_stay_breakfast if slot == "Breakfast" else can_stay_dinner):
+            continue  # no breakfast there on the arrival day, no dinner there on the last day
+        # Where the new meal goes in the day: the old one's place, else the start or the end of the day
+        if old is not None and not meals.is_stay(old):
+            at, start = ordered.index(old), _time_to_minutes(old.start_time)
+        elif slot == "Breakfast":
+            at, start = 0, window_start
+        else:
+            rest = [i for i in ordered if not meals.is_stay(i)]
+            at = len(rest) if not ordered or not meals.is_stay(ordered[-1]) else len(ordered) - 1
+            ends = [_time_to_minutes(i.end_time) for i in rest]
+            start = max(ends, default=window_start)
+        if old is not None:
+            ordered.remove(old)
+            day.items.remove(old)
+            db.delete(old)
+        new = None
+        if want == "own":
+            # eaten at the stop seen just before (none for breakfast)
+            here = None if slot == "Breakfast" else next(
+                (i.place for i in reversed(ordered[:at]) if i.item_type == "activity" and i.place is not None), None)
+            new = meals.own_item(slot, max(start, meals.OWN_EARLIEST.get(slot, 0)), rules.own_cost(n), at=here)
+        elif want == "restaurant":
+            start = max(start, MEAL_EARLIEST.get(slot, 0))
+            new = svc._meal_item_at(db, trip.destination, slot, svc._pick_meal(db, trip.destination, slot, seed, start), start, seed)
+        if new is not None:
+            day.items.append(new)
+            ordered.insert(min(at, len(ordered)), new)
+        first_change = at if first_change is None else min(first_change, at)
+    db.flush()
+    if first_change is None:
+        recompute_day(day, hotel)
+        return []
+    return apply_order(day, ordered, day_start_of(day, trip), hotel, first_change, busy_of(trip, day))
 
 
 def replan_for_rules(db: "Session", trip: Trip, changed_days: set[int], hotel=None) -> list[int]:

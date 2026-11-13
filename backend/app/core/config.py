@@ -115,6 +115,13 @@ class Settings(BaseSettings):
     ors_base_url: str = "https://api.heigit.org/openrouteservice"   # was api.openrouteservice.org (deprecated)
     routing_timeout_seconds: float = 10.0
 
+    # --- Search anything (trip upgrades step 6): addresses and areas from ORS geocoding (same ORS_API_KEY;
+    # geocoding is at api.openrouteservice.org, not under ors_base_url). Cached 7 days by (query, area),
+    # one call per user per 2 s, and a daily cap below the free quota (1,000 a day) shared by every process.
+    ors_geocode_url: str = "https://api.openrouteservice.org/geocode/search"
+    geocode_daily_cap: int = 800
+    geocode_timeout_seconds: float = 4.0
+
     # --- Profile photos: uploaded to ImgBB (api.imgbb.com) with this key; empty = photos off ---
     imgbb_api_key: str = ""
 

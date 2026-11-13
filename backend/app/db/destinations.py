@@ -82,12 +82,13 @@ def _load(db: Session, data: dict, dest: Optional[Destination], version: str) ->
 
 
 def _sync(db: Session, model, dest: Destination, records: list[dict], fill) -> None:
-    # Rows published by the data platform (source_ref "catalog:…") belong to it, not to these files
-    existing = {
-        row.source_ref: row
-        for row in db.query(model).filter(model.destination_id == dest.id, model.source_ref.isnot(None),
-                                          ~model.source_ref.startswith(CATALOG_REF_PREFIX))
-    }
+    # Rows published by the data platform (source_ref "catalog:…") belong to it, not to these files,
+    # and a traveller's private stop (step 6: "poi:…", "geocode:…") belongs to them
+    query = db.query(model).filter(model.destination_id == dest.id, model.source_ref.isnot(None),
+                                   ~model.source_ref.startswith(CATALOG_REF_PREFIX))
+    if model is Place:
+        query = query.filter(Place.listed.is_(True))
+    existing = {row.source_ref: row for row in query}
     seen = set()
     for r in records:
         row = existing.get(r["ref"])

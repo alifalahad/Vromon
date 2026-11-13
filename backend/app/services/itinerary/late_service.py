@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Optional
 from app.services.itinerary.editing_service import (
     after_busy, busy_of, day_window, is_must_visit, recompute_day, sorted_items, travel_minutes,
 )
+from app.services import meals
 from app.services.itinerary.trip_rules import m2t, t2m
 
 if TYPE_CHECKING:
@@ -45,7 +46,8 @@ def push_back(trip: "Trip", day: "Itinerary", now: int, minutes: int) -> dict:
     What pushing the rest of the day back would do (nothing is changed):
     {"moved": [{item_id, title, from, to}], "dropped": [{item_id, title, reason}], "kept": [{item_id, title, at}]}.
     """
-    ordered = sorted_items(day)
+    # Breakfast and dinner where you stay aren't pushed: they follow leaving and getting back (step 3)
+    ordered = [i for i in sorted_items(day) if not meals.is_stay(i)]
     later = [i for i in ordered if t2m(i.start_time) >= now]
     out: dict = {"moved": [], "dropped": [], "kept": [], "_times": {}}
     if not later:
@@ -112,8 +114,8 @@ def apply(db: "Session", trip: "Trip", day: "Itinerary", plan: dict, hotel=None)
     for d in plan["dropped"]:
         it = items[d["item_id"]]
         if it.item_type == "meal":
-            undo["restore"].append({"kind": "meal", "meal": it.title.split(" at ")[0], "restaurant_id": it.restaurant_id,
-                                    "start": it.start_time})
+            undo["restore"].append({"kind": "meal", "meal": meals.slot_of(it), "restaurant_id": it.restaurant_id,
+                                    "source": meals.source_of(it), "cost": it.cost, "start": it.start_time})
         else:
             undo["restore"].append({"kind": "activity", "place_id": it.place_id, "start": it.start_time})
         day.items.remove(it)
@@ -144,6 +146,9 @@ def undo(db: "Session", trip: "Trip", day: "Itinerary", data: dict, hotel=None) 
         if r.get("kind") == "meal":
             if r.get("meal") not in MEALS:
                 raise LateError("Unknown meal.")
+            if r.get("source") == "own":
+                day.items.append(meals.own_item(r["meal"], start, min(float(r.get("cost") or 0.0), meals.MAX_OWN_COST)))
+                continue
             rest = db.get(Restaurant, r["restaurant_id"]) if r.get("restaurant_id") else None
             if rest is not None and rest.destination_name != trip.destination:
                 raise LateError("That restaurant isn't in this trip's destination.")

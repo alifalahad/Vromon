@@ -22,12 +22,15 @@ import { lateCard } from '../../../src/features/chat/onTheTrip';
 import { useConversations } from '../../../src/features/chat/queries';
 import { sendCard } from '../../../src/features/chat/share';
 import { durationDays, localToday, parseDay } from '../../../src/features/trips/dates';
-import { MODE_ICON } from '../../../src/features/trips/plan/PlanRows';
+import { isUnchecked } from '../../../src/features/places/kinds';
+import { NotCheckedBadge } from '../../../src/features/places/NotCheckedBadge';
+import { cardTitle, MODE_ICON } from '../../../src/features/trips/plan/PlanRows';
 import { dayParts, stopTitle } from '../../../src/features/trips/plan/timeline';
 import { usePlanFormat } from '../../../src/features/trips/plan/usePlanFormat';
 import { allowNotifications } from '../../../src/features/trips/today/reminders';
 import { useTodaySettings } from '../../../src/features/trips/today/settings';
-import { dayFor, directionsUrl, leaveBy, m2t, minuteOfDay, pointOf, t2m, todayState, type Point } from '../../../src/features/trips/today/today';
+import { baseName, stayIcon } from '../../../src/features/trips/stays/stays';
+import { backAt, dayFor, dayStart, directionsUrl, leaveBy, m2t, minuteOfDay, pointOf, t2m, todayState, type Point } from '../../../src/features/trips/today/today';
 import { askForLocation, useHere } from '../../../src/features/trips/today/useHere';
 import { useTripReminders } from '../../../src/features/trips/today/useTripReminders';
 import { tripsApi } from '../../../src/services/api';
@@ -89,7 +92,11 @@ export default function TodayScreen() {
     itinerary.data?.hotel?.latitude != null && itinerary.data.hotel.longitude != null
       ? { lat: itinerary.data.hotel.latitude, lon: itinerary.data.hotel.longitude }
       : null;
-  const leave = state ? leaveBy(state, hotel, isToday && here ? here : null) : null;
+  // From the day's stay (docs/trip-upgrades, step 2), and back to it after the last stop
+  const leave = state ? leaveBy(state, dayStart(day, hotel), isToday && here ? here : null, day?.start_leg) : null;
+  const back = backAt(day);
+  const backName = baseName(day?.end_base, t);
+  const backPoint: Point | null = day?.end_base?.latitude != null && day.end_base.longitude != null ? { lat: day.end_base.latitude, lon: day.end_base.longitude } : null;
   const condDay = conditions.data?.days.find((d) => d.day_id === day?.id);
 
   // Running late
@@ -223,7 +230,7 @@ export default function TodayScreen() {
             {late <= 0 && leave && state.current && leave.atMin < t2m(state.current.end_time) ? (
               // The plan has no time to get there after this stop (a meal "on the way"): say so
               <Text style={styles.beforeEnd} testID="today-before-end">
-                {t('today.beforeEnd', { time: f.duration(t2m(state.current.end_time) - leave.atMin), place: stopTitle(state.current) })}
+                {t('today.beforeEnd', { time: f.duration(t2m(state.current.end_time) - leave.atMin), place: cardTitle(state.current, t) })}
               </Text>
             ) : null}
             {leave ? (
@@ -237,13 +244,16 @@ export default function TodayScreen() {
                     leave.from === 'location'
                       ? t('today.fromHere')
                       : leave.from === 'hotel'
-                        ? t('today.fromHotel')
+                        ? baseName(day?.start_base, t)
+                          ? t('stays.from', { place: baseName(day?.start_base, t) })
+                          : t('today.fromHotel')
                         : t('today.fromPrev', { place: state.previous ? stopTitle(state.previous) : '' }),
                   ].join(' · ')}
                 </Text>
               </View>
             ) : null}
             <Text style={styles.nextText}>{t('today.nextAt', { place: stopTitle(state.next), time: f.time(state.next.start_time) })}</Text>
+            {isUnchecked(state.next.place) ? <NotCheckedBadge testID="today-next-unchecked" /> : null}
             <View style={styles.buttons}>
               <PressableScale
                 haptic="selection"
@@ -318,9 +328,37 @@ export default function TodayScreen() {
               </Animated.View>
             ) : null}
           </Animated.View>
-        ) : state && state.phase !== 'before' ? (
+        ) : state && state.phase !== 'before' && !(back && backName) ? (
+          // (with a way back to the stay, its card below says what's next)
           <View style={styles.card}>
             <Text style={styles.muted}>{t('today.noNext')}</Text>
+          </View>
+        ) : null}
+
+        {/* After the last stop: the way back to where you sleep */}
+        {back && backName && !state?.next ? (
+          <View style={styles.card} testID="today-back" accessible accessibilityLabel={t('today.backTo', { place: backName, time: f.time(back.at), travel: f.duration(back.minutes) })}>
+            <View style={styles.travelRow}>
+              <MaterialCommunityIcons name={stayIcon(day!.end_base!.kind)} size={20} color={theme.colors.textSecondary} />
+              <Text style={styles.travelText}>
+                {[t('today.backTo', { place: backName, time: f.time(back.at), travel: f.duration(back.minutes) }), back.cost > 0 ? f.money(back.cost) : null]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Text>
+            </View>
+            {backPoint ? (
+              <PressableScale
+                haptic="selection"
+                style={[styles.button, styles.buttonPrimary]}
+                onPress={() => void Linking.openURL(directionsUrl(backPoint, 'cng'))}
+                accessibilityRole="link"
+                accessibilityLabel={t('today.directionsA11y', { place: backName })}
+                testID="today-back-directions"
+              >
+                <MaterialCommunityIcons name="navigation-variant-outline" size={20} color={theme.colors.onAccent} />
+                <Text style={styles.buttonPrimaryText}>{t('today.directions')}</Text>
+              </PressableScale>
+            ) : null}
           </View>
         ) : null}
 
@@ -376,7 +414,8 @@ export default function TodayScreen() {
                       testID={`today-item-${item.id}`}
                     >
                       <Text style={styles.restTime}>{f.time(item.start_time)}</Text>
-                      <Text style={styles.restTitle} numberOfLines={2}>{stopTitle(item)}</Text>
+                      <Text style={styles.restTitle} numberOfLines={2}>{cardTitle(item, t)}</Text>
+                      {isUnchecked(item.place) ? <NotCheckedBadge testID={`today-unchecked-${item.id}`} style={{ alignSelf: 'center' }} /> : null}
                       {ws.length ? <Text style={styles.warnTag}>{t(`today.warn.${ws[0].code}`).toUpperCase()}</Text> : null}
                       {done ? (
                         <MaterialCommunityIcons name="check" size={18} color={theme.colors.success} importantForAccessibility="yes" accessibilityElementsHidden={false} accessibilityLabel={t('today.done')} />
@@ -444,7 +483,7 @@ function NowCard({
     if (state.current) {
       const s = t2m(state.current.start_time);
       const e = t2m(state.current.end_time);
-      title = stopTitle(state.current);
+      title = cardTitle(state.current, t);
       line = t('today.until', { end: f.time(state.current.end_time), left: f.duration(e - now) });
       progress = Math.min(1, Math.max(0, (now - s) / Math.max(1, e - s)));
     } else if (state.phase === 'before') {
@@ -462,6 +501,7 @@ function NowCard({
     <View style={styles.now} testID="today-now" accessible accessibilityLabel={[label, title, line].filter(Boolean).join('. ')}>
       <Text style={styles.nowLabel}>{label}</Text>
       <Text style={styles.nowTitle}>{title}</Text>
+      {isToday && state?.current && isUnchecked(state.current.place) ? <NotCheckedBadge testID="today-now-unchecked" /> : null}
       {line ? <Text style={styles.nowLine}>{line}</Text> : null}
       {progress != null ? (
         <View style={styles.progress}>

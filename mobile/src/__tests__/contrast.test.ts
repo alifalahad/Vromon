@@ -4,6 +4,8 @@
  */
 
 import { contrast, mix } from '../features/mapThemes/color';
+import { planColors } from '../features/trips/plan/colors';
+import { reviewColors } from '../features/trips/review/colors';
 import { AVATAR_COLORS } from '../ui/Avatar';
 import { ON_SUNSET, SUNSET_CARD } from '../ui/theme/cards';
 import { darkColors, lightColors, SENDER_NAMES, type ThemeColors } from '../ui/theme/tokens';
@@ -48,6 +50,35 @@ describe.each([
         expect(contrast(colors[text], seen)).toBeGreaterThanOrEqual(AA);
       }
     }
+  });
+
+  it("the stay's bed or house on its map pin, and the pin against the map (docs/trip-upgrades, step 2)", () => {
+    const plan = planColors({ scheme: colors === darkColors ? 'dark' : 'light', colors });
+    expect(contrast(plan.onStay, plan.stay)).toBeGreaterThanOrEqual(AA);
+    // an icon on a map: 3:1 against the map's ground
+    expect(contrast(plan.stay, colors.surfaceInset)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('Good and Bad, when chosen, on their green and red (trip upgrades step 7)', () => {
+    const review = reviewColors({ scheme: colors === darkColors ? 'dark' : 'light' });
+    expect(contrast(review.onGood, review.good)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(review.onBad, review.bad)).toBeGreaterThanOrEqual(AA);
+  });
+
+  it('"Not checked" on its badge, and the badge on every surface it sits on (trip upgrades step 6)', () => {
+    const plan = planColors({ scheme: colors === darkColors ? 'dark' : 'light', colors });
+    expect(contrast(plan.onUnchecked, plan.unchecked)).toBeGreaterThanOrEqual(AA);
+    // the hollow map pin of a stop that isn't checked: its number in link colour on the surface
+    expect(contrast(colors.link, colors.surface)).toBeGreaterThanOrEqual(AA);
+  });
+
+  it('text on the stay advisor card: primary and secondary text over the soft accent (trip upgrades step 4)', () => {
+    const m = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(colors.accentSoft)!;
+    const top = `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`;
+    const seen = mix(colors.surface, top.toUpperCase(), Number(m[4]));
+    expect(contrast(colors.textPrimary, seen)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.textSecondary, seen)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.onAccentSoft, seen)).toBeGreaterThanOrEqual(AA);   // "Why?"
   });
 
   it('white on the strong accent (filled buttons)', () => {

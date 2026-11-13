@@ -6,9 +6,11 @@
  * step 1 has a default, so a plan can be built from step 1 alone.
  */
 
-import type { BusyTime, JourneyMode, MustSee, MustSeeWhen, TripCreate } from '../../../types';
+import type { BusyTime, JourneyMode, MealPlan, MustSee, MustSeeWhen, TripCreate } from '../../../types';
+import { isDefault } from '../meals/meals';
 import { durationDays, localToday, parseDay } from '../dates';
 import type { Currency } from './currency';
+import { freeNights, nightsOf, staysFromPicks, type StayPick } from '../stays/stays';
 
 /** Same limit as the backend (schemas.py MAX_TRIP_DAYS). */
 export const MAX_TRIP_DAYS = 30;
@@ -76,6 +78,15 @@ export type NewTrip = {
   busy: BusyTime[];
   skip: number[];
   avoidCrowds: boolean;
+  /** Where you'll stay, one choice per night ("auto": the hotel Vromon picks for the budget) */
+  stayPicks: StayPick[];
+  /** A night's hotel at the budget's level for one room (the destination's priced hotels' middle
+   * price; 0 when none has a price): what a free night (family or friends, day trips) takes off */
+  freeNightPrice: number;
+  /** Meals (step 3): per meal a restaurant (default), your own food or where you stay; null = the best places to eat */
+  meals: MealPlan | null;
+  /** "Have breakfast and dinner there?" was answered (it's offered once, for a family stay) */
+  mealsOffered: boolean;
 };
 
 const iso = (d: Date) => localToday(d);
@@ -95,6 +106,12 @@ const round500 = (n: number) => Math.max(500, Math.round(n / 500) * 500);
 
 export function tierBudget(tier: Tier, travellers: number, days: number): number {
   return round500(TIER_PER_PERSON_DAY[tier] * travellers * days);
+}
+
+/** The level's budget, less the hotel nights that cost nothing (family or friends, day trips). */
+export function suggestedBudget(t: Pick<NewTrip, 'tier' | 'travellers' | 'start' | 'end' | 'stayPicks' | 'freeNightPrice'>): number {
+  const free = freeNights(t.stayPicks) * t.freeNightPrice * Math.ceil(t.travellers / 2);
+  return round500(TIER_PER_PERSON_DAY[t.tier] * t.travellers * tripLength(t) - free);
 }
 
 export function defaultNewTrip(today = new Date(), destination = ''): NewTrip {
@@ -122,6 +139,10 @@ export function defaultNewTrip(today = new Date(), destination = ''): NewTrip {
     busy: [],
     skip: [],
     avoidCrowds: false,
+    stayPicks: Array.from({ length: nightsOf(durationDays(start, end)) }, () => ({ kind: 'auto' as const })),
+    freeNightPrice: 0,
+    meals: null,
+    mealsOffered: false,
   };
 }
 
@@ -133,8 +154,15 @@ export function defaultNewTrip(today = new Date(), destination = ''): NewTrip {
 export function update(t: NewTrip, change: Partial<NewTrip>): NewTrip {
   const next = { ...t, ...change };
   const days = tripLength(next);
-  if (!next.budgetByHand && ('tier' in change || 'travellers' in change || 'start' in change || 'end' in change)) {
-    next.budget = tierBudget(next.tier, next.travellers, days);
+  if ('start' in change || 'end' in change) {
+    // One choice per night: new nights take the last night's choice, gone nights drop theirs
+    const nights = nightsOf(days);
+    const last = next.stayPicks[next.stayPicks.length - 1] ?? { kind: 'auto' as const };
+    next.stayPicks = Array.from({ length: nights }, (_, i) => next.stayPicks[i] ?? last);
+  }
+  const budgetInputs = ['tier', 'travellers', 'start', 'end', 'stayPicks', 'freeNightPrice'];
+  if (!next.budgetByHand && budgetInputs.some((k) => k in change)) {
+    next.budget = suggestedBudget(next);
   }
   if ('start' in change || 'end' in change) {
     next.mustSees = next.mustSees.map((m) => (m.day && m.day > days ? { ...m, day: null } : m));
@@ -190,6 +218,10 @@ export function toPayload(t: NewTrip): TripCreate {
     transport_mode: null,
     transport_modes: t.modes,
     transport_by_budget: t.modes.length === 0,
+    // Where you'll stay, when chosen (otherwise the hotel Vromon picks for the budget)
+    ...(staysFromPicks(t.stayPicks) ? { stays: staysFromPicks(t.stayPicks) } : {}),
+    // Meals, when they're not all at the best places to eat
+    ...(!isDefault(t.meals) ? { meals: t.meals } : {}),
   };
 }
 

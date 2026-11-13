@@ -21,7 +21,7 @@ const mockMe = { data: { id: 'me' } };
 jest.mock('../features/account/useMe', () => ({ ME_QUERY_KEY: ['me'], useMe: () => mockMe }));
 jest.mock('../services/api', () => ({
   ApiError: class ApiError extends Error {},
-  tripsApi: { get: jest.fn(), budget: jest.fn(), saveBudget: jest.fn(), aiBudget: jest.fn(), update: jest.fn() },
+  tripsApi: { get: jest.fn(), budget: jest.fn(), saveBudget: jest.fn(), aiBudget: jest.fn(), update: jest.fn(), notNowStaySuggestion: jest.fn(), dismissStaySuggestion: jest.fn() },
 }));
 
 const api = tripsApi as unknown as Record<string, jest.Mock>;
@@ -87,8 +87,45 @@ describe('Trip budget screen', () => {
     expect(screen.getByTestId('budget-part-stay')).toHaveTextContent('StaySea Crown Hotel · 2 nights × ৳3,500৳7,000');
     expect(screen.getByTestId('budget-part-food')).toHaveTextContent(/Meals for 3 days, both of you৳5,960$/);
     expect(screen.getByTestId('budget-part-tickets')).toHaveTextContent(/Entry and activities · 2 stops are free৳3,300$/);
-    expect(screen.getByTestId('budget-part-local')).toHaveTextContent('Local travelCNG and rickshaw, to and from your hotel≈ ৳1,400');
+    expect(screen.getByTestId('budget-part-local')).toHaveTextContent('Local travelCNG and rickshaw, to and from where you stay≈ ৳1,400');
     expect(screen.getByText('Likely ৳23,000 to ৳25,600')).toBeTruthy();
+  });
+
+  it('says where the meals are eaten when some are packed or where you stay (trip upgrades step 3)', async () => {
+    setUp({
+      ...BUDGET,
+      parts: BUDGET.parts.map((p) =>
+        p.key === 'food' ? { ...p, amount: 2400, detail: { ...p.detail, by_source: { restaurant: 4, own: 3, stay: 2 }, own_cost_per_person: 100 } } : p,
+      ),
+    });
+    await renderWithQuery(<BudgetScreen />);
+    expect(await screen.findByTestId('budget-part-food')).toHaveTextContent(
+      /Meals for 3 days, both of you\s4 at restaurants · 3 packed · 2 where you stay৳2,400$/,
+    );
+  });
+
+  it('a better place to sleep is a way to save, with Switch, Not now and Don\'t suggest this (trip upgrades step 4)', async () => {
+    const advice = {
+      id: 6, first_night: 3, last_night: 3, nights: 1, day_number: 3,
+      hotel: { id: 9, name: 'Hotel Pashur', destination_name: 'Bagerhat', price_per_night: 2800, currency: 'BDT', rating: 3.5, rating_known: false, latitude: 22.47, longitude: 89.6 },
+      current: { id: 4, name: 'Sea Crown Hotel', price_per_night: 2500 },
+      money_saved: 2400, minutes_saved: 104, extra_moves: 1,
+      parts: { rooms: 1, nights: 1, price_now: 2500, price_then: 2800, stay_now: 2500, stay_then: 2800, road_now: 236, road_then: 11,
+        fares_now: 4410, fares_then: 280, transfer_minutes: 76, transfer_cost: 1430, hassle_minutes: 45, days: [3], time_value: 5 },
+    };
+    const action = { kind: 'stay_advice' as const, suggestion_id: 6 };
+    setUp({ ...BUDGET, saves: [{ key: 'stay', saving: 2400, estimate: true, detail: advice, action }, ...BUDGET.saves.filter((x) => x.key !== 'hotel')] });
+    api.saveBudget.mockResolvedValue({ message: 'Staying at Hotel Pashur.', undo: { kind: 'stays', stays: [] }, budget: BUDGET, days: [], validation: { trip_id: 5, valid: true, hard_violation_count: 0, soft_violation_count: 0, violations: [] } });
+    api.dismissStaySuggestion.mockResolvedValue({ trip_id: 5, suggestions: [] });
+    await renderWithQuery(<BudgetScreen />);
+    const card = await screen.findByTestId('advice-6');
+    expect(card).toHaveTextContent(/Sleep in Bagerhat for night 3\?.*Saves ৳2,400 and 1 h 44 min on the road/);
+    await fireEvent.press(screen.getByTestId('advice-dismiss-6'));
+    await waitFor(() => expect(api.dismissStaySuggestion).toHaveBeenCalledWith(5, 6));
+    expect(await screen.findByTestId('budget-snackbar')).toHaveTextContent(/We won't suggest that again/);
+    await fireEvent.press(await screen.findByTestId('advice-switch-6'));
+    await waitFor(() => expect(api.saveBudget).toHaveBeenCalledWith(5, action));
+    await waitFor(() => expect(screen.getByTestId('budget-snackbar')).toHaveTextContent(/Staying at Hotel Pashur/));
   });
 
   it('says when the plan is over, and what is not known', async () => {

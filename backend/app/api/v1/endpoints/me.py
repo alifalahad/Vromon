@@ -22,11 +22,12 @@ from app.core.auth import DEV_BYPASS_SUBJECT, get_current_user
 from app.core.config import settings
 from app.core.rate_limit import USERNAME_CHECK_LIMIT, limiter
 from app.db import get_db
-from app.models.models import Block, Device, FriendRequest, Photo, Trip, User, UserSettings, Visit
+from app.models.models import Block, Device, FriendRequest, Photo, Place, Trip, User, UserSettings, Visit
 from app.services.photos import StorageError, delete_photos, photos_out
 from app.services.photos.storage import PhotoStore, optional_photo_store
 from app.schemas.schemas import TripStatsOut
 from app.services import avatars, live
+from app.services import reviews as reviews_service
 from app.services.chat import delete_chat_data, export_chats, partners
 from app.services.rooms import delete_user_rooms
 from app.services.friends import delete_social_data, friend_ids
@@ -213,6 +214,14 @@ def export_my_data(
         ],
         "photos": photo_rows,
         "chats": export_chats(db, user.id),
+        # "How was your trip?" (trip upgrades step 7): your stars, comments and things marked good or bad
+        "trip_reviews": reviews_service.export(db, user),
+        # Stops from outside Vromon's list (trip upgrades step 6): the places you added or pinned
+        "private_places": [
+            {"id": p.id, "name": p.name, "latitude": p.latitude, "longitude": p.longitude, "source": p.source,
+             "kind": p.tags[0] if p.tags else None, "destination": p.destination_name, "created_at": p.created_at.isoformat()}
+            for p in db.scalars(select(Place).where(Place.owner_user_id == user.id).order_by(Place.id))
+        ],
     }
 
 
@@ -256,11 +265,15 @@ def delete_me(
     chat_partners = partners(db, user.id)
     # Trip rooms first: their own trips' rooms, and their places in friends' rooms (step 7)
     delete_user_rooms(db, user.id)
+    # Their trip reviews, in friends' trip rooms too (trip upgrades step 7)
+    reviews_service.delete_for(db, user)
     for trip in db.scalars(select(Trip).where(Trip.user_id == user.id)).all():
         db.delete(trip)  # ORM cascades to preferences, constraints, itinerary, feedback
     # Now, before the account: nothing tells the ORM that a trip goes before its user, and
     # PostgreSQL checks the plan's foreign keys (SQLite doesn't; found in step 10)
     db.flush()
+    # Their private stops (step 6): only their own trips used them, and those are gone
+    db.execute(delete(Place).where(Place.owner_user_id == user.id))
     db.execute(delete(Visit).where(Visit.user_id == user.id))
     delete_chat_data(db, user.id)
     delete_social_data(db, user.id)

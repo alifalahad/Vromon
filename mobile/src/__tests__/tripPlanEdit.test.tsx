@@ -13,6 +13,8 @@ jest.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void) => jest.requireActual<typeof React>('react').useEffect(effect, [effect]),
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
   useLocalSearchParams: () => ({ id: '5' }),
+  // The screen has finished sliding in (the plan sheet waits for that)
+  useNavigation: () => ({ addListener: (_event: string, cb: (e: { data: { closing: boolean } }) => void) => (cb({ data: { closing: false } }), () => {}) }),
 }));
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
 jest.mock('../ui/haptics', () => ({

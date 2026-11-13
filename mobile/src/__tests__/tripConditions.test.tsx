@@ -13,6 +13,8 @@ jest.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void) => jest.requireActual<typeof React>('react').useEffect(effect, [effect]),
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
   useLocalSearchParams: () => ({ id: '5', day: '1' }),
+  // The screen has finished sliding in (the plan sheet waits for that)
+  useNavigation: () => ({ addListener: (_event: string, cb: (e: { data: { closing: boolean } }) => void) => (cb({ data: { closing: false } }), () => {}) }),
   Stack: { Screen: () => null },
 }));
 const mockPush = jest.fn();

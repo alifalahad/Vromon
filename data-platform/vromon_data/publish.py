@@ -193,7 +193,7 @@ def publish_places(session: Session, *, dry_run: bool = False) -> dict:
     for dest in destinations:
         if dest.name in DEMO_DESTINATIONS and dest.id in published_dest:
             for p in session.scalars(select(Place).where(Place.destination_id == dest.id, Place.source_ref.is_(None),
-                                                         Place.is_active.is_(True))):
+                                                         Place.is_active.is_(True), Place.listed.is_(True))):  # not a private stop
                 p.is_active = False
                 counts["demo_hidden"] += 1
 
@@ -395,6 +395,7 @@ def tidy_destinations(session: Session, *, dry_run: bool = False) -> dict:
         unreviewed_left = False
         for model in (Place, Hotel, Restaurant):
             rows = list(session.scalars(select(model).where(model.destination_id == dest.id)))
+            rows = [r for r in rows if getattr(r, "listed", True)]   # a traveller's private stop isn't Vromon's to hide (step 6)
             reviewed = any(r.source == "catalog" and r.is_active for r in rows)
             for r in rows:
                 if r.source == "curated" and r.source_ref is None:

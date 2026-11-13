@@ -90,7 +90,7 @@ class RecommendationService:
         # Fetch all active places for destination
         all_places: List[Place] = (
             db.query(Place)
-            .filter(Place.destination_name == destination, Place.is_active == True)
+            .filter(Place.destination_name == destination, Place.is_active == True, Place.listed == True)  # noqa: E712 (never a private stop)
             .all()
         )
 

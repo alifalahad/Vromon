@@ -25,7 +25,10 @@ def test_only_approved_attractions_become_places(session, layers, monkeypatch):
     session.flush()
     demo = Place(name="Demo place", destination_id=dest.id, destination_name="Barishal", category="Beach",
                  latitude=22.1, longitude=90.1)
-    session.add(demo)
+    # A traveller's pin (trip upgrades step 6): no source ref either, but not Vromon's to hide
+    pin = Place(name="Aunt's house", destination_id=dest.id, destination_name="Barishal", category="Other",
+                latitude=22.1, longitude=90.1, source="pin", listed=False, checked=False)
+    session.add_all([demo, pin])
     session.commit()
     monkeypatch.setattr(publish, "DEMO_DESTINATIONS", {"Barishal"})
     _run(session)
@@ -37,6 +40,7 @@ def test_only_approved_attractions_become_places(session, layers, monkeypatch):
     assert mosque.source_ref == "catalog:barishal-guthia-mosque" and mosque.category == "Culture"
     assert mosque.checked and not mosque.hours_known and not mosque.cost_known and not mosque.rating_known
     assert not places["Demo place"].is_active          # hidden, not deleted
+    assert places["Aunt's house"].is_active             # a private stop stays
     assert "Border Park" not in places                  # not approved
     # Republishing changes nothing; unpublishing hides the place
     assert publish.publish_places(session)["written"] == 0
@@ -152,7 +156,9 @@ def test_every_district_with_sights_becomes_a_destination_at_its_largest_town(se
                       latitude=22.3, longitude=90.3, source="curated")
     demo_free = Hotel(name="Demo hotel", destination_id=bhola.id, destination_name="Bhola", latitude=22.3,
                       longitude=90.3, source="curated")
-    session.add_all([reviewed, old, demo_used, demo_free])
+    mine = Place(name="Zilla School", destination_id=bhola.id, destination_name="Bhola", category="Other",
+                 latitude=22.3, longitude=90.3, source="poi", source_ref="poi:1", checked=False, listed=False)
+    session.add_all([reviewed, old, demo_used, demo_free, mine])
     session.flush()
     trip = Trip(title="T", destination="Bhola", total_budget=5000, start_date=datetime(2026, 11, 1).date(),
                 end_date=datetime(2026, 11, 1).date())
@@ -168,6 +174,7 @@ def test_every_district_with_sights_becomes_a_destination_at_its_largest_town(se
     assert t["unreviewed_hidden"] == 1 and t["demo_deleted"] == 1 and t["demo_kept_for_trips"] == 1
     assert not session.get(Place, old.id).is_active and not session.get(Place, demo_used.id).is_active
     assert session.get(Place, reviewed.id).is_active
+    assert session.get(Place, mine.id).is_active        # a traveller's private stop isn't an unreviewed import
 
 
 def test_alike_district_names_keep_their_own_destinations(session):

@@ -1,0 +1,210 @@
+# Overture Maps place categories (`basic_category`, release 2026-10) → Vromon's friendly kinds, for the
+# places index (docs/trip-upgrades, step 5) and for reading what a search asks for (step 6: "college",
+# "কলেজ", "atm", "bazar").
+#
+# - `skip`: lodging and food. The catalog has them (service_places), reviewed.
+# - each kind: its `categories`; `words` people search with (English and Bangla); `name_words` that, in a
+#   place's name, make a generic kind specific ("Brajalal College" under "place_of_learning" → college).
+#   Name words are whole words in Latin script, and any part of a Bangla name.
+# - `beats`: kinds a name word of this kind replaces even though they aren't generic.
+# - `generic: true`: a kind a name word may replace. Categories in no list get the kind "other" (generic)
+#   and are listed in the run's report.
+#
+# It lives in the backend because search reads it at run time (app/core/poi_kinds.py); the data platform's
+# overture_pois connector reads it from here.
+
+skip: [restaurant, hotel, lodging, casual_eatery, cafe, fast_food_restaurant, coffee_shop, resort, bar, food_and_drink,
+       food_service, non_alcoholic_beverage_venue, private_lodging, smoothie_juice_bar, bed_and_breakfast, inn,
+       food_truck_stand, lounge, brewery, winery, distillery, alcoholic_beverage_venue, rv_park, apartment, condominium]
+
+# Checked in this order when a name refines a generic kind (the first that matches wins)
+refine_order: [college, school, madrasa, hospital, clinic, diagnostic, pharmacy, bank, atm, market, shopping_mall, mosque,
+               temple, church, pagoda, police, post_office, bus_station, train_station, ferry_terminal, fuel, museum, park, stadium]
+
+# Phrases cleared from a name before name words are looked for (place names that contain one)
+not_words: ["cox's bazar", "coxs bazar", "cox bazar", "কক্সবাজার", "bazar road", "college road", "school road", "station road",
+            "hospital road", "college gate", "college more", "bank colony", "market road"]
+
+kinds:
+  college:
+    categories: [college_university]
+    words: {en: [college, university, varsity, campus], bn: [কলেজ, বিশ্ববিদ্যালয়, ভার্সিটি]}
+    name_words: [college, university, varsity, কলেজ, বিশ্ববিদ্যালয়]
+  school:
+    categories: [high_school, elementary_school, middle_school, preschool, specialty_school]
+    words: {en: [school, kindergarten], bn: [স্কুল, বিদ্যালয়, বিদ্যালয়]}
+    name_words: [school, kindergarten, স্কুল, বিদ্যালয়, বিদ্যালয়]
+  madrasa:
+    categories: []
+    words: {en: [madrasa, madrasah, madrassa], bn: [মাদ্রাসা, মাদরাসা]}
+    name_words: [madrasa, madrasah, madrassa, madrasha, মাদ্রাসা, মাদরাসা]
+  education:
+    generic: true
+    categories: [place_of_learning, education, educational_service, tutoring_service, educational_facility, campus_building,
+                 research_institute]
+    words: {en: [education, institute, coaching, academy], bn: [শিক্ষা, ইনস্টিটিউট, কোচিং]}
+  library:
+    categories: [library]
+    words: {en: [library], bn: [লাইব্রেরি, গ্রন্থাগার, পাঠাগার]}
+  hospital:
+    categories: [hospital]
+    words: {en: [hospital, medical], bn: [হাসপাতাল, মেডিকেল]}
+    name_words: [hospital, হাসপাতাল]
+    # "Khulna Medical College & Hospital" is filed as a school: a hospital in the name wins over these
+    beats: [school, college, education, clinic]
+  clinic:
+    categories: [dental_clinic, health_care, outpatient_care_facility, specialized_health_care, medical_service,
+                 physical_medicine_and_rehabilitation, vision_or_eye_care_clinic, reproductive_perinatal_and_womens_care,
+                 behavioral_or_mental_health_clinic, specialized_medical_facility, surgery, pediatric_clinic,
+                 primary_care_or_general_clinic, emergency_or_urgent_care_facility, walk_in_clinic, emergency_department,
+                 complementary_and_alternative_medicine]
+    words: {en: [clinic, doctor, dental, dentist], bn: [ক্লিনিক, ডাক্তার, চেম্বার]}
+    name_words: [clinic, ক্লিনিক]
+  diagnostic:
+    categories: [diagnostics_imaging_or_lab_service]
+    words: {en: [diagnostic, lab, test], bn: [ডায়াগনস্টিক, ডায়াগনস্টিক, ল্যাব]}
+    name_words: [diagnostic, diagnostics, ডায়াগনস্টিক, ডায়াগনস্টিক]
+  pharmacy:
+    categories: [pharmacy_and_drug_store]
+    words: {en: [pharmacy, medicine, drug store, chemist], bn: [ফার্মেসি, ফার্মেসী, ঔষধ, ওষুধ]}
+    name_words: [pharmacy, pharma, ফার্মেসি, ফার্মেসী]
+  bank:
+    categories: [bank_or_credit_union, financial_service]
+    words: {en: [bank], bn: [ব্যাংক, ব্যাংক]}
+    name_words: [bank, ব্যাংক, ব্যাংক]
+  atm:
+    categories: [atm]
+    words: {en: [atm, cash machine, booth], bn: [এটিএম]}
+    name_words: [atm, এটিএম]
+  market:
+    categories: [market, farmers_market]
+    words: {en: [market, bazar, bazaar, haat, hat], bn: [বাজার, হাট, মার্কেট]}
+    name_words: [market, bazar, bazaar, haat, বাজার, হাট, মার্কেট]
+  shopping_mall:
+    categories: [shopping_mall, department_store, superstore, warehouse_club_store]
+    words: {en: [mall, shopping mall, shopping centre, shopping center, plaza], bn: [শপিং মল, শপিং কমপ্লেক্স, বিপণী]}
+    name_words: [mall, shopping complex, shopping centre, shopping center, শপিং মল, শপিং কমপ্লেক্স]
+  shop:
+    generic: true
+    categories: [fashion_and_apparel_store, electronics_store, shopping, hardware_home_and_garden_store, food_and_beverage_store,
+                 vehicle_parts_store, books_music_and_video_store, specialty_store, sporting_goods_store, flowers_and_gifts_store,
+                 personal_care_and_beauty_store, animal_and_pet_store, arts_crafts_and_hobby_store, convenience_store,
+                 musical_instrument_and_pro_audio_store, office_supply_store, toys_and_games_store, second_hand_store,
+                 discount_store, auto_dealer, vehicle_dealer]
+    words: {en: [shop, store], bn: [দোকান, স্টোর]}
+  mosque:
+    categories: [muslim_place_of_worship]
+    words: {en: [mosque, masjid], bn: [মসজিদ]}
+    name_words: [mosque, masjid, মসজিদ]
+  temple:
+    categories: [hindu_place_of_worship]
+    words: {en: [temple, mandir], bn: [মন্দির]}
+    name_words: [temple, mandir, মন্দির]
+  church:
+    categories: [christian_place_of_worship]
+    words: {en: [church], bn: [গির্জা, চার্চ]}
+    name_words: [church, গির্জা, চার্চ]
+  pagoda:
+    categories: [buddhist_place_of_worship]
+    words: {en: [pagoda, kyang, buddhist temple, vihara], bn: [প্যাগোডা, বৌদ্ধ বিহার, কেয়াং]}
+    name_words: [pagoda, kyang, vihara, bihar, প্যাগোডা, বিহার, কেয়াং]
+  place_of_worship:
+    generic: true
+    categories: [place_of_worship, jewish_place_of_worship, religious_organization]
+    words: {en: [place of worship], bn: [উপাসনালয়]}
+  park:
+    categories: [park, playground, garden, public_plaza, dog_park, national_park, nature_reserve]
+    words: {en: [park, garden, playground], bn: [পার্ক, উদ্যান, বাগান]}
+    name_words: [park, উদ্যান, পার্ক]
+  government_office:
+    categories: [government_office, community_and_government, government_department, courthouse, embassy, public_utility,
+                 natural_gas_utility_provider, electric_utility_provider, water_utility_provider]
+    words: {en: [office, government, court, dc office, upazila office, embassy], bn: [অফিস, কার্যালয়, সরকারি, আদালত, দপ্তর]}
+  police:
+    categories: [police_station, public_safety_service]
+    words: {en: [police, thana, police station], bn: [থানা, পুলিশ]}
+    name_words: [police, পুলিশ]
+  fire_station:
+    categories: [fire_station]
+    words: {en: [fire station, fire service], bn: [ফায়ার সার্ভিস, ফায়ার সার্ভিস, দমকল]}
+  post_office:
+    categories: []
+    words: {en: [post office], bn: [ডাকঘর, পোস্ট অফিস]}
+    name_words: [post office, ডাকঘর, পোস্ট অফিস]
+  bus_station:
+    categories: []
+    words: {en: [bus stand, bus station, bus terminal, bus counter], bn: [বাস স্ট্যান্ড, বাসস্ট্যান্ড, বাস টার্মিনাল, কাউন্টার]}
+    name_words: [bus stand, bus station, bus terminal, bus counter, বাস স্ট্যান্ড, বাসস্ট্যান্ড, বাস টার্মিনাল]
+  train_station:
+    categories: [train_station, rail_facility_or_service]
+    words: {en: [railway station, train station, rail station], bn: [রেলস্টেশন, রেল স্টেশন, রেলওয়ে স্টেশন]}
+    name_words: [railway station, rail station, train station, রেলস্টেশন, রেল স্টেশন, রেলওয়ে স্টেশন]
+  airport:
+    categories: [airport, air_transport_facility_or_service]
+    words: {en: [airport], bn: [বিমানবন্দর]}
+  ferry_terminal:
+    categories: [marina, pier]
+    words: {en: [ghat, launch ghat, ferry, launch terminal], bn: [ঘাট, লঞ্চ ঘাট, ফেরি ঘাট]}
+    name_words: [ghat, launch, ferry, ঘাট, লঞ্চ, ফেরি]
+  transit:
+    generic: true
+    categories: [public_transit_facility_or_service, travel_and_transportation, taxi_or_ride_share_service, parking]
+    words: {en: [transport, parking], bn: [পরিবহন, পার্কিং]}
+  fuel:
+    categories: [gas_station, fueling_station, ev_charging_station]
+    words: {en: [petrol pump, filling station, fuel, cng station, gas station], bn: [পেট্রোল পাম্প, ফিলিং স্টেশন]}
+    name_words: [filling station, petrol pump, ফিলিং স্টেশন]
+  historic_site:
+    categories: [historic_site, monument, fort, castle, military_site, sculpture_statue, lighthouse]
+    words: {en: [historic, monument, fort, memorial, shaheed minar], bn: [ঐতিহাসিক, স্মৃতিসৌধ, শহীদ মিনার, দুর্গ]}
+  museum:
+    categories: [museum, art_gallery, planetarium, cultural_center, aquarium, zoo]
+    words: {en: [museum, gallery, zoo, cultural centre], bn: [জাদুঘর, গ্যালারি, চিড়িয়াখানা]}
+    name_words: [museum, জাদুঘর]
+  nature:
+    categories: [river, lake, beach, mountain, waterfall, forest, island, canal, hot_springs, land_feature, geographic_entities,
+                 campground, recreational_trail_or_path]
+    words: {en: [river, lake, beach, hill, waterfall, forest, island], bn: [নদী, লেক, সৈকত, পাহাড়, ঝর্ণা, বন, দ্বীপ]}
+  stadium:
+    categories: [stadium_arena, sport_or_fitness_facility, gym, fitness_studio, sport_field, sport_court, swimming_pool, golf_course,
+                 skate_park, skating_rink, sport_league, sport_team, sports_and_recreation, sport_or_recreation_club]
+    words: {en: [stadium, playground, field, gym, sports, club], bn: [স্টেডিয়াম, খেলার মাঠ, মাঠ, জিম]}
+    name_words: [stadium, স্টেডিয়াম]
+  entertainment:
+    categories: [movie_theater, music_venue, theatre_venue, performing_arts_venue, event_venue, amusement_park, arcade, gaming_venue,
+                 comedy_club, fairgrounds, festival_venue, dance_club, nightlife_venue, casino, adult_entertainment_venue,
+                 arts_and_entertainment, amusement_attraction, animal_attraction, science_attraction, street_art, arts_and_crafts_space]
+    words: {en: [cinema, theatre, theater, amusement park, community centre, convention hall], bn: [সিনেমা হল, থিয়েটার, বিনোদন]}
+  community:
+    generic: true
+    categories: [community_center, civic_organization, political_organization, youth_organization, labor_union, family_service,
+                 senior_living_facility, food_bank, social_or_community_service]
+    words: {en: [community centre, club, association, ngo], bn: [ক্লাব, সমিতি]}
+  office:
+    generic: true
+    categories: [corporate_or_business_office, professional_service, b2b_service, b2b_office_and_professional_service,
+                 b2b_transportation_and_storage_service, b2b_industrial_and_machine_service, b2b_energy_and_utility_service,
+                 b2b_science_and_technology_service, attorney_or_law_firm, legal_service, real_estate_service, media_service,
+                 design_service, telecommunications_service, technical_service, printing_service, radio_station, television_station,
+                 building_or_construction_service, environmental_or_ecological_service, security_service, housing_or_property_service]
+    words: {en: [office, company], bn: [অফিস, কোম্পানি]}
+  service:
+    generic: true
+    categories: [personal_or_beauty_service, home_service, automotive_service, vehicle_service, laundry_service, rental_service,
+                 travel_service, event_or_party_service, wellness_service, shipping_or_delivery_service, storage_facility,
+                 animal_or_pet_service, astrological_advising, psychic_advising, recreational_equipment_rental]
+    words: {en: [service, salon, parlour, courier, repair], bn: [সার্ভিস, পার্লার, কুরিয়ার]}
+  business:
+    generic: true
+    categories: [manufacturer, industrial_facility_or_service, farm, agricultural_service, wholesaler, supplier_or_distributor]
+    words: {en: [factory, industry, farm], bn: [কারখানা, শিল্প, খামার]}
+  bridge:
+    categories: [bridge, built_feature]
+    words: {en: [bridge], bn: [সেতু, ব্রিজ]}
+  cemetery:
+    categories: [cemetery]
+    words: {en: [graveyard, cemetery], bn: [কবরস্থান, শ্মশান]}
+  other:
+    generic: true
+    categories: [jail_or_prison, public_fountain, public_restroom]
+    words: {en: [], bn: []}

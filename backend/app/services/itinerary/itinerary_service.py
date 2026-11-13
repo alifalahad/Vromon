@@ -31,6 +31,7 @@ from app.models.models import (
     Itinerary, ItineraryItem,
 )
 from app.services.recommendation.recommendation_service import RecommendationService
+from app.services import meals
 from app.services.routing import ROADS, point_of
 from app.services.conditions.service import outdoor_place, planning_weather, wet_during
 from app.services.itinerary.trip_rules import (
@@ -58,6 +59,17 @@ MEAL_SLOTS = {
     "Lunch": ("12:30", "13:30", 60),
     "Dinner": ("19:00", "20:00", 60),
 }
+
+
+# Where a packed lunch is nicest: outdoors with a view (step 3)
+NICE_FOR_LUNCH = {"park", "parks", "scenic", "beach", "nature", "garden", "lake", "river", "viewpoint", "picnic"}
+
+
+def _nice_for_lunch(place) -> bool:
+    if place is None or not getattr(place, "name", None):
+        return False
+    words = {str(getattr(place, "category", "") or "").lower(), *(str(t).lower() for t in (getattr(place, "tags", None) or []))}
+    return bool(words & NICE_FOR_LUNCH)
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -157,6 +169,17 @@ def _travel_minutes(p1, p2, mode: Optional[str] = None) -> Tuple[float, float]:
     return t.minutes, t.km
 
 
+def way_back_minutes(items: Iterable[ItineraryItem], end) -> float:
+    """Minutes from the day's last stop or meal with a place back to where the traveller sleeps (D3)."""
+    if end is None or point_of(end) is None:
+        return 0.0
+    for item in sorted(items, key=lambda i: (_time_to_minutes(i.start_time), i.order_index), reverse=True):
+        point = item.place if item.item_type == "activity" else getattr(item, "restaurant", None) if item.item_type == "meal" else None
+        if point is not None and point_of(point) is not None:
+            return _travel_minutes(point, end)[0]
+    return 0.0
+
+
 class ItineraryService:
     """
     Generates a multi-day itinerary for a trip.
@@ -166,11 +189,14 @@ class ItineraryService:
     def __init__(self):
         self.recommender = RecommendationService()
 
-    def generate(self, db: Session, trip: Trip) -> List[Itinerary]:
-        """Generate and persist day-by-day itineraries."""
-        rules = load_rules(db, trip)
+    def generate(self, db: Session, trip: Trip, meal_overrides: Optional[dict] = None) -> List[Itinerary]:
+        """Generate and persist day-by-day itineraries (`meal_overrides`: the replaced days' own meal plans)."""
+        from app.services import stays
+        rules = load_rules(db, trip, meal_overrides)
         candidates = self.ranked(db, trip, rules)
-        hotel = self._pick_hotel(db, trip)
+        # Where each day starts and ends (the trip's stays; the hotel Vromon picks is written down first)
+        stays.freeze(db, trip)
+        hotel = stays.bases(db, trip)
         # Must-sees with a time are fixed first; the days are built around them
         anchors = place_timed(rules, {p.id: p for p, _, _ in candidates if p.id in rules.must_ids()}, hotel)
         wet = planning_weather(db, trip)
@@ -279,9 +305,12 @@ class ItineraryService:
         `wet` are the hours rain is likely (from the forecast): an outdoor place goes there
         only when nothing else fits.
         """
+        from app.services.stays import end_of, start_of
         cons: TripConstraint = trip.constraints
         rules = rules or load_rules(db, trip)
         day_start, day_end = rules.window(day_number)
+        # The day starts where the traveller slept and ends back where they sleep tonight
+        start_base, end_base = start_of(hotel, day_number), end_of(hotel, day_number)
         max_activities = rules.stops_per_day
         daily_budget_cap = cons.max_daily_budget if cons else 0.0
         keep = list(keep)
@@ -296,26 +325,47 @@ class ItineraryService:
         blocks += [Block(_time_to_minutes(k.start_time), _time_to_minutes(k.end_time), k.place or k.restaurant, "kept") for k in keep]
         blocks += [Block(a.start, a.end, a.place, "must") for a in anchors]
 
-        # Meals: at their usual times, around the fixed parts; a meal that's kept isn't planned again
-        kept_meals = {k.title.split(" at ")[0] for k in keep if k.item_type == "meal"}
+        # Meals: at their usual times, around the fixed parts; a meal that's kept isn't planned again.
+        # Each is at a restaurant (the default), your own food or where you stay (step 3, services/meals.py)
+        kept_meals = {meals.slot_of(k) for k in keep if k.item_type == "meal"}
+        source = lambda m: rules.meal_source(day_number, m)  # noqa: E731
+        own_cost = rules.own_cost(day_number)
         starts = {m: s for m, s in meal_starts(rules, day_number, blocks).items() if s is not None and m not in kept_meals}
         seed = _meal_seed(trip, day_number)
-        rests = {m: self._pick_meal(db, trip.destination, m, seed, s) for m, s in starts.items()}
+        rests = {m: self._pick_meal(db, trip.destination, m, seed, s) for m, s in starts.items() if source(m) == "restaurant"}
         # With a daily cap, the meals must fit within it: pick cheaper ones (an equal share each)
         if daily_budget_cap > 0 and rests and sum(_meal_cost(r) for r in rests.values()) > daily_budget_cap:
             share = daily_budget_cap / len(rests)
-            rests = {m: self._pick_meal(db, trip.destination, m, seed, starts[m], max_cost=share) for m in starts}
+            rests = {m: self._pick_meal(db, trip.destination, m, seed, starts[m], max_cost=share) for m in rests}
+        # "Finish by" means back where you sleep (D3): dinner ends early enough for the way back
+        if starts.get("Dinner") is not None and rests.get("Dinner") is not None and end_base is not None:
+            latest = day_end - MEAL_SLOTS["Dinner"][2] - travel_min(rests["Dinner"], end_base)
+            if starts["Dinner"] > latest >= rules.activity_start(day_number):
+                starts["Dinner"] = latest
+                if not restaurant_open(rests["Dinner"], latest, MEAL_SLOTS["Dinner"][2]):
+                    rests["Dinner"] = self._pick_meal(db, trip.destination, "Dinner", seed, latest,
+                                                      max_cost=rests["Dinner"].average_meal_cost)
         # Lunch moves with the day (it follows the morning's visits, 12:00-14:30), unless a
         # must-see, busy time or kept stop is around midday: then it keeps its free slot
+        lunch_len = meals.minutes(source("Lunch"))
+        own_lunch = "Lunch" in starts and source("Lunch") == "own"
         lunch_moves = "Lunch" in starts and not any(
-            b.start < LUNCH_STRETCH[1] + MEAL_SLOTS["Lunch"][2] and LUNCH_STRETCH[0] < b.end for b in blocks
+            b.start < LUNCH_STRETCH[1] + lunch_len and LUNCH_STRETCH[0] < b.end for b in blocks
         )
-        items: List[ItineraryItem] = [
-            self._make_meal_item(m, rests[m], starts[m]) for m in starts if not (m == "Lunch" and lunch_moves)
-        ]
+
+        def fixed_meal(m: str) -> ItineraryItem:
+            if source(m) == "own":
+                return meals.own_item(m, starts[m], own_cost)
+            return self._make_meal_item(m, rests[m], starts[m])
+
+        items: List[ItineraryItem] = [fixed_meal(m) for m in starts if not (m == "Lunch" and lunch_moves)]
         day_cost = sum(i.cost for i in items) + sum(k.cost or 0.0 for k in keep)
         if lunch_moves:
-            day_cost += _meal_cost(rests["Lunch"])
+            day_cost += own_cost if own_lunch else _meal_cost(rests["Lunch"])
+        # Your own dinner comes after the last stop, before the way back: the day keeps room for it
+        own_dinner = source("Dinner") == "own" and "Dinner" not in kept_meals
+        if own_dinner:
+            day_cost += own_cost
         activity_count = sum(1 for k in keep if k.item_type == "activity")
 
         # Must-sees with a time, unless the daily cap can't take them (then they're reported, not forced)
@@ -332,7 +382,7 @@ class ItineraryService:
             day_cost += a.place.estimated_cost
             activity_count += 1
         blocks += [
-            Block(starts[m], starts[m] + MEAL_SLOTS[m][2], None, "meal") for m in starts if not (m == "Lunch" and lunch_moves)
+            Block(starts[m], starts[m] + meals.minutes(source(m)), None, "meal") for m in starts if not (m == "Lunch" and lunch_moves)
         ]
 
         # Bias toward day theme. The bonus only orders the candidates; the stored score
@@ -346,21 +396,36 @@ class ItineraryService:
         # Must-see places are tried first (the theme bonus must not push them out of the day)
         themed.sort(key=lambda x: (x[0].id in must_ids, x[1]), reverse=True)
 
+        def add_lunch(at: int) -> int:
+            if own_lunch:
+                # A packed lunch where the traveller is: at the stop they've just seen, no restaurant leg
+                here = last_point if getattr(last_point, "name", None) and last_point is not start_base else None
+                items.append(meals.own_item("Lunch", at, own_cost, at=here))
+                return at + meals.OWN_MINUTES
+            return self._add_lunch(db, trip, items, rests["Lunch"], at, seed)
+
         # Fill each gap between the fixed parts, in time order, with the best places that fit
         cursor = day_start
-        last_point = hotel
-        for block in sorted(blocks, key=lambda b: b.start) + [Block(day_end, day_end, None, "end")]:
+        last_point = start_base
+        nice_only = False      # a packed lunch looks for a park, a view or a beach to eat at first
+        nice_tried = False
+        # The end of the day is back at the stay: the last visit leaves time for the way there (and your own dinner)
+        end_block = Block(day_end - (meals.OWN_MINUTES if own_dinner else 0), day_end, end_base, "end")
+        for block in sorted(blocks, key=lambda b: b.start) + [end_block]:
             gap_end = min(block.start, day_end)
             while True:
                 lunch_at = max(cursor, LUNCH_RANGE[0])
-                lunch_fits = lunch_moves and lunch_at <= LUNCH_STRETCH[1] and lunch_at + MEAL_SLOTS["Lunch"][2] <= gap_end
-                if lunch_fits and cursor >= LUNCH_RANGE[0]:
-                    cursor = self._add_lunch(db, trip, items, rests["Lunch"], lunch_at, seed)
-                    lunch_moves = False
-                    continue
+                lunch_fits = lunch_moves and lunch_at <= LUNCH_STRETCH[1] and lunch_at + lunch_len <= gap_end
+                if lunch_fits and cursor >= LUNCH_RANGE[0] and not nice_only:
+                    if own_lunch and not nice_tried and not _nice_for_lunch(last_point) and activity_count < max_activities:
+                        nice_tried = nice_only = True
+                    else:
+                        cursor = add_lunch(lunch_at)
+                        lunch_moves = False
+                        continue
                 if activity_count >= max_activities:
                     if lunch_fits:
-                        cursor = self._add_lunch(db, trip, items, rests["Lunch"], lunch_at, seed)
+                        cursor = add_lunch(lunch_at)
                         lunch_moves = False
                     break
                 chosen = None
@@ -374,9 +439,14 @@ class ItineraryService:
                     arrive_min = max(cursor + travel_min(last_point, place), open_min)
                     finish_min = arrive_min + visit_min
                     limit = min(close_min, gap_end - (travel_min(place, block.point) if block.point is not None else 0))
-                    if lunch_moves and arrive_min < LUNCH_RANGE[0]:
+                    if nice_only:
+                        # one more stop before a packed lunch, if it's a nice place to eat and lunch still fits by 14:30
+                        if not _nice_for_lunch(place):
+                            continue
+                        limit = min(limit, LUNCH_STRETCH[1], gap_end - lunch_len)
+                    elif lunch_moves and arrive_min < LUNCH_RANGE[0]:
                         # a morning visit must leave time for lunch by 14:30
-                        limit = min(limit, LUNCH_STRETCH[1], gap_end - MEAL_SLOTS["Lunch"][2])
+                        limit = min(limit, LUNCH_STRETCH[1], gap_end - lunch_len)
                     elif lunch_moves:
                         continue  # lunch comes first
                     if finish_min > limit:
@@ -392,9 +462,13 @@ class ItineraryService:
                     break
                 if chosen is None and rained_out is not None:
                     chosen = rained_out
+                if nice_only:
+                    nice_only = False
+                    if chosen is None:
+                        continue  # no nice stop fits: lunch where the traveller is
                 if chosen is None:
                     if lunch_fits:
-                        cursor = self._add_lunch(db, trip, items, rests["Lunch"], lunch_at, seed)
+                        cursor = add_lunch(lunch_at)
                         lunch_moves = False
                         continue
                     break
@@ -411,22 +485,45 @@ class ItineraryService:
             if block.point is not None:
                 last_point = block.point
 
-        # Order and travel legs (between consecutive activities; the first leg from the hotel)
+        # Your own dinner: after the last stop (not before 17:30 when the day has room), eaten there
+        if own_dinner:
+            visits = [i for i in items if i.item_type == "activity"] + [k for k in keep if k.item_type == "activity"]
+            last = max(visits, key=lambda i: _time_to_minutes(i.end_time), default=None)
+            timed = [_time_to_minutes(i.end_time) for i in items + list(keep)]
+            done = max(timed, default=day_start)
+            back = travel_min(last.place, end_base) if last is not None and end_base is not None else 0
+            latest = day_end - meals.OWN_MINUTES - back
+            at = max(done, min(max(done, meals.OWN_EARLIEST["Dinner"]), latest))
+            items.append(meals.own_item("Dinner", at, own_cost, at=last.place if last is not None else None))
+
+        # Order and travel legs (between consecutive activities; the first leg from the stay, and the way back)
         items.sort(key=lambda x: _time_to_minutes(x.start_time))
-        total_travel = 0.0
+        total_travel = way_back_minutes(items, end_base)
         last_activity: Optional[ItineraryItem] = None
         for i, item in enumerate(items):
             item.order_index = i
             if item.item_type != "activity":
                 continue
             if last_activity is None:
-                total_travel += _travel_minutes(hotel, item.place)[0] if hotel is not None else 0.0
+                total_travel += _travel_minutes(start_base, item.place)[0] if start_base is not None else 0.0
             else:
                 minutes, km = _travel_minutes(last_activity.place, item.place)
                 total_travel += minutes
                 last_activity.travel_time_to_next = round(minutes, 1)
                 last_activity.distance_to_next = round(km, 1)
             last_activity = item
+
+        # Breakfast where you stay before leaving, dinner there after the way back (outside the day)
+        can_breakfast, can_dine = meals.stay_days(rules, day_number)
+        stay_meals = [
+            m for m in meals.place_stay_meals(items + list(keep), rules.meals.get(day_number) or {}, start_base, end_base,
+                                              breakfast=can_breakfast, dinner=can_dine)
+            if meals.slot_of(m) not in kept_meals
+        ]
+        if stay_meals:
+            items = sorted(items + stay_meals, key=lambda x: _time_to_minutes(x.start_time))
+            for i, item in enumerate(items):
+                item.order_index = i
 
         itinerary = Itinerary(
             trip_id=trip.id,
@@ -436,6 +533,7 @@ class ItineraryService:
             total_cost=round(day_cost, 2),
             total_travel_time=round(total_travel, 1),
         )
+        itinerary.meals = rules.meal_overrides.get(day_number)
         itinerary.items = items
         return itinerary
 
@@ -475,24 +573,9 @@ class ItineraryService:
     # ------------------------------------------------------------------
 
     def _pick_hotel(self, db: Session, trip: Trip) -> Optional[Hotel]:
-        """The hotel the traveller chose, else the best-known one at their accommodation level."""
-        pref = trip.preference
-        if pref is not None and pref.hotel_id is not None:
-            chosen = db.get(Hotel, pref.hotel_id)
-            if chosen is not None and chosen.is_active and chosen.destination_name == trip.destination:
-                return chosen
-        cat = pref.accommodation_preference if pref else "Standard"
-        # One whose price is known first (imported hotels often have none), then the first listed
-        order = (Hotel.price_known.desc(), Hotel.id)
-        hotel = (
-            db.query(Hotel)
-            .filter(Hotel.destination_name == trip.destination, Hotel.category == cat, Hotel.is_active == True)
-            .order_by(*order)
-            .first()
-        )
-        if not hotel:
-            hotel = db.query(Hotel).filter(Hotel.destination_name == trip.destination, Hotel.is_active == True).order_by(*order).first()
-        return hotel
+        """The hotel the traveller chose, else the best one Vromon knows (stays.pick_hotel, decision D11)."""
+        from app.services.stays import pick_hotel
+        return pick_hotel(db, trip)
 
     def _pick_meal(
         self,
@@ -542,6 +625,7 @@ class ItineraryService:
         cost = _meal_cost(restaurant)
         item = ItineraryItem(
             item_type="meal",
+            meal_source="restaurant",
             restaurant_id=restaurant.id if restaurant else None,
             title=f"{meal_name}" + (f" at {restaurant.name}" if restaurant else ""),
             start_time=_minutes_to_time(start_min),
@@ -554,6 +638,8 @@ class ItineraryService:
             order_index=0,
         )
         item.recommendation_reasons = [f"Meal break \u2014 {meal_name}"]
+        if restaurant is not None:
+            item.restaurant = restaurant
         return item
 
     def _day_theme_interests(self, trip: Trip, day_number: int) -> List[str]:

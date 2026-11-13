@@ -32,6 +32,12 @@ import { BudgetCard } from '../../src/features/trips/new/BudgetCard';
 import { Building, type BuildPhase } from '../../src/features/trips/new/Building';
 import { currencyFor, formatMoney, fromTaka, roundShown } from '../../src/features/trips/new/currency';
 import { InterestsRow, InterestsSheet } from '../../src/features/trips/new/InterestsSheet';
+import { StaysRow } from '../../src/features/trips/stays/StaysRow';
+import { offerStayMeals, stayMeals } from '../../src/features/trips/meals/meals';
+import { MealsRow, StayMealsOffer } from '../../src/features/trips/meals/MealsRow';
+import { MealsSheet } from '../../src/features/trips/meals/MealsSheet';
+import { StaysSheet } from '../../src/features/trips/stays/StaysSheet';
+import { freeNights, freeNightSaving, nightsOf } from '../../src/features/trips/stays/stays';
 import { MustDosEditor } from '../../src/features/trips/new/MustDosEditor';
 import {
   addMustSee,
@@ -102,6 +108,8 @@ export default function NewTripScreen() {
   const [showError, setShowError] = useState(false);
   const [timeField, setTimeField] = useState<TimeField | null>(null);
   const [pickingInterests, setPickingInterests] = useState(false);
+  const [pickingStays, setPickingStays] = useState(false);
+  const [pickingMeals, setPickingMeals] = useState(false);
   // While typing (dates, a city), the footer steps aside so what's typed and the calendar under it fit
   const [keyboardUp, setKeyboardUp] = useState(false);
   useEffect(() => {
@@ -140,6 +148,9 @@ export default function NewTripScreen() {
 
   const days = tripLength(trip);
   const nights = days - 1;
+  // A free night (family or friends, day trips) takes a night at the budget's level off the suggestion
+  const freeNightPrice = freeNightSaving(hotels.data ?? [], hotelLevel(trip), 1);
+  if (freeNightPrice !== trip.freeNightPrice) setTrip((cur) => update(cur, { freeNightPrice }));
   const set = (change: Partial<NewTrip>) => setTrip((cur) => update(cur, change));
   // Amounts in the trip's currency (the budget is kept in taka): today's rate, or taka until it's known
   const fx = useQuery({ queryKey: ['fx-rates'], queryFn: () => fxApi.rates(), staleTime: 60 * 60_000, enabled: trip.currency !== 'BDT' });
@@ -591,6 +602,30 @@ export default function NewTripScreen() {
                 </View>
               </View>
 
+              {nightsOf(days) > 0 ? (
+                <>
+                  <Text style={styles.h2} accessibilityRole="header">
+                    {t('stays.title')}
+                  </Text>
+                  <StaysRow picks={trip.stayPicks} onPress={() => setPickingStays(true)} />
+                </>
+              ) : null}
+
+              <Text style={styles.h2} accessibilityRole="header">
+                {t('meals.title')}
+              </Text>
+              {/* Staying with family: breakfast and dinner there? (offered once, one tap, never automatic) */}
+              {!trip.mealsOffered && trip.stayPicks.some((p) => p.kind === 'home') && offerStayMeals(trip.meals) ? (
+                <StayMealsOffer
+                  onYes={() => {
+                    set({ meals: stayMeals(trip.meals), mealsOffered: true });
+                    haptics.success();
+                  }}
+                  onNo={() => set({ mealsOffered: true })}
+                />
+              ) : null}
+              <MealsRow plan={trip.meals} onPress={() => setPickingMeals(true)} />
+
               <View style={styles.h2Row}>
                 <Text style={styles.h2} accessibilityRole="header">
                   {t('newTrip.budget')}
@@ -608,7 +643,7 @@ export default function NewTripScreen() {
                 byHand={trip.budgetByHand}
                 travellers={trip.travellers}
                 currency={trip.currency}
-                hotelText={hotelLine(hotels.data, hotelLevel(trip), t, f)}
+                hotelText={stayLine(trip.stayPicks, hotelLine(hotels.data, hotelLevel(trip), t, f), t, f)}
                 onBudget={(budget) => set({ budget, budgetByHand: true })}
                 onTier={(tier) => set({ tier, budgetByHand: false })}
                 onCurrency={(currency) => set({ currency, currencyByHand: true })}
@@ -686,6 +721,34 @@ export default function NewTripScreen() {
           } else set({ [timeField]: value });
         }}
       />
+      <StaysSheet
+        visible={pickingStays}
+        nights={nightsOf(days)}
+        startDate={trip.start}
+        destination={destination}
+        picks={trip.stayPicks}
+        allowAuto
+        onClose={() => setPickingStays(false)}
+        onSave={(stayPicks) => {
+          set({ stayPicks });
+          setPickingStays(false);
+          haptics.success();
+        }}
+      />
+      <MealsSheet
+        visible={pickingMeals}
+        title={t('meals.title')}
+        plan={trip.meals}
+        currency={trip.currency}
+        stayBreakfast={nightsOf(days) > 0}
+        stayDinner={nightsOf(days) > 0}
+        onClose={() => setPickingMeals(false)}
+        onSave={(meals) => {
+          set({ meals, mealsOffered: true });
+          setPickingMeals(false);
+          haptics.success();
+        }}
+      />
       <InterestsSheet
         visible={pickingInterests}
         value={trip.interests}
@@ -750,6 +813,14 @@ function timeSheetFor(field: TimeField | null, trip: NewTrip, t: TFunction) {
     default:
       return { title: '', times: [], none: undefined };
   }
+}
+
+/** The budget card's stay line: the hotels' price range, or that some or all nights cost nothing. */
+function stayLine(picks: NewTrip['stayPicks'], hotels: string | null, t: TFunction, f: ReturnType<typeof usePlanFormat>): string | null {
+  const free = freeNights(picks);
+  if (!free) return hotels;
+  if (free === picks.length) return t('stays.noCostLine');
+  return [hotels, t('stays.freeNights', { count: free, n: f.n(free) })].filter(Boolean).join(' · ');
 }
 
 /** "hotels around ৳2,800–4,200 a night", from the destination's hotels at that level. */

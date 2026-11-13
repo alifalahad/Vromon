@@ -5,12 +5,13 @@
  * "Leave by" = the next stop's start − the travel time − the usual traffic then:
  *   - from where you are, when you turned location on: the straight line × 1.3
  *     at local speeds, worked out on the phone (your location is never sent);
- *   - otherwise from the stop before (the plan's road time) or from your hotel.
+ *   - otherwise from the stop before (the plan's road time) or from where you stay (the day's start:
+ *     docs/trip-upgrades, step 2; the server's road time from it when it has one).
  * Traffic is the usual pattern of Bangladesh towns (slow 08:00–10:00 ×1.3 and
  * 17:00–20:00 ×1.4), not live, as on the Conditions screen.
  */
 
-import type { ItineraryDay, ItineraryItem, TravelMode } from '../../../types';
+import type { BaseLeg, ItineraryDay, ItineraryItem, TravelMode } from '../../../types';
 
 export type Point = { lat: number; lon: number };
 
@@ -23,6 +24,22 @@ export const m2t = (min: number) => {
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 };
 export const minuteOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
+
+const MODES: readonly TravelMode[] = ['walk', 'rickshaw', 'cng', 'car'];
+
+/** Where the day starts: its stay, else the trip's hotel (older plans) */
+export function dayStart(day: ItineraryDay | null | undefined, hotel: Point | null): Point | null {
+  const b = day?.start_base;
+  return b && b.latitude != null && b.longitude != null ? { lat: b.latitude, lon: b.longitude } : hotel;
+}
+
+/** Back at the stay after the day's last stop: when, and how long the way back takes. null without one. */
+export function backAt(day: ItineraryDay | null | undefined): { at: string; minutes: number; cost: number } | null {
+  const leg = day?.return_leg;
+  if (!day || !leg || !day.items.length) return null;
+  const end = Math.max(...day.items.map((i) => t2m(i.end_time)));
+  return { at: m2t(end + leg.minutes), minutes: Math.round(leg.minutes), cost: leg.cost };
+}
 
 export const pointOf = (item: ItineraryItem): Point | null => {
   const p = item.place ?? item.restaurant;
@@ -131,7 +148,7 @@ export interface LeaveBy {
  * When to leave for `next`. With `here` (location on) from where you are;
  * otherwise from the stop before it (the plan's travel), or the hotel at the start of the day.
  */
-export function leaveBy(state: TodayState, hotel: Point | null, nearHere: Point | null): LeaveBy | null {
+export function leaveBy(state: TodayState, hotel: Point | null, nearHere: Point | null, startLeg?: BaseLeg | null): LeaveBy | null {
   let here = nearHere;
   const { next, previous } = state;
   const to = next ? pointOf(next) : null;
@@ -166,6 +183,10 @@ export function leaveBy(state: TodayState, hotel: Point | null, nearHere: Point 
     // A meal before it (it's on the way): from there
     const e = estimate(pointOf(previous)!, to);
     travel = { ...e, from: 'previous', source: 'estimate' };
+  } else if (startLeg && startLeg.to_item_id === next.id && startLeg.minutes > 0) {
+    // The day's first stop: the server's way from the stay
+    const mode: TravelMode = MODES.includes(startLeg.mode as TravelMode) ? (startLeg.mode as TravelMode) : 'cng';
+    travel = { minutes: startLeg.minutes, km: startLeg.km || null, mode, from: 'hotel', source: 'estimate' };
   } else if (hotel) {
     const e = estimate(hotel, to);
     travel = { ...e, from: 'hotel', source: 'estimate' };
@@ -198,7 +219,7 @@ export function leaveTimes(day: ItineraryDay, hotel: Point | null): { item: Itin
     if (!pointOf(item)) return;
     const previous = [...items.slice(0, i)].reverse().find((p) => pointOf(p)) ?? null;
     const state: TodayState = { current: null, next: item, previous, rest: [], done: [], phase: 'during' };
-    const leave = leaveBy(state, hotel, null);
+    const leave = leaveBy(state, dayStart(day, hotel), null, day.start_leg);
     // Walking next door, or a meal at the same place: nothing to remind
     if (leave && leave.minutes >= 5) out.push({ item, leave });
   });

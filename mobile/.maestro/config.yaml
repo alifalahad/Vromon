@@ -13,7 +13,7 @@ executionOrder:
   flowsOrder:
     - 00 Sign in with a test account
     - 01 Four tabs in order, no Passport
-    - 02 Mark Bangladesh visited (Countries view)
+    - 02 Mark Bangladesh visited
     - 03 Apply the Rustic theme
     - 04 Add a friend by code, the friend accepts, compare maps
     - 05 Plan a trip with must-sees, fix one that can't fit, see the plan

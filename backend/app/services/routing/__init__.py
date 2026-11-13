@@ -8,6 +8,7 @@ __all__ = ["ROADS", "Road", "RoadNetwork", "RoutingUnavailable", "Travel", "poin
 def prepare_destination(db, destination: str) -> None:
     """Road data between every place and hotel of a destination (asked for once, then kept)."""
     from app.models.models import Hotel, Place
-    points = [point_of(p) for p in db.query(Place).filter(Place.destination_name == destination, Place.is_active == True)]  # noqa: E712
+    # Vromon's places only: a private stop gets road data for its own day when it's added (place_search.prepare_day)
+    points = [point_of(p) for p in db.query(Place).filter(Place.destination_name == destination, Place.is_active == True, Place.listed == True)]  # noqa: E712
     points += [point_of(h) for h in db.query(Hotel).filter(Hotel.destination_name == destination, Hotel.is_active == True)]  # noqa: E712
     ROADS.prepare(db, points)

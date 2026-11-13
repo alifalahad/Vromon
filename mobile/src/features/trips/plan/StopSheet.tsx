@@ -16,6 +16,8 @@ import { haptics } from '../../../ui/haptics';
 import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
 import { useSheetPresentation } from '../../../ui/useSheetPresentation';
+import { isPrivatePlace, isUnchecked, kindLabel } from '../../places/kinds';
+import { NotCheckedBadge } from '../../places/NotCheckedBadge';
 import { priceText } from './PlanRows';
 import { fromMinutes, stopCoord, stopTitle, toMinutes } from './timeline';
 import { usePlanFormat } from './usePlanFormat';
@@ -34,6 +36,7 @@ export function StopSheet({
   onSetDuration,
   onSetPinned,
   onMoveDay,
+  onSuggest,
 }: {
   item: ItineraryItem | null;
   issues: Violation[];
@@ -47,6 +50,8 @@ export function StopSheet({
   onSetDuration?: (item: ItineraryItem, minutes: number) => void;
   onSetPinned?: (item: ItineraryItem, pinned: boolean) => void;
   onMoveDay?: (item: ItineraryItem, dayId: number) => void;
+  /** Your own stop from outside Vromon's list: "Suggest this place to Vromon" (trip upgrades step 6) */
+  onSuggest?: (item: ItineraryItem) => void;
 }) {
   const ref = useRef<BottomSheetModal>(null);
   const styles = useStyles();
@@ -75,7 +80,9 @@ export function StopSheet({
   const rating = (place ?? restaurant)?.rating_known === false ? null : place?.rating ?? restaurant?.rating;
   const hoursUnknown = (place ?? restaurant)?.hours_known === false;
   const imported = place?.source && place.source !== 'curated' ? place : null;
-  const what = item?.item_type === 'meal' ? restaurant?.cuisine : place?.category ?? item?.category;
+  // Your own stop from data Vromon hasn't checked: the badge, who sees it, and "Suggest this place to Vromon"
+  const unchecked = isUnchecked(place);
+  const what = item?.item_type === 'meal' ? restaurant?.cuisine : (isPrivatePlace(place) ? kindLabel(place?.kind, t) : null) ?? place?.category ?? item?.category;
   const crowd = place?.crowd_level === 'Low' ? t('plan.quiet') : place?.crowd_level === 'High' ? t('plan.busy') : null;
   const coord = item ? stopCoord(item) : null;
   const isVisit = item?.item_type === 'activity';
@@ -110,6 +117,12 @@ export function StopSheet({
               {stopTitle(item)}
             </Text>
             <Text style={styles.subtitle}>{[what, rating ? `★ ${f.n(rating)}` : null].filter(Boolean).join(' · ')}</Text>
+            {unchecked ? (
+              <>
+                <NotCheckedBadge testID="stop-sheet-unchecked" />
+                <Text style={styles.muted}>{t('search.privateNote')}</Text>
+              </>
+            ) : null}
           </View>
 
           <View style={styles.chips}>
@@ -151,7 +164,8 @@ export function StopSheet({
                   {t(imported.checked === false ? 'plan.sourceUnchecked' : 'plan.source', { source: t(`plan.sourceNames.${imported.source}`, { defaultValue: imported.source }) })}
                 </Text>
               ) : null}
-              {isVisit && (
+              {/* Not for your own stop: Vromon knows nothing about it, and its name isn't sent to the AI */}
+              {isVisit && !isPrivatePlace(place) && (
                 <PressableScale onPress={() => closeThen(() => onExplain(item))} pressEffect="opacity" style={styles.link} testID="stop-explain">
                   <Text style={styles.linkText}>{t('plan.moreAbout')}</Text>
                   <MaterialCommunityIcons name="chevron-right" size={20} color={colors.link} />
@@ -185,6 +199,9 @@ export function StopSheet({
             )}
             {editable && isVisit && (
               <ActionButton icon="trash-can-outline" label={t('plan.remove')} danger onPress={() => closeThen(() => onRemove(item))} testID="stop-remove" />
+            )}
+            {editable && unchecked && onSuggest && (
+              <ActionButton icon="send-outline" label={t('search.suggest')} onPress={() => closeThen(() => onSuggest(item))} testID="stop-suggest" />
             )}
           </View>
         </BottomSheetScrollView>

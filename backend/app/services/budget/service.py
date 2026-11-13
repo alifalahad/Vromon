@@ -5,12 +5,13 @@ actually apply to this plan, each applied (and undone) in one tap.
 
   - Getting there: both ways by the trip's mode, from the rough estimate in
     `routing.modes` (per seat, or per car).
-  - Stay: the trip's hotel × nights × rooms (2 travellers a room), from its price.
+  - Stay: night by night (the trip's stays): a hotel's price × its nights × rooms (2 travellers
+    a room); a family or friend's home, or a day trip, costs nothing.
   - Food and tickets: the plan's prices × travellers. Meals without a restaurant
     record have a placeholder price, so food is then an estimate.
-  - Local travel: every leg of every day, hotel to the first stop and the last
-    stop back included, by the leg's mode, its fare × the vehicles needed. Legs
-    without road data use the straight line × 1.3.
+  - Local travel: every leg of every day, from where the day starts to the first stop and
+    from its last stop or meal back to where the traveller sleeps included, by the leg's mode,
+    its fare × the vehicles needed. Legs without road data use the straight line × 1.3.
 
 Estimates carry a range (`low`–`high`) and are marked; known prices have none.
 Nothing unknown is guessed: a part without data is `known: false` and isn't
@@ -72,16 +73,42 @@ def _leg(a, b, mode: Optional[str], travellers: int) -> dict:
     return {"mode": m, "km": km, "cost": M.fare(m, km) * vehicles(m, travellers), "road": road.source == "road"}
 
 
+def move_legs(day: "Itinerary", hotel, travellers: int) -> list[dict]:
+    """
+    Moving to another stay that day (trip upgrades step 4): one ride with the bags from last night's
+    stay to tonight's, by the mode a local would pick. None when the day starts and ends at the same stay.
+    """
+    from app.services.stays import TripBases
+    if not isinstance(hotel, TripBases):
+        return []
+    n = day.day_number
+    if n < 2 or n > hotel.nights:
+        return []
+    a, b = hotel.end(n - 1), hotel.end(n)
+    if a is None or b is None or point_of(a) is None or point_of(b) is None:
+        return []
+    if (a.kind, a.latitude, a.longitude) == (b.kind, b.latitude, b.longitude):
+        return []
+    return [{**_leg(a, b, None, travellers), "move": True}]
+
+
 def day_legs(day: "Itinerary", hotel, travellers: int) -> list[dict]:
-    """The day's legs: from the hotel, between the stops (each by its chosen mode), back to the hotel."""
+    """
+    The day's legs: from where it starts (the stay) to the first stop, between the stops (each by
+    its chosen mode), and from its last stop or meal back to where the traveller sleeps.
+    `hotel` is the trip's bases (stays.bases), or one hotel from older callers.
+    """
+    from app.services.stays import end_of, last_point, start_of
     acts = _activities(day)
+    start, end = start_of(hotel, day.day_number), end_of(hotel, day.day_number)
     legs = []
-    if hotel is not None and acts:
-        legs.append(_leg(hotel, acts[0].place, None, travellers))
+    if start is not None and point_of(start) is not None and acts:
+        legs.append(_leg(start, acts[0].place, None, travellers))
     for a, b in zip(acts, acts[1:]):
         legs.append({**_leg(a.place, b.place, a.travel_mode, travellers), "item_id": a.id})
-    if hotel is not None and acts:
-        legs.append(_leg(acts[-1].place, hotel, None, travellers))
+    if end is not None and point_of(end) is not None and acts:
+        _item, last = last_point(day)
+        legs.append(_leg(last or acts[-1].place, end, None, travellers))
     return legs
 
 
@@ -99,8 +126,13 @@ def _part(key: str, amount: Optional[float], estimate: bool, detail: dict) -> di
     }
 
 
-def full_budget(db: "Session", trip: "Trip", hotel: Optional["Hotel"], getting_there: Optional[dict]) -> dict:
-    """The parts, the total with its range, the days, and the ways to save. Prices in the trip's currency only."""
+def full_budget(db: "Session", trip: "Trip", hotel, getting_there: Optional[dict], private: bool = False,
+                advice: Optional[list] = None) -> dict:
+    """
+    The parts, the total with its range, the days, and the ways to save. Prices in the trip's
+    currency only. `hotel` is the trip's bases (stays.bases); `private`: the viewer isn't the
+    owner, so a home's name is left out (D2).
+    """
     n = trip.num_travelers
     currency = trip.currency
     days = sorted(trip.itinerary_days, key=lambda d: d.day_number)
@@ -118,23 +150,14 @@ def full_budget(db: "Session", trip: "Trip", hotel: Optional["Hotel"], getting_t
     else:
         gt = _part("getting_there", None, False, {"reason": "no_origin"})
 
-    # The stay
-    if hotel is None:
-        stay = _part("stay", None, False, {"reason": "no_hotel"})
-    elif (hotel.currency or "BDT") != currency:
-        stay = _part("stay", None, False, {"reason": "currency", "currency": hotel.currency})
-    elif not hotel.price_known:
-        stay = _part("stay", None, False, {"reason": "no_price", "hotel": hotel.name, "nights": nights})
-    else:
-        stay = _part("stay", hotel.price_per_night * nights * rooms, False, {
-            "hotel": hotel.name, "hotel_id": hotel.id, "rating": hotel.rating, "nights": nights, "rooms": rooms,
-            "per_night": hotel.price_per_night,
-        })
+    # The stay, night by night
+    stay = stay_part(hotel, nights, rooms, currency, private)
 
     # Food, tickets and local travel, day by day
     by_day = []
     food_total = tickets_total = local_total = 0.0
     meals = placeholder = paid = free = unknown = legs_count = 0
+    by_source = {"restaurant": 0, "own": 0, "stay": 0}   # step 3: where each meal is eaten
     local_modes: set[str] = set()
     for d in days:
         food = tickets = 0.0
@@ -145,8 +168,11 @@ def full_budget(db: "Session", trip: "Trip", hotel: Optional["Hotel"], getting_t
                 continue
             if i.item_type == "meal":
                 meals += 1
+                kind = i.meal_source or "restaurant"
+                by_source[kind] = by_source.get(kind, 0) + 1
+                # Your own food costs what you said it does (0 when unset); where you stay, nothing
                 food += (i.cost or 0.0) * n
-                if i.restaurant_id is None:
+                if i.restaurant_id is None and kind == "restaurant":
                     placeholder += 1
                     day_estimate = True
             elif i.item_type == "activity":
@@ -158,7 +184,7 @@ def full_budget(db: "Session", trip: "Trip", hotel: Optional["Hotel"], getting_t
                     paid += 1
                 else:
                     free += 1
-        legs = day_legs(d, hotel, n)
+        legs = day_legs(d, hotel, n) + move_legs(d, hotel, n)
         local = sum(leg["cost"] for leg in legs)
         legs_count += sum(1 for leg in legs if leg["mode"] != "walk")
         local_modes |= {leg["mode"] for leg in legs if leg["mode"] != "walk"}
@@ -171,7 +197,11 @@ def full_budget(db: "Session", trip: "Trip", hotel: Optional["Hotel"], getting_t
             "amount": _r10(amount), "food": _r10(food), "tickets": _r10(tickets), "local": _r10(local),
             "estimate": day_estimate or local > 0,
         })
-    food_part = _part("food", food_total, placeholder > 0, {"meals": meals, "placeholder_meals": placeholder, "days": len(days), "travellers": n})
+    from app.services import meals as meal_plan
+    food_part = _part("food", food_total, placeholder > 0, {
+        "meals": meals, "placeholder_meals": placeholder, "days": len(days), "travellers": n,
+        "by_source": by_source, "own_cost_per_person": meal_plan.trip_plan(trip).get("own_cost_per_person"),
+    })
     tickets_part = _part("tickets", tickets_total, False, {"paid": paid, "free": free, "unknown": unknown})
     local_part = _part("local", local_total, local_total > 0, {"legs": legs_count, "modes": sorted(local_modes)})
 
@@ -185,45 +215,55 @@ def full_budget(db: "Session", trip: "Trip", hotel: Optional["Hotel"], getting_t
     return {
         "total": total, "low": low, "high": high, "left": round(budget - total), "status": status,
         "parts": parts, "by_day": by_day,
-        "saves": ways_to_save(db, trip, hotel, nights, rooms),
+        "saves": ways_to_save(db, trip, hotel, nights, rooms, advice),
     }
+
+
+def stay_part(bases, nights: int, rooms: int, currency: str, private: bool = False) -> dict:
+    """
+    The stay's part of the budget, from the trip's stays. One hotel for all nights keeps the shape
+    the app has always had (hotel, nights, per night, rooms); `blocks` has each stay.
+    """
+    from app.services.stays import TripBases, stay_cost
+    if nights < 1:
+        return _part("stay", 0.0, False, {"nights": 0, "rooms": rooms, "blocks": []})
+    if not isinstance(bases, TripBases) or not bases.blocks:
+        return _part("stay", None, False, {"reason": "no_hotel"})
+    cost = stay_cost(bases.blocks, rooms, currency)
+    lines = [{**ln, "label": None} if private and ln["kind"] == "home" else ln for ln in cost["lines"]]
+    if not cost["known"]:
+        return _part("stay", None, False, {**cost["unknown"], "blocks": lines})
+    detail: dict = {"nights": nights, "rooms": rooms, "blocks": lines}
+    only = bases.blocks[0] if len(bases.blocks) == 1 else None
+    if only is not None and only.kind == "hotel" and only.hotel is not None:
+        h = only.hotel
+        detail.update(hotel=h.name, hotel_id=h.id, rating=h.rating, per_night=h.price_per_night)
+    return _part("stay", cost["amount"], False, detail)
 
 
 # ---------------------------------------------------------------------------
 # Ways to save
 # ---------------------------------------------------------------------------
 
-def ways_to_save(db: "Session", trip: "Trip", hotel: Optional["Hotel"], nights: int, rooms: int) -> list[dict]:
-    """The savings that apply to this plan, biggest first: a cheaper hotel, a paid stop to skip, rickshaws."""
-    from app.models.models import Hotel
+def ways_to_save(db: "Session", trip: "Trip", hotel: Optional["Hotel"], nights: int, rooms: int,
+                 advice: Optional[list] = None) -> list[dict]:
+    """
+    The savings that apply to this plan, biggest first: a better place to sleep for some nights (the
+    stay advisor's open suggestions, `advice`; step 4: one source of truth for hotels), a paid stop to
+    skip, rickshaws.
+    """
     from app.services.itinerary.editing_service import is_must_visit
 
     n = trip.num_travelers
     out = []
 
-    # A cheaper hotel: the cheapest one that's still well rated
-    if hotel is not None and nights > 0 and hotel.price_known:
-        cheaper = (
-            db.query(Hotel)
-            .filter(Hotel.destination_name == trip.destination, Hotel.is_active == True,  # noqa: E712
-                    Hotel.price_known == True, Hotel.rating_known == True,  # noqa: E712
-                    Hotel.price_per_night < hotel.price_per_night, Hotel.rating >= 3.5, Hotel.currency == hotel.currency)
-            .order_by(Hotel.price_per_night, Hotel.rating.desc())
-            .first()
-        )
-        if cheaper is not None:
-            # Net of the rides: a cheaper hotel further away costs more to get around from
-            days = trip.itinerary_days
-            rides = sum(leg["cost"] for d in days for leg in day_legs(d, cheaper, n)) - sum(
-                leg["cost"] for d in days for leg in day_legs(d, hotel, n)
-            )
-            saving = (hotel.price_per_night - cheaper.price_per_night) * nights * rooms - rides
-            out.append({
-                "key": "hotel", "saving": _r10(saving), "estimate": False,
-                "detail": {"from": hotel.name, "from_rating": hotel.rating, "to": cheaper.name, "to_rating": cheaper.rating,
-                           "per_night": cheaper.price_per_night},
-                "action": {"kind": "hotel", "hotel_id": cheaper.id},
-            })
+    # Sleeping somewhere else for some nights: the stay advisor's open suggestions (owner only)
+    for s in advice or []:
+        out.append({
+            "key": "stay", "saving": _r10(s["money_saved"] or 0), "estimate": True,
+            "detail": s,
+            "action": {"kind": "stay_advice", "suggestion_id": s["id"]},
+        })
 
     # The priciest stop you could skip (not a must-see, not one you pinned)
     days = sorted(trip.itinerary_days, key=lambda d: d.day_number)
@@ -279,22 +319,43 @@ def apply_save(db: "Session", trip: "Trip", action: dict, hotel_of) -> tuple[str
     days = {d.id: d for d in trip.itinerary_days}
     items = {i.id: i for d in trip.itinerary_days for i in d.items}
 
-    if kind == "hotel":
-        pref = trip.preference
-        if pref is None:
-            raise SaveError("This trip has no preferences to change.")
-        hotel_id = action.get("hotel_id")
-        if hotel_id is not None:
-            h = db.get(Hotel, hotel_id)
-            if h is None or not h.is_active or h.destination_name != trip.destination:
-                raise SaveError("That hotel isn't available for this trip.", 404)
-        before = pref.hotel_id
-        pref.hotel_id = hotel_id
-        db.flush()
+    if kind == "stay_advice":
+        # Switch to a stay the advisor suggested (step 4); Undo puts the stays back
+        from app.services import stay_advisor
+        try:
+            row, before = stay_advisor.accept(db, trip, action.get("suggestion_id"))
+        except stay_advisor.AdviceError as exc:
+            raise SaveError(exc.message, exc.status)
         new = hotel_of(trip)
         for d in trip.itinerary_days:
             edits.recompute_day(d, new)
-        return f"Staying at {new.name}." if new else "Hotel changed.", {"kind": "hotel", "hotel_id": before}
+        return f"Staying at {row.hotel.name}.", {"kind": "stays", "stays": before}
+
+    if kind in ("hotel", "stays"):
+        from app.services import stays
+        before = stays.as_items(stays.blocks_of(db, trip))
+        if kind == "stays":
+            wanted = action.get("stays") or []
+        else:
+            h = db.get(Hotel, action.get("hotel_id")) if action.get("hotel_id") is not None else None
+            if h is None or not h.is_active:
+                raise SaveError("That hotel isn't available for this trip.", 404)
+            first, last = action.get("first_night"), action.get("last_night")
+            wanted = [
+                {**b, "kind": "hotel", "hotel_id": h.id, "label": None, "lat": None, "lon": None}
+                if b["kind"] == "hotel" and (first is None or (b["first_night"] == first and b["last_night"] == last)) else b
+                for b in before
+            ]
+        try:
+            stays.replace(db, trip, stays.validate(db, trip, wanted))
+        except stays.StayError as exc:
+            raise SaveError(exc.message, exc.status)
+        new = hotel_of(trip)
+        for d in trip.itinerary_days:
+            edits.recompute_day(d, new)
+        if kind == "stays":
+            return "Your stays are back as they were.", {"kind": "stays", "stays": before}
+        return f"Staying at {h.name}.", {"kind": "stays", "stays": before}
 
     if kind == "skip":
         item = items.get(action.get("item_id"))

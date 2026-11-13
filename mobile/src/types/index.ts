@@ -29,6 +29,124 @@ export interface Hotel {
   price_per_night: number;
   currency?: string;
   rating?: number;
+  latitude?: number;
+  longitude?: number;
+  /** false: the price shown is a placeholder, not the hotel's (never shown as a price) */
+  price_known?: boolean;
+  rating_known?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Where the traveller stays (docs/trip-upgrades, steps 1–2)
+// ---------------------------------------------------------------------------
+
+/** hotel · a family or friend's home (no cost, private) · no night there (day trips) · not decided yet */
+export type StayKind = 'hotel' | 'home' | 'none' | 'undecided';
+
+/** One stay as sent: nights first_night..last_night (1-based, inclusive) */
+export interface StayIn {
+  first_night: number;
+  last_night: number;
+  kind: StayKind;
+  hotel_id?: number | null;
+  label?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+}
+
+/** One stay as the server has it (a home's label and place are null for anyone but the owner) */
+export interface Stay {
+  first_night: number;
+  last_night: number;
+  nights: number;
+  kind: StayKind;
+  hotel: (Hotel & { price_known: boolean; rating_known: boolean }) | null;
+  label: string | null;
+  lat: number | null;
+  lon: number | null;
+}
+
+/** GET /trips/{id}/stays: `chosen` is false while Vromon picks the hotel */
+export interface Stays {
+  trip_id: number;
+  nights: number;
+  chosen: boolean;
+  stays: Stay[];
+}
+
+/** PUT /trips/{id}/stays: the days whose start or end moved, the validation, the budget before and after */
+export interface StaysUpdated extends Stays {
+  days: ItineraryDay[];
+  validation: ValidationReport | null;
+  budget: { before: number; after: number; change: number };
+}
+
+/** The stay advisor (trip upgrades step 4): "sleep somewhere else for nights a-b?" with its numbers */
+export interface StaySuggestion {
+  id: number;
+  first_night: number;
+  last_night: number;
+  nights: number;
+  /** The day it's shown above: the day you'd move (night a's day) */
+  day_number: number;
+  hotel: { id: number; name: string; destination_name: string; price_per_night: number; currency: string; rating: number; rating_known: boolean; latitude: number; longitude: number };
+  /** The hotel it replaces (price null when not known) */
+  current: { id: number; name: string; price_per_night: number | null } | null;
+  /** null: the current hotel's price isn't known (only the road time made the case) */
+  money_saved: number | null;
+  minutes_saved: number;
+  /** Moves between stays it adds (0: none, it's from the first night or merges with a neighbour) */
+  extra_moves: number;
+  /** How the numbers add up, for "Why?" */
+  parts: {
+    rooms: number;
+    nights: number;
+    price_now: number | null;
+    price_then: number;
+    stay_now: number | null;
+    stay_then: number;
+    road_now: number;
+    road_then: number;
+    fares_now: number;
+    fares_then: number;
+    transfer_minutes: number;
+    transfer_cost: number;
+    hassle_minutes: number;
+    days: number[];
+    time_value: number;
+  };
+}
+
+export interface StaySuggestions {
+  trip_id: number;
+  suggestions: StaySuggestion[];
+}
+
+/** POST …/stay-suggestions/{id}/accept: the stays changed, and the old ones for Undo (PUT /stays) */
+export interface StayAccepted extends StaysUpdated {
+  message: string;
+  undo: { stays: StayIn[] };
+}
+
+/** Where a day starts or ends. For anyone but the owner a home is { kind: "home" } and nothing else */
+export interface DayBase {
+  kind: StayKind;
+  name: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  hotel_id: number | null;
+  /** The destination's centre, standing in for a place not known yet */
+  estimate: boolean;
+}
+
+/** From the stay to the day's first stop, or from its last stop back to the stay */
+export interface BaseLeg {
+  minutes: number;
+  km: number;
+  mode: TravelMode | string;
+  cost: number;
+  to_item_id?: number;
+  from_item_id?: number;
 }
 
 export interface Place {
@@ -60,6 +178,99 @@ export interface Place {
   url?: string | null;
   /** false: imported and not checked by a person yet */
   checked?: boolean;
+  /** false: a stop from outside Vromon's list, the traveller's own (trip upgrades step 6) */
+  listed?: boolean;
+  /** For such a stop: what it is (college, market, address, pin…) */
+  kind?: string | null;
+}
+
+/** "How was your trip?" (trip upgrades step 7): a thing of the trip to mark good or bad */
+export type ReviewTarget = 'place' | 'restaurant' | 'hotel' | 'stay_home' | 'journey';
+export type Verdict = 'good' | 'bad';
+
+export interface ReviewThing {
+  /** Stable for the list ("place:12:340") */
+  key: string;
+  target_type: ReviewTarget;
+  target_id: number | null;
+  /** The itinerary item, when there is one */
+  item_id: number | null;
+  /** Empty for a family/friend stay that isn't yours to name (the app says "With family or friends") */
+  name: string;
+  /** The day it's on; null: getting there, where you stayed */
+  day: number | null;
+  time: string | null;
+  /** Breakfast / Lunch / Dinner for a meal */
+  meal: string | null;
+  first_night: number | null;
+  last_night: number | null;
+  /** How you got there: bus / train / plane / car / boat */
+  mode: string | null;
+  verdict: Verdict | null;
+  comment: string | null;
+}
+
+export interface TripReviewResponse {
+  trip_id: number;
+  /** The trip's first day: rating opens then */
+  opens_on: string;
+  /** Yours only; null until you rate (rating null: things rated one by one, no stars yet) */
+  review: { rating: number | null; comment: string | null; created_at: string; updated_at: string } | null;
+  items: ReviewThing[];
+}
+
+/** What a save sends: only what changed. A verdict of null clears it (and its comment). */
+export interface TripReviewIn {
+  rating?: number | null;
+  comment?: string | null;
+  items?: { target_type: ReviewTarget; target_id: number | null; item_id: number | null; verdict: Verdict | null; comment?: string | null }[];
+}
+
+/** What to add as a stop (trip upgrades step 6): Vromon's place, or a search result, or a named pin */
+export type AddRef =
+  | { place_id: number }
+  | { poi_id: string }
+  | { geocode: string }
+  | { restaurant_id: number }
+  | { hotel_id: number }
+  | { pin: { lat: number; lon: number; name: string } };
+
+export type SearchGroupKey = 'vromon' | 'nearby' | 'other' | 'addresses';
+
+/** One search result: from Vromon's places, the catalog nearby, the places index or the address search */
+export interface SearchResult {
+  id: string;
+  ref: AddRef;
+  group: SearchGroupKey;
+  source: 'vromon' | 'restaurant' | 'hotel' | 'poi' | 'geocode';
+  name: string;
+  name_bn?: string | null;
+  kind?: string | null;
+  category?: string | null;
+  address?: string | null;
+  lat: number;
+  lon: number;
+  distance_km: number;
+  /** false: outside Vromon's checked data ("Not checked") */
+  checked: boolean;
+  score: number;
+}
+
+export interface SearchResponse {
+  query: string;
+  /** The kind the words asked for ("college"), or one a misspelt word seems to */
+  kind: string | null;
+  /** Distances are from here: the stop before (its name), or the day's centre (no name) */
+  near: { name: string | null; lat: number; lon: number };
+  groups: { key: SearchGroupKey; results: SearchResult[] }[];
+  did_you_mean: string[];
+  kind_results: { kind: string; results: SearchResult[] } | null;
+  /** Always true: "Put a pin on the map" */
+  pin: boolean;
+  /** The places part found few good matches: the address search is worth asking */
+  addresses_wanted: boolean;
+  geocoder: 'skipped' | 'used' | 'cached' | 'wait' | 'capped' | 'off' | 'unavailable';
+  retry_after: number | null;
 }
 
 export interface TripPreferenceInput {
@@ -105,8 +316,11 @@ export interface DayRoute {
   day_id: number;
   provider: string | null;
   legs: {
-    from_item_id: number;
-    to_item_id: number;
+    /** null on the leg from the stay (`kind: "from_base"`) */
+    from_item_id: number | null;
+    /** null on the leg back to the stay (`kind: "to_base"`) */
+    to_item_id: number | null;
+    kind?: 'from_base' | 'to_base';
     line: number[][] | null;
     /** No road at all: by boat or ferry between two ghats (estimates) */
     crossing?: LegCrossing & { from_ghat: { name: string; lat: number; lon: number }; to_ghat: { name: string; lat: number; lon: number } };
@@ -289,6 +503,37 @@ export interface TripStopInput {
   depart_on?: string | null;
 }
 
+/** Where a meal is eaten (trip upgrades step 3): a restaurant (default), your own food, or where you stay */
+export type MealSource = 'restaurant' | 'own' | 'stay';
+export type MealSlot = 'Breakfast' | 'Lunch' | 'Dinner';
+
+/** A trip's or a day's meal plan; lunch is never "stay" */
+export interface MealPlan {
+  Breakfast: MealSource;
+  Lunch: Exclude<MealSource, 'stay'>;
+  Dinner: MealSource;
+  /** What your own food costs per person, in the trip's currency; null = nothing */
+  own_cost_per_person?: number | null;
+}
+
+/** PUT /trips/{id}/meals and /days/{day_id}/meals */
+export interface MealsUpdated {
+  trip_id: number;
+  meals: MealPlan;
+  days: ItineraryDay[];
+  validation: ValidationReport | null;
+  budget: { before: number; after: number; change: number };
+}
+
+/** GET /trips/{id}/items/{item_id}/places-to-eat */
+export interface PlacesToEat {
+  item_id: number;
+  /** The stop the traveller is at then (null for a home) */
+  near: string | null;
+  at: string;
+  restaurants: { restaurant: Restaurant; km: number | null }[];
+}
+
 export interface TripCreate {
   destination: string;
   start_date: string;
@@ -304,6 +549,11 @@ export interface TripCreate {
   /** How you like to travel there; none + transport_by_budget: Vromon suggests by budget */
   transport_modes?: JourneyMode[];
   transport_by_budget?: boolean;
+  /** Where you'll stay: one choice for all nights, or night by night; neither = the hotel Vromon picks */
+  stay?: Omit<StayIn, 'first_night' | 'last_night'> | null;
+  stays?: StayIn[] | null;
+  /** Meals: per meal a restaurant (default), your own food or where you stay */
+  meals?: MealPlan | null;
 }
 
 // Matches _trip_summary_out / _trip_out in trips.py
@@ -335,6 +585,8 @@ export interface Trip {
     preferred_end_time: string;
     arrive_time?: string | null;
     leave_time?: string | null;
+    /** The trip's meal plan; null = every meal at a restaurant */
+    meals?: MealPlan | null;
   };
   constraints?: {
     id: number;
@@ -372,6 +624,8 @@ export interface ItineraryItem {
   currency: string;
   /** "placeholder" = no restaurant/place record; the cost is an estimate, not real data */
   cost_source: 'data' | 'placeholder';
+  /** A meal's source (step 3); null/absent on other items */
+  meal_source?: MealSource | null;
   /** The leg to the next activity (trip planner step 5); absent on meals and the last activity */
   travel_mode?: TravelMode | null;
   /** The traveller chose the mode (otherwise the app picked it) */
@@ -421,6 +675,14 @@ export interface ItineraryDay {
   total_cost: number;
   total_travel_time: number;
   items: ItineraryItem[];
+  /** Where the day starts and ends (the stays), and the legs from and back to them */
+  start_base?: DayBase | null;
+  end_base?: DayBase | null;
+  start_leg?: BaseLeg | null;
+  return_leg?: BaseLeg | null;
+  /** This day's own meal plan (null: the trip's), and the plan it follows either way */
+  meals?: MealPlan | null;
+  meal_plan?: MealPlan | null;
 }
 
 export type DayPart =
@@ -672,10 +934,26 @@ export interface BudgetPart {
     nights?: number;
     rooms?: number;
     per_night?: number;
+    /** Each stay: its nights, kind and amount (0 for a home or a day trip; null when not known) */
+    blocks?: {
+      first_night: number;
+      last_night: number;
+      nights: number;
+      kind: StayKind;
+      hotel: string | null;
+      hotel_id: number | null;
+      label: string | null;
+      amount: number | null;
+      per_night: number | null;
+      rooms: number;
+    }[];
     // food
     days?: number;
     travellers?: number;
     placeholder_meals?: number;
+    /** Meals by where they're eaten (step 3) */
+    by_source?: Partial<Record<MealSource, number>>;
+    own_cost_per_person?: number | null;
     // tickets
     paid?: number;
     free?: number;
@@ -690,12 +968,15 @@ export interface BudgetPart {
 /** A change the budget screen can apply; the server's `undo` is one too */
 export type SaveAction =
   | { kind: 'hotel'; hotel_id: number | null }
+  | { kind: 'stay_advice'; suggestion_id: number }
+  | { kind: 'stays'; stays: StayIn[] }
   | { kind: 'skip'; item_id: number }
   | { kind: 'restore'; day_id: number; place_id: number; position: number }
   | { kind: 'modes'; modes: Record<string, TravelMode | null>; times?: Record<string, [string, string]> };
 
 export type BudgetSave =
   | { key: 'hotel'; saving: number; estimate: boolean; action: SaveAction; detail: { from: string; from_rating: number; to: string; to_rating: number; per_night: number } }
+  | { key: 'stay'; saving: number; estimate: boolean; action: SaveAction; detail: StaySuggestion }
   | { key: 'skip'; saving: number; estimate: boolean; action: SaveAction; detail: { title: string; day_number: number; item_id: number } }
   | { key: 'rickshaw'; saving: number; estimate: boolean; action: SaveAction; detail: { legs: number; extra_min: number } };
 

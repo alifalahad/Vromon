@@ -10,6 +10,8 @@ traveller's needs from here, so they agree on them:
   - must-sees: a place, optionally on a given day and at a time of day
     (morning / afternoon / sunset / evening) or an exact time
   - pace: how many stops a day
+  - meals (docs/trip-upgrades, step 3): per day, each meal at a restaurant, your own food or
+    where you stay (services/meals.py); with no choices, every meal is at a restaurant as before
 
 `unplaced()` explains, for each must-see that isn't in the plan, why it can't
 fit (closed then, outside your day, busy, another must-see then, budget, no
@@ -158,6 +160,23 @@ class TripRules:
     stops_per_day: int = 4
     first_date: Optional[date] = None
     latlon: Optional[tuple[float, float]] = None
+    # Each day's meal plan, by day number ({"Breakfast": "restaurant"|"own"|"stay", …}); missing = restaurants
+    meals: dict = field(default_factory=dict)
+    # The days' own overrides as stored (kept across a re-plan of the whole trip)
+    meal_overrides: dict = field(default_factory=dict)
+
+    # -- meals --------------------------------------------------------------
+    def meal_source(self, day: int, slot: str) -> str:
+        return (self.meals.get(day) or {}).get(slot, "restaurant")
+
+    def own_cost(self, day: int) -> float:
+        return float((self.meals.get(day) or {}).get("own_cost_per_person") or 0.0)
+
+    def breakfast_minutes(self, day: int) -> int:
+        """How long breakfast takes inside the day: 60 at a restaurant, 30 packed, 0 where you stay (before leaving)."""
+        from app.services.meals import minutes
+        source = self.meal_source(day, "Breakfast")
+        return 0 if source == "stay" else minutes(source)
 
     # -- days ---------------------------------------------------------------
     def window(self, day: int) -> tuple[int, int]:
@@ -174,12 +193,13 @@ class TripRules:
 
     def has_breakfast(self, day: int) -> bool:
         s, e = self.window(day)
-        return s <= BREAKFAST_LATEST and s + MEAL_MINUTES <= e and not _overlaps(s, s + MEAL_MINUTES, self.busy_blocks(day))
+        b = self.breakfast_minutes(day)
+        return s <= BREAKFAST_LATEST and s + b <= e and not _overlaps(s, s + b, self.busy_blocks(day))
 
     def activity_start(self, day: int) -> int:
-        """The earliest a visit can start: after breakfast, when the day has one."""
+        """The earliest a visit can start: after breakfast, when the day has one (where you stay: before the day starts)."""
         s, _ = self.window(day)
-        return s + MEAL_MINUTES if self.has_breakfast(day) else s
+        return s + self.breakfast_minutes(day) if self.has_breakfast(day) else s
 
     def busy_blocks(self, day: int) -> list[Block]:
         return [Block(b.start, b.end, None, "busy") for b in self.busy_on(day)]
@@ -229,7 +249,9 @@ class TripRules:
                 return None, {"code": "closes_before", "closes": m2t(closes), **self._wanted(m, day)}
             return None, {"code": "opens_after", "opens": m2t(opens), **self._wanted(m, day)}
         s, e = self.window(day)
-        first = self.activity_start(day) + travel_min(hotel, place)
+        from app.services.stays import start_of
+        # From where this day starts (`hotel`: the trip's bases, or one hotel from older callers)
+        first = self.activity_start(day) + travel_min(start_of(hotel, day), place)
         lo3, hi3 = max(lo2, first), min(hi2, e - dur)
         if lo3 > hi3:
             if lo2 > e - dur:
@@ -283,8 +305,11 @@ def free_start(
     return None
 
 
-def rules_for(trip: "Trip", destination=None) -> TripRules:
+def rules_for(trip: "Trip", destination=None, meal_overrides: Optional[dict] = None) -> TripRules:
+    """`meal_overrides`: the days' own meal plans when the days are about to be replaced (else read from them)."""
+    from app.services import meals
     pref, cons = trip.preference, trip.constraints
+    overrides = meals.day_overrides(trip) if meal_overrides is None else meal_overrides
     return TripRules(
         num_days=trip.num_days,
         start=t2m(pref.preferred_start_time if pref else "09:00"),
@@ -296,13 +321,15 @@ def rules_for(trip: "Trip", destination=None) -> TripRules:
         stops_per_day=cons.max_activities_per_day if cons else 4,
         first_date=trip.start_date,
         latlon=(destination.latitude, destination.longitude) if destination is not None else None,
+        meals=meals.plans_by_day(trip, overrides),
+        meal_overrides=dict(overrides),
     )
 
 
-def load_rules(db, trip: "Trip") -> TripRules:
+def load_rules(db, trip: "Trip", meal_overrides: Optional[dict] = None) -> TripRules:
     from app.models.models import Destination
     dest = db.query(Destination).filter(Destination.name == trip.destination).first()
-    return rules_for(trip, dest)
+    return rules_for(trip, dest, meal_overrides)
 
 
 # ---------------------------------------------------------------------------
@@ -314,24 +341,30 @@ def meal_starts(rules: TripRules, day: int, blocks: list[Block]) -> dict[str, Op
     Start of breakfast, lunch and dinner on a day (None = the day has no room or time for it),
     avoiding busy times and must-sees already placed.
     """
+    from app.services.meals import minutes
     s, e = rules.window(day)
-    out: dict[str, Optional[int]] = {"Breakfast": s if rules.has_breakfast(day) else None}
-    taken = list(blocks) + ([Block(s, s + MEAL_MINUTES, None, "breakfast")] if out["Breakfast"] is not None else [])
+    # Breakfast where you stay is before leaving, and dinner there after getting back: not in the day
+    has_breakfast = rules.has_breakfast(day) and rules.meal_source(day, "Breakfast") != "stay"
+    out: dict[str, Optional[int]] = {"Breakfast": s if has_breakfast else None}
+    breakfast = rules.breakfast_minutes(day)
+    taken = list(blocks) + ([Block(s, s + breakfast, None, "breakfast")] if out["Breakfast"] is not None else [])
 
-    def first_fit(lo: int, hi: int, prefer: Optional[int] = None) -> Optional[int]:
-        hi = min(hi, e - MEAL_MINUTES)
+    def first_fit(lo: int, hi: int, dur: int, prefer: Optional[int] = None) -> Optional[int]:
+        hi = min(hi, e - dur)
         lo = max(lo, rules.activity_start(day) if out["Breakfast"] is not None else s)
         if lo > hi:
             return None
-        return free_start(lo, hi, MEAL_MINUTES, [Block(b.start, b.end) for b in taken], prefer=prefer)
+        return free_start(lo, hi, dur, [Block(b.start, b.end) for b in taken], prefer=prefer)
 
-    lunch = first_fit(*LUNCH_RANGE, prefer=LUNCH_PREFERRED)
+    lunch_min = minutes(rules.meal_source(day, "Lunch"))
+    lunch = first_fit(*LUNCH_RANGE, lunch_min, prefer=LUNCH_PREFERRED)
     if lunch is None:
-        lunch = first_fit(*LUNCH_STRETCH, prefer=LUNCH_PREFERRED)
+        lunch = first_fit(*LUNCH_STRETCH, lunch_min, prefer=LUNCH_PREFERRED)
     out["Lunch"] = lunch
     if lunch is not None:
-        taken.append(Block(lunch, lunch + MEAL_MINUTES, None, "meal"))
-    out["Dinner"] = first_fit(DINNER_EARLIEST, 23 * 60)
+        taken.append(Block(lunch, lunch + lunch_min, None, "meal"))
+    # Your own dinner comes after the last stop (the planners place it); dinner where you stay, after the way back
+    out["Dinner"] = first_fit(DINNER_EARLIEST, 23 * 60, MEAL_MINUTES) if rules.meal_source(day, "Dinner") == "restaurant" else None
     return out
 
 

@@ -49,6 +49,8 @@ export type Preferences = {
   notificationPreviews: boolean;
   /** Friends see your current and coming trips (On the road, the chat header, your profile) */
   shareTrips: boolean;
+  /** Trips whose "Rate your trip?" card was answered "Not now": never asked again (trip upgrades step 7) */
+  rateReminderDismissed: number[];
   /**
    * Account whose settings changed here but haven't reached the server yet
    * (offline, or the app closed first). Sync pushes them before pulling.
@@ -67,6 +69,7 @@ type PreferencesState = Preferences & {
   addRecentDestination: (name: string) => void;
   clearRecentDestinations: () => void;
   setMapTheme: (v: UserMapTheme) => void;
+  dismissRateReminder: (tripId: number) => void;
   setNotifyFriendRequests: (v: boolean) => void;
   setNotifyFriendAccepted: (v: boolean) => void;
   /** Chats and privacy: one or more of its switches */
@@ -92,6 +95,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   notifyTripRooms: true,
   notificationPreviews: true,
   shareTrips: true,
+  rateReminderDismissed: [],
   unsyncedFor: null,
 };
 
@@ -109,6 +113,8 @@ export const usePreferences = create<PreferencesState>()(
       addRecentDestination: (name) => set((s) => ({ recentDestinations: [name, ...s.recentDestinations.filter((n) => n !== name)].slice(0, MAX_RECENT) })),
       clearRecentDestinations: () => set({ recentDestinations: [] }),
       setMapTheme: (mapTheme) => set({ mapTheme }),
+      dismissRateReminder: (tripId) =>
+        set((s) => ({ rateReminderDismissed: s.rateReminderDismissed.includes(tripId) ? s.rateReminderDismissed : [...s.rateReminderDismissed, tripId] })),
       setNotifyFriendRequests: (notifyFriendRequests) => set({ notifyFriendRequests }),
       setNotifyFriendAccepted: (notifyFriendAccepted) => set({ notifyFriendAccepted }),
       setChat: (change) => set(change),
@@ -134,6 +140,7 @@ export const usePreferences = create<PreferencesState>()(
         notifyTripRooms,
         notificationPreviews,
         shareTrips,
+        rateReminderDismissed,
         unsyncedFor,
       }) => ({
         appearance,
@@ -152,6 +159,7 @@ export const usePreferences = create<PreferencesState>()(
         notifyTripRooms,
         notificationPreviews,
         shareTrips,
+        rateReminderDismissed,
         unsyncedFor,
       }),
       // A stored theme may name catalog items this version doesn't have

@@ -40,6 +40,21 @@ def _json_set(value) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+def _json_dict_get(value: str | None) -> dict | None:
+    """A JSON object stored as text; None when unset or not an object."""
+    if not value:
+        return None
+    try:
+        out = json.loads(value)
+    except Exception:
+        return None
+    return out if isinstance(out, dict) else None
+
+
+def _json_dict_set(value: dict | None) -> str | None:
+    return json.dumps(value, ensure_ascii=False) if value is not None else None
+
+
 # ---------------------------------------------------------------------------
 # Destination
 # ---------------------------------------------------------------------------
@@ -115,6 +130,11 @@ class Place(Base):
     source_ref: Mapped[Optional[str]] = mapped_column(String(160), nullable=True, index=True)
     url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     checked: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    # A stop from outside Vromon's list (trip upgrades step 6): source poi / geocode / pin / restaurant / hotel,
+    # owned by the traveller who added it, never listed. Unlisted places are never ranked, suggested,
+    # published or shown to anyone but their owner and the trip's room members.
+    owner_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    listed: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
 
     # Relationships
     destination_rel: Mapped["Destination"] = relationship("Destination", back_populates="places")
@@ -611,10 +631,27 @@ class Trip(Base):
     feedback: Mapped[Optional["Feedback"]] = relationship(
         "Feedback", back_populates="trip", uselist=False, cascade="all, delete-orphan"
     )
+    # Where the traveller sleeps, night by night (trip upgrades step 1); none = the hotel Vromon picks
+    stays: Mapped[List["TripStay"]] = relationship(
+        "TripStay", back_populates="trip", cascade="all, delete-orphan", order_by="TripStay.first_night"
+    )
+    # Deleted by the ORM, not left to the database: SQLite doesn't enforce ON DELETE CASCADE here
+    # (no PRAGMA foreign_keys), and passive deletes left the rows behind
+    stay_suggestions: Mapped[List["StaySuggestion"]] = relationship(
+        "StaySuggestion", back_populates="trip", cascade="all, delete-orphan"
+    )
+    # "How was your trip?" (trip upgrades step 7): one per traveller who went, private to each
+    reviews: Mapped[List["TripReview"]] = relationship(
+        "TripReview", back_populates="trip", cascade="all, delete-orphan"
+    )
 
     @property
     def num_days(self) -> int:
         return (self.end_date - self.start_date).days + 1
+
+    @property
+    def num_nights(self) -> int:
+        return max(0, self.num_days - 1)
 
 
 class TripStop(Base):
@@ -638,6 +675,67 @@ class TripStop(Base):
     trip: Mapped["Trip"] = relationship("Trip", back_populates="stops")
     city: Mapped[Optional["City"]] = relationship("City", lazy="joined")
     country: Mapped["Country"] = relationship("Country", lazy="joined")
+
+
+class TripStay(Base):
+    """
+    Where the traveller sleeps for nights `first_night`..`last_night` (1-based, inclusive): a hotel,
+    a family or friend's home (`home`: private to the trip's owner), no night there (`none`: day
+    trips from the trip's start point), or not decided yet. A trip's stays cover its nights once.
+    (docs/trip-upgrades, step 1, decisions D1 and D2)
+    """
+
+    __tablename__ = "trip_stays"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    trip_id: Mapped[int] = mapped_column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    first_night: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_night: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)  # hotel / home / none / undecided
+    hotel_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("hotels.id", ondelete="SET NULL"), nullable=True)
+    label: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    lon: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    trip: Mapped["Trip"] = relationship("Trip", back_populates="stays")
+    hotel: Mapped[Optional["Hotel"]] = relationship("Hotel")
+
+
+class StaySuggestion(Base):
+    """
+    "Sleep at this hotel for nights a-b?" (docs/trip-upgrades, step 4, decisions D4-D5): the numbers when
+    last worked out, the plan's fingerprint then, and what the traveller decided. Private to the trip's owner.
+    """
+
+    __tablename__ = "stay_suggestions"
+    __table_args__ = (UniqueConstraint("trip_id", "first_night", "last_night", "hotel_id", name="uq_stay_suggestion"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    trip_id: Mapped[int] = mapped_column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    first_night: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_night: Mapped[int] = mapped_column(Integer, nullable=False)
+    hotel_id: Mapped[int] = mapped_column(Integer, ForeignKey("hotels.id", ondelete="CASCADE"), nullable=False)
+    money_saved: Mapped[Optional[float]] = mapped_column(Float, nullable=True)   # None: the current price isn't known
+    minutes_saved: Mapped[int] = mapped_column(Integer, nullable=False)
+    extra_moves: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(10), nullable=False, default="open")  # open / accepted / not_now / dismissed
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    shown_numbers_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    trip: Mapped["Trip"] = relationship("Trip", back_populates="stay_suggestions")
+    hotel: Mapped["Hotel"] = relationship("Hotel")
+
+    @property
+    def numbers(self) -> dict:
+        return _json_dict_get(self.shown_numbers_json) or {}
+
+    @numbers.setter
+    def numbers(self, value: dict):
+        self.shown_numbers_json = _json_dict_set(value) or "{}"
 
 
 # ---------------------------------------------------------------------------
@@ -668,6 +766,17 @@ class TripPreference(Base):
     origin_lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     origin_lon: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     origin_label: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # Meals (docs/trip-upgrades, step 3): per meal "restaurant" | "own" | "stay", and the cost of your own
+    # food per person. None = every meal at a restaurant (services/meals.py reads it)
+    meals_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    @property
+    def meals(self) -> Optional[dict]:
+        return _json_dict_get(self.meals_json)
+
+    @meals.setter
+    def meals(self, value: Optional[dict]):
+        self.meals_json = _json_dict_set(value)
 
     @property
     def transport_modes(self) -> list:
@@ -768,6 +877,16 @@ class Itinerary(Base):
     theme: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     total_cost: Mapped[float] = mapped_column(Float, default=0.0)
     total_travel_time: Mapped[float] = mapped_column(Float, default=0.0)  # minutes
+    # This day's meals, when they differ from the trip's (step 3); None = the trip's plan
+    meals_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    @property
+    def meals(self) -> Optional[dict]:
+        return _json_dict_get(self.meals_json)
+
+    @meals.setter
+    def meals(self, value: Optional[dict]):
+        self.meals_json = _json_dict_set(value)
 
     trip: Mapped["Trip"] = relationship("Trip", back_populates="itinerary_days")
     items: Mapped[List["ItineraryItem"]] = relationship(
@@ -806,6 +925,8 @@ class ItineraryItem(Base):
     travel_mode: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     # Condition warnings the traveller chose to keep the stop despite ("Keep"): JSON list of warning keys
     kept_warnings_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    # A meal's source (step 3): "restaurant" | "own" (packed) | "stay" (where the traveller sleeps); None otherwise
+    meal_source: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
 
     @property
     def kept_warnings(self) -> list:
@@ -852,6 +973,60 @@ class Feedback(Base):
     @tags.setter
     def tags(self, value):
         self.tags_json = _json_set(value)
+
+
+# ---------------------------------------------------------------------------
+# Trip reviews (trip upgrades step 7)
+# ---------------------------------------------------------------------------
+
+class TripReview(Base):
+    """
+    "How was your trip?" (docs/trip-upgrades, step 7; decisions D7-D9): five stars and an optional
+    comment, from the trip's first day. The owner and each trip-room member have their own (D8), private
+    to its author (D9). `rating` is None while only things one by one were rated.
+    """
+
+    __tablename__ = "trip_reviews"
+    __table_args__ = (
+        UniqueConstraint("trip_id", "user_id", name="uq_trip_review"),
+        CheckConstraint("rating IS NULL OR (rating >= 1 AND rating <= 5)", name="ck_trip_reviews_rating"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    trip_id: Mapped[int] = mapped_column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    comment: Mapped[Optional[str]] = mapped_column(String(280), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    trip: Mapped["Trip"] = relationship("Trip", back_populates="reviews")
+    items: Mapped[List["ReviewItem"]] = relationship(
+        "ReviewItem", back_populates="review", cascade="all, delete-orphan", order_by="ReviewItem.id"
+    )
+
+
+class ReviewItem(Base):
+    """One thing of the trip marked good or bad (D9), with an optional comment. `item_id` is the itinerary
+    item when there is one: a plain number, so the verdict outlives a re-planned day."""
+
+    __tablename__ = "review_items"
+    __table_args__ = (
+        CheckConstraint("verdict IN ('good', 'bad')", name="ck_review_items_verdict"),
+        CheckConstraint("target_type IN ('place', 'restaurant', 'hotel', 'stay_home', 'journey')", name="ck_review_items_target"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    review_id: Mapped[int] = mapped_column(Integer, ForeignKey("trip_reviews.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_type: Mapped[str] = mapped_column(String(12), nullable=False)    # place / restaurant / hotel / stay_home / journey
+    target_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    item_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    verdict: Mapped[str] = mapped_column(String(4), nullable=False)          # good / bad
+    comment: Mapped[Optional[str]] = mapped_column(String(280), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    review: Mapped["TripReview"] = relationship("TripReview", back_populates="items")
 
 
 # ---------------------------------------------------------------------------

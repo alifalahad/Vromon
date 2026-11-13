@@ -20,6 +20,7 @@ import { useVisits } from '../../src/features/map/visits';
 import { usePhotos } from '../../src/features/photos/queries';
 import { addDays, groupTrips, localToday } from '../../src/features/trips/dates';
 import { NextTripCard } from '../../src/features/trips/NextTripCard';
+import { RateTripReminder } from '../../src/features/trips/review/RateTripReminder';
 import { useTrips, useTripStats } from '../../src/features/trips/queries';
 import { StatsCard } from '../../src/features/trips/StatsCard';
 import { TripCard } from '../../src/features/trips/TripCard';
@@ -96,6 +97,7 @@ export default function TripsScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <LargeTitle title={t('trips.title')} />
+            <RateTripReminder trips={[...(trips.data ?? []), ...(joined.data ?? [])]} today={today} />
             {next ? <NextTripCard trip={next} today={today} onOpen={() => openNext(next)} /> : null}
             {hasTrips ? <StatsCard stats={stats.data} /> : null}
           </View>

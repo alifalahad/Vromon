@@ -8,6 +8,7 @@
 
 import type { ItineraryDay, ItineraryItem, TravelMode, Trip } from '../../../types';
 import { parseDay } from '../dates';
+import { isStayMeal, slotOf, sourceOf } from '../meals/meals';
 
 export type StopKind = 'visit' | 'meal';
 export type Coord = { latitude: number; longitude: number };
@@ -55,9 +56,12 @@ export function stopKind(item: Pick<ItineraryItem, 'item_type'>): StopKind {
   return item.item_type === 'meal' ? 'meal' : 'visit';
 }
 
-/** Items in visiting order, without the ones being removed (gone from view while Undo is offered). */
+/**
+ * Items in visiting order, without the ones being removed (gone from view while Undo is offered), and
+ * without breakfast and dinner where you stay: they're before leaving and after getting back, not stops.
+ */
 export function orderedStops(day: ItineraryDay, hidden: readonly number[] = []): ItineraryItem[] {
-  return [...day.items].filter((i) => !hidden.includes(i.id)).sort((a, b) => a.order_index - b.order_index);
+  return [...day.items].filter((i) => !hidden.includes(i.id) && !isStayMeal(i)).sort((a, b) => a.order_index - b.order_index);
 }
 
 /** Where the stop is: the place, or the meal's restaurant. Null when the data has no coordinates. */
@@ -73,24 +77,34 @@ export function stopCoord(item: ItineraryItem): Coord | null {
 export function planRows(day: ItineraryDay, hidden: readonly number[] = []): PlanRow[] {
   const items = orderedStops(day, hidden);
   const rows: PlanRow[] = [];
+  // A packed meal right after a stop is eaten there (step 3): the way on comes after it
+  let carried: ItineraryItem | null = null;
   items.forEach((item, i) => {
     rows.push({ kind: 'stop', key: `s${item.id}`, item, n: i + 1, stopKind: stopKind(item) });
     const next = items[i + 1];
     if (!next) return;
-    const travel = item.travel_time_to_next > 0 ? Math.round(item.travel_time_to_next) : 0;
+    const from: ItineraryItem = carried ?? item;
+    carried = null;
+    const travel = from.travel_time_to_next > 0 ? Math.round(from.travel_time_to_next) : 0;
+    if (travel > 0 && sourceOf(next) === 'own') {
+      carried = from;
+      const wait = toMinutes(next.start_time) - toMinutes(item.end_time);
+      if (wait >= FREE_TIME_MIN) rows.push({ kind: 'free', key: `f${item.id}`, start: item.end_time, minutes: wait });
+      return;
+    }
     const gap = toMinutes(next.start_time) - toMinutes(item.end_time) - travel;
     if (gap >= FREE_TIME_MIN) rows.push({ kind: 'free', key: `f${item.id}`, start: item.end_time, minutes: gap });
     if (travel > 0) {
       rows.push({
         kind: 'leg',
-        key: `l${item.id}`,
+        key: `l${from.id}`,
         minutes: travel,
-        km: item.distance_to_next,
-        itemId: item.id,
-        mode: item.travel_mode ?? null,
-        source: item.travel_source ?? null,
-        fare: item.travel_fare ?? null,
-        crossing: item.travel_crossing ?? null,
+        km: from.distance_to_next,
+        itemId: from.id,
+        mode: from.travel_mode ?? null,
+        source: from.travel_source ?? null,
+        fare: from.travel_fare ?? null,
+        crossing: from.travel_crossing ?? null,
       });
     }
   });
@@ -112,11 +126,17 @@ export function dayWindow(day: ItineraryDay, prefStart?: string, prefEnd?: strin
 /** Visits, meals and travel, in minutes since midnight. */
 export function ribbonSegments(day: ItineraryDay, hidden: readonly number[] = []): RibbonSegment[] {
   const segs: RibbonSegment[] = [];
+  let carried = 0; // the way on from a stop, after a packed meal eaten there
   orderedStops(day, hidden).forEach((item, i, all) => {
     const start = toMinutes(item.start_time);
     const end = toMinutes(item.end_time);
     segs.push({ start, end, kind: stopKind(item) });
-    if (all[i + 1] && item.travel_time_to_next > 0) segs.push({ start: end, end: end + Math.round(item.travel_time_to_next), kind: 'travel' });
+    const next = all[i + 1];
+    const travel = carried || (item.travel_time_to_next > 0 ? Math.round(item.travel_time_to_next) : 0);
+    carried = 0;
+    if (!next || !travel) return;
+    if (sourceOf(next) === 'own') carried = travel;
+    else segs.push({ start: end, end: end + travel, kind: 'travel' });
   });
   return segs;
 }
@@ -172,6 +192,8 @@ export function initialDayIndex(days: readonly Pick<ItineraryDay, 'day_date'>[],
 
 const KMH = 30;
 const MEAL_EARLIEST: Record<string, number> = { Lunch: 12 * 60, Dinner: 19 * 60 };
+/** Your own food (the server's meals.OWN_EARLIEST) */
+const OWN_EARLIEST: Record<string, number> = { Lunch: 12 * 60, Dinner: 17 * 60 + 30 };
 
 function haversineKm(a: Coord, b: Coord): number {
   const R = 6371;
@@ -224,7 +246,7 @@ export function retime(items: readonly ItineraryItem[], dayStart: number, fromIn
     // Travel starts when the previous visit ends (a meal in between happens on the way)
     const travel = coord && prevActivity ? Math.round((haversineKm(prevActivity, coord) / KMH) * 60) : 0;
     let start = Math.max(cursor, travel ? prevEnd + travel : cursor, openingMin(item));
-    if (item.item_type === 'meal') start = Math.max(start, MEAL_EARLIEST[item.title.split(' at ')[0]] ?? 0);
+    if (item.item_type === 'meal') start = Math.max(start, (sourceOf(item) === 'own' ? OWN_EARLIEST : MEAL_EARLIEST)[slotOf(item) ?? ''] ?? 0);
     start = afterBusy(start, item.duration_minutes, busy);
     if (item.pinned) start = Math.max(start, toMinutes(item.start_time));
     cursor = start + item.duration_minutes;
@@ -261,7 +283,7 @@ export function dayRulesOf(trip: Pick<Trip, 'preference' | 'constraints'> | unde
 
 /** When the day begins (the server's day_start_of): the preferred start, or the first stop if earlier. */
 export function dayStartOf(day: ItineraryDay, prefStart = '09:00'): number {
-  return Math.min(toMinutes(prefStart), ...day.items.map((i) => toMinutes(i.start_time)));
+  return Math.min(toMinutes(prefStart), ...day.items.filter((i) => !isStayMeal(i)).map((i) => toMinutes(i.start_time)));
 }
 
 /** The day re-timed with one item moved: what the preview and the optimistic update show. */
@@ -271,5 +293,6 @@ export function previewMove(day: ItineraryDay, itemId: number, to: number, rules
   if (from < 0) return items;
   const r: DayRules = typeof rules === 'string' || rules === undefined ? { start: rules ?? '09:00', busy: [] } : rules;
   const moved = moveInList(items, from, to);
-  return retime(moved, dayStartOf(day, r.start), Math.min(from, to), r.busy);
+  // Meals where you stay keep their times (the server moves them when leaving or getting back changes)
+  return [...retime(moved, dayStartOf(day, r.start), Math.min(from, to), r.busy), ...day.items.filter(isStayMeal)];
 }

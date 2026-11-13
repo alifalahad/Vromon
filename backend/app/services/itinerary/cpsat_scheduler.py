@@ -105,9 +105,21 @@ class SchedulingProblem:
     meal_cost_per_day: list[float] = field(default_factory=list)
     theme_interests_per_day: list[list[str]] = field(default_factory=list)
     hotel_latlon: Optional[tuple[float, float]] = None
+    # Where each day starts and ends (index 0 = day 1); missing entries use hotel_latlon (trip upgrades step 1)
+    start_per_day: list[Optional[tuple[float, float]]] = field(default_factory=list)
+    end_per_day: list[Optional[tuple[float, float]]] = field(default_factory=list)
+    # Minutes from the day's dinner back to where the traveller sleeps: dinner ends that much before the day (D3)
+    dinner_back_per_day: list[int] = field(default_factory=list)
     # Per day (index 0 = day 1); missing entries use day_start_min / day_end_min
     day_windows: list[tuple[int, int]] = field(default_factory=list)
     breakfast_per_day: list[bool] = field(default_factory=list)
+    # Meals (trip upgrades step 3): how long breakfast and lunch take in the day (60 at a restaurant, 30
+    # packed, 0 for breakfast where you stay), whether dinner is a restaurant in the day, and the minutes
+    # kept before the way back for a packed dinner after the last stop. Missing entries: restaurants
+    breakfast_minutes_per_day: list[int] = field(default_factory=list)
+    lunch_minutes_per_day: list[int] = field(default_factory=list)
+    dinner_in_day_per_day: list[bool] = field(default_factory=list)
+    end_reserve_per_day: list[int] = field(default_factory=list)
     busy_per_day: list[list[tuple[int, int]]] = field(default_factory=list)
     # Must-sees placed whenever possible (soft), and where they may go: place → {day index: (lo, hi) start}
     wanted_ids: list[int] = field(default_factory=list)
@@ -119,13 +131,32 @@ class SchedulingProblem:
     sunset_ids: set[int] = field(default_factory=set)
     sunset_per_day: list[Optional[int]] = field(default_factory=list)
 
+    def start_point(self, d: int) -> Optional[tuple[float, float]]:
+        return self.start_per_day[d] if d < len(self.start_per_day) else self.hotel_latlon
+
+    def end_point(self, d: int) -> Optional[tuple[float, float]]:
+        return self.end_per_day[d] if d < len(self.end_per_day) else self.hotel_latlon
+
+    def dinner_back(self, d: int) -> int:
+        return self.dinner_back_per_day[d] if d < len(self.dinner_back_per_day) else 0
+
     def window(self, d: int) -> tuple[int, int]:
         return self.day_windows[d] if d < len(self.day_windows) else (self.day_start_min, self.day_end_min)
 
     def act_start(self, d: int) -> int:
         """Visits start after breakfast (when the day has one)."""
         breakfast = self.breakfast_per_day[d] if d < len(self.breakfast_per_day) else True
-        return self.window(d)[0] + (MEAL_MINUTES if breakfast else 0)
+        minutes = self.breakfast_minutes_per_day[d] if d < len(self.breakfast_minutes_per_day) else MEAL_MINUTES
+        return self.window(d)[0] + (minutes if breakfast else 0)
+
+    def lunch_minutes(self, d: int) -> int:
+        return self.lunch_minutes_per_day[d] if d < len(self.lunch_minutes_per_day) else MEAL_MINUTES
+
+    def dinner_in_day(self, d: int) -> bool:
+        return self.dinner_in_day_per_day[d] if d < len(self.dinner_in_day_per_day) else True
+
+    def end_reserve(self, d: int) -> int:
+        return self.end_reserve_per_day[d] if d < len(self.end_reserve_per_day) else 0
 
     def busy(self, d: int) -> list[tuple[int, int]]:
         return self.busy_per_day[d] if d < len(self.busy_per_day) else []
@@ -309,6 +340,25 @@ def solve(
             if i != j and points[i] is not None and points[j] is not None:
                 travel[i][j] = _travel(points[i], points[j])
 
+    # Each day's start and end (the stays): travel from the start to each place, and from each place to the end
+    def _row(p: Optional[tuple[float, float]], outbound: bool) -> list[tuple[int, float]]:
+        row = [(0, 0.0)] * n
+        if p is not None:
+            for k in range(1, n):
+                if points[k] is not None:
+                    row[k] = _travel(p, points[k]) if outbound else _travel(points[k], p)
+        return row
+    rows_cache: dict[tuple, list[tuple[int, float]]] = {}
+
+    def row_from(p, outbound: bool) -> list[tuple[int, float]]:
+        key = (p, outbound)
+        if key not in rows_cache:
+            rows_cache[key] = travel[0] if p == hotel and outbound else _row(p, outbound)
+        return rows_cache[key]
+
+    from_start = [row_from(problem.start_point(d), True) for d in range(problem.num_days)]
+    to_end = [row_from(problem.end_point(d), False) for d in range(problem.num_days)]
+
     x: dict[tuple[int, int], cp_model.IntVar] = {}
     start: dict[tuple[int, int], cp_model.IntVar] = {}
     arcs_by_day: dict[int, list[tuple[int, int, cp_model.IntVar]]] = {}
@@ -371,16 +421,20 @@ def solve(
 
         # Meals inside the window become fixed-length intervals the visits must avoid
         # (optional, with a large bonus: only left out when a busy time or a must-see leaves no room)
+        lunch_len = problem.lunch_minutes(d)
         lunch_lo = max(LUNCH_EARLIEST, act_start)
-        lunch_hi = min(max(LUNCH_LATEST, lunch_lo), day_end - MEAL_MINUTES)
+        lunch_hi = min(max(LUNCH_LATEST, lunch_lo), day_end - lunch_len)
         if lunch_lo <= lunch_hi:
             lv = model.NewIntVar(lunch_lo, lunch_hi, f"lunch_{d}")
             lp = model.NewBoolVar(f"lunch_on_{d}")
-            intervals.append(model.NewOptionalFixedSizeIntervalVar(lv, MEAL_MINUTES, lp, f"lunch_iv_{d}"))
+            intervals.append(model.NewOptionalFixedSizeIntervalVar(lv, lunch_len, lp, f"lunch_iv_{d}"))
             lunch_vars[d], lunch_on[d] = lv, lp
             objective_terms.append(MEAL_BONUS * lp)
-        if day_end - MEAL_MINUTES >= max(DINNER_EARLIEST, act_start):
-            dv = model.NewIntVar(max(DINNER_EARLIEST, act_start), day_end - MEAL_MINUTES, f"dinner_{d}")
+        # Back where you sleep by the end of the day (D3): dinner ends early enough for the way back
+        dinner_hi = day_end - MEAL_MINUTES - problem.dinner_back(d)
+        dinner_lo = max(min(DINNER_EARLIEST, dinner_hi), act_start)
+        if problem.dinner_in_day(d) and dinner_lo <= dinner_hi:
+            dv = model.NewIntVar(dinner_lo, dinner_hi, f"dinner_{d}")
             dp = model.NewBoolVar(f"dinner_on_{d}")
             intervals.append(model.NewOptionalFixedSizeIntervalVar(dv, MEAL_MINUTES, dp, f"dinner_iv_{d}"))
             dinner_vars[d], dinner_on[d] = dv, dp
@@ -402,9 +456,15 @@ def solve(
             arcs.append((i, i, xi.Not()))
             first = model.NewBoolVar(f"a_0_{i}_{d}")
             arcs.append((0, i, first))
-            model.Add(start[ci.place_id, d] >= act_start + travel[0][i][0]).OnlyEnforceIf(first)
+            model.Add(start[ci.place_id, d] >= act_start + from_start[d][i][0]).OnlyEnforceIf(first)
             day_arcs.append((0, i, first))
-            arcs.append((i, 0, model.NewBoolVar(f"a_{i}_0_{d}")))
+            last = model.NewBoolVar(f"a_{i}_0_{d}")
+            arcs.append((i, 0, last))
+            reserve = problem.end_reserve(d)
+            if problem.end_point(d) is not None or reserve:
+                # The last visit leaves time for the way back (and for a packed dinner there first)
+                back = to_end[d][i][0] if problem.end_point(d) is not None else 0
+                model.Add(start[ci.place_id, d] + ci.duration_min + back + reserve <= day_end).OnlyEnforceIf(last)
             for j, cj in nodes:
                 # skip self-arcs and arcs that can never be time-feasible
                 if i == j or windows[i][0] + ci.duration_min + travel[i][j][0] > windows[j][1]:
@@ -421,8 +481,9 @@ def solve(
         if len(day_sunny) > 1:
             model.Add(sum(day_sunny) <= 1)
         for i, j, lit in day_arcs:
-            if travel[i][j][0]:
-                objective_terms.append(-TRAVEL_PENALTY_PER_MINUTE * travel[i][j][0] * lit)
+            minutes = from_start[d][j][0] if i == 0 else travel[i][j][0]
+            if minutes:
+                objective_terms.append(-TRAVEL_PENALTY_PER_MINUTE * minutes * lit)
 
         # Daily limits
         if day_x:
@@ -501,7 +562,7 @@ def solve(
             c = next(c for c in cands if c.place_id == pid)
             node = cands.index(c) + 1
             prev = prev_of.get(node, 0)
-            minutes, km = travel[prev][node]
+            minutes, km = from_start[d][node] if prev == 0 else travel[prev][node]
             s = solver.Value(start[pid, d])
             result.visits.append(ScheduledVisit(
                 place_id=pid, day_number=d + 1, start_min=s, end_min=s + c.duration_min,
@@ -550,16 +611,36 @@ class CpSatItineraryService:
         self.workers = workers if workers is not None else settings.optimizer_workers
         self.seed = seed
 
+    @staticmethod
+    def _way_back(items: list, end, context: dict) -> float:
+        """Minutes from the day's last visit or meal back to where the traveller sleeps (D3)."""
+        from app.services.routing import ROADS, point_of
+        target = point_of(end)
+        if target is None:
+            return 0.0
+        for it in reversed(items):
+            if it.item_type == "activity" and it.place_id in context["candidates"]:
+                c = context["candidates"][it.place_id]
+                here = (c.lat, c.lon) if c.lat is not None and c.lon is not None else None
+            elif it.item_type == "meal":
+                here = point_of(getattr(it, "restaurant", None))
+            else:
+                here = None
+            if here is not None:
+                return ROADS.travel(here, target).minutes
+        return 0.0
+
     def _meals(self, db: "Session", trip: "Trip", day_number: int, rules):
+        """The restaurants of the day's restaurant meals (step 3: own food and meals where you stay have none)."""
         from app.services.itinerary.itinerary_service import _meal_seed
         seed = _meal_seed(trip, day_number)
         # Breakfast is at the start of the day; lunch and dinner use their usual slots
         day_start = rules.window(day_number)[0]
         meals = {
             m: self.baseline._pick_meal(db, trip.destination, m, seed, day_start if m == "Breakfast" else None)
-            for m in ("Lunch", "Dinner")
+            for m in ("Lunch", "Dinner") if rules.meal_source(day_number, m) == "restaurant"
         }
-        if rules.has_breakfast(day_number):
+        if rules.has_breakfast(day_number) and rules.meal_source(day_number, "Breakfast") == "restaurant":
             meals["Breakfast"] = self.baseline._pick_meal(db, trip.destination, "Breakfast", seed, day_start)
         return meals
 
@@ -581,11 +662,22 @@ class CpSatItineraryService:
             for p, score, reasons in ranked
         ]
         meals = {d: self._meals(db, trip, d, rules) for d in range(1, trip.num_days + 1)}
+        from app.services import meals as meal_plan
+        own_meals = {d: [m for m in meal_plan.SLOTS if rules.meal_source(d, m) == "own"
+                         and (m != "Breakfast" or rules.has_breakfast(d))] for d in range(1, trip.num_days + 1)}
         meal_cost = [
-            sum((r.average_meal_cost if r else 300.0) for r in meals[d].values())
+            sum((r.average_meal_cost if r else 300.0) for r in meals[d].values()) + rules.own_cost(d) * len(own_meals[d])
             for d in range(1, trip.num_days + 1)
         ]
-        hotel = self.baseline._pick_hotel(db, trip)
+        from app.services import stays
+        from app.services.routing import point_of
+        bases = stays.bases(db, trip)
+        latlon = lambda b: point_of(b) if b is not None else None  # noqa: E731
+        days = range(1, trip.num_days + 1)
+        dinner_back = []
+        for d in days:
+            dinner, end = meals[d].get("Dinner"), bases.end(d)
+            dinner_back.append(_travel(point_of(dinner), point_of(end))[0] if dinner is not None and latlon(end) and point_of(dinner) else 0)
         # A must-see with a day or a time may only start in that window
         durations = {c.place_id: c.duration_min for c in candidates}
         allowed = {
@@ -604,6 +696,10 @@ class CpSatItineraryService:
             allowed=allowed,
             day_windows=[rules.window(d) for d in range(1, trip.num_days + 1)],
             breakfast_per_day=[rules.has_breakfast(d) for d in range(1, trip.num_days + 1)],
+            breakfast_minutes_per_day=[rules.breakfast_minutes(d) for d in days],
+            lunch_minutes_per_day=[meal_plan.minutes(rules.meal_source(d, "Lunch")) for d in days],
+            dinner_in_day_per_day=[rules.meal_source(d, "Dinner") == "restaurant" for d in days],
+            end_reserve_per_day=[meal_plan.OWN_MINUTES if rules.meal_source(d, "Dinner") == "own" else 0 for d in days],
             busy_per_day=[[(b.start, b.end) for b in rules.busy_on(d)] for d in range(1, trip.num_days + 1)],
             excluded_ids=list(cons.excluded_places) if cons else [],
             daily_budget_cap=cons.max_daily_budget if cons else 0.0,
@@ -611,7 +707,10 @@ class CpSatItineraryService:
             theme_interests_per_day=[
                 self.baseline._day_theme_interests(trip, d) for d in range(1, trip.num_days + 1)
             ],
-            hotel_latlon=(hotel.latitude, hotel.longitude) if hotel else None,
+            hotel_latlon=latlon(bases.start(1)),
+            start_per_day=[latlon(bases.start(d)) for d in days],
+            end_per_day=[latlon(bases.end(d)) for d in days],
+            dinner_back_per_day=dinner_back,
         )
         # The weather (step 7): rainy hours from the forecast, and sunset stops for photography
         from app.services.conditions.service import outdoor_place, planning_weather
@@ -654,29 +753,48 @@ class CpSatItineraryService:
             raise OptimizationFailed(result)
 
         from app.services.itinerary.itinerary_service import _must_note
-        from app.services.routing import ROADS
+        from app.services.routing import ROADS, point_of
         from app.services.itinerary.trip_rules import Placement
         from app.services.itinerary.trip_rules import load_rules
 
+        from app.models.models import Place
+        from app.services import meals as meal_plan
+        from app.services import stays
         rules = context.get("rules") or load_rules(db, trip)
+        stays.freeze(db, trip)
+        bases = stays.bases(db, trip)
         days: list[Itinerary] = []
         for d in range(1, trip.num_days + 1):
             meals = context["meals"][d]
             visits = [v for v in result.visits if v.day_number == d]
             seed = _meal_seed(trip, d)
+            own_cost = rules.own_cost(d)
 
             def meal(name: str, start: int, meals=meals, seed=seed) -> ItineraryItem:
                 # The planned restaurant if it's open at the solved time, otherwise one that is
+                if rules.meal_source(d, name) == "own":
+                    # A packed meal at the stop the traveller has just seen (no restaurant, no leg to one)
+                    here = max((v for v in visits if v.end_min <= start), key=lambda v: v.end_min, default=None)
+                    return meal_plan.own_item(name, start, own_cost, at=db.get(Place, here.place_id) if here else None)
                 return self.baseline._meal_item_at(db, trip.destination, name, meals[name], start, seed)
 
             # Only the meals the day has room and time for (the solver leaves one out only when it must)
             items: list[ItineraryItem] = []
-            if "Breakfast" in meals:
+            if "Breakfast" in meals or (rules.meal_source(d, "Breakfast") == "own" and rules.has_breakfast(d)):
                 items.append(meal("Breakfast", rules.window(d)[0]))
             if d in result.lunch_start:
                 items.append(meal("Lunch", result.lunch_start[d]))
             if d in result.dinner_start:
                 items.append(meal("Dinner", result.dinner_start[d]))
+            if rules.meal_source(d, "Dinner") == "own":
+                # After the last stop (not before 17:30 when there's room), then the way back
+                last = max(visits, key=lambda v: v.end_min, default=None)
+                done = max([last.end_min if last else rules.activity_start(d)] + [_time_to_minutes(i.end_time) for i in items])
+                end = bases.end(d)
+                c = context["candidates"].get(last.place_id) if last else None
+                back = round(ROADS.travel((c.lat, c.lon), point_of(end)).minutes) if c and c.lat is not None and end is not None and point_of(end) else 0
+                latest = rules.window(d)[1] - meal_plan.OWN_MINUTES - back
+                items.append(meal("Dinner", max(done, min(max(done, meal_plan.OWN_EARLIEST["Dinner"]), latest))))
 
             activity_items = []
             for v in visits:
@@ -694,6 +812,7 @@ class CpSatItineraryService:
                     recommendation_score=round(v.ranking_score, 3),
                     order_index=0,
                 )
+                item.place = db.get(Place, v.place_id)
                 m = rules.must_for(v.place_id)
                 if m is not None and m.timed:
                     note = _must_note(rules, Placement(m, None, d, v.start_min), d)
@@ -715,6 +834,10 @@ class CpSatItineraryService:
                 prev_item.travel_time_to_next = round(t.minutes, 1)
                 prev_item.distance_to_next = round(v.distance_from_prev_km, 1)
             items.extend(activity_items)
+            # Breakfast where you stay before leaving, dinner there after the way back (outside the day)
+            can_breakfast, can_dine = meal_plan.stay_days(rules, d)
+            items += meal_plan.place_stay_meals(items, rules.meals.get(d) or {}, bases.start(d), bases.end(d),
+                                                breakfast=can_breakfast, dinner=can_dine)
 
             items.sort(key=lambda it: _time_to_minutes(it.start_time))
             for i, it in enumerate(items):
@@ -725,8 +848,11 @@ class CpSatItineraryService:
                 day_date=trip.start_date + timedelta(days=d - 1),
                 theme=self.baseline._theme_label(self.baseline._day_theme_interests(trip, d), d),
                 total_cost=round(sum(it.cost for it in items), 2),
-                total_travel_time=float(sum(v.travel_from_prev_min for v in visits)),
+                total_travel_time=float(sum(v.travel_from_prev_min for v in visits)) + (
+                    round(self._way_back(items, bases.end(d), context)) if visits else 0.0
+                ),
             )
+            itinerary.meals = rules.meal_overrides.get(d)
             itinerary.items = items
             db.add(itinerary)
             db.flush()

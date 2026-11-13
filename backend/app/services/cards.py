@@ -144,7 +144,7 @@ def _place(db: Session, card: PlaceCardIn) -> dict:
     kind = card.type
     if kind == "attraction":
         place = db.get(Place, _int(card.ref, "Place"))
-        if place is None or not place.is_active:
+        if place is None or not place.is_active or not place.listed:   # a private stop is never sent (step 6)
             raise CardError(404, "Place not found")
         destination = db.get(Destination, place.destination_id)
         return {
@@ -165,7 +165,7 @@ def _place(db: Session, card: PlaceCardIn) -> dict:
         if destination is None or not destination.is_active:
             raise CardError(404, "Destination not found")
         places = db.scalar(
-            select(func.count(Place.id)).where(Place.destination_id == destination.id, Place.is_active.is_(True))
+            select(func.count(Place.id)).where(Place.destination_id == destination.id, Place.is_active.is_(True), Place.listed.is_(True))
         )
         return {"type": kind, "id": destination.id, "name": destination.name, "places": places or 0, **_where(destination)}
     if kind == "country":
@@ -264,7 +264,7 @@ class _Access:
         if (kind, ref) not in self.places:
             if kind == "attraction":
                 found = self.db.get(Place, int(ref)) if ref.isdigit() else None
-                ok = found is not None and found.is_active
+                ok = found is not None and found.is_active and found.listed
             elif kind == "destination":
                 found = self.db.get(Destination, int(ref)) if ref.isdigit() else None
                 ok = found is not None and found.is_active

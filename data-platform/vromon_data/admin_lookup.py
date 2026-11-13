@@ -55,3 +55,13 @@ class AdminLookup:
         sub = next((s for s in subs if self.units[s].parent_id == district), None)
         return Placement(division_id=self.units[district].parent_id, district_id=district, subdistrict_id=sub,
                          near_edge=near_edge, outside=outside, in_country=in_country)
+
+    def district_of(self, lat: float, lon: float) -> uuid.UUID | None:
+        """Only the district, quickly (no sub-district, no border check), for bulk loads like the places
+        index; a point just off the coast goes to the nearest district. None when outside Bangladesh."""
+        p = Point(lon, lat)
+        hits = self._idx["district"].covering_point(p)
+        if hits:
+            return uuid.UUID(hits[0])
+        near = uuid.UUID(self._idx["district"].nearest(p))
+        return near if self.shapes[near].distance(p) <= OUTSIDE_DEG else None

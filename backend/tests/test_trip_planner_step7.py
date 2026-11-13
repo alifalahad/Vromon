@@ -238,10 +238,10 @@ def dhaka():
     return 1185241
 
 
-def trip_from_dhaka(client, mode="bus", travellers=2, budget_bdt=40000, days=3) -> int:
+def trip_from_dhaka(client, mode="bus", travellers=2, budget_bdt=40000, days=3, start: date = date(2026, 11, 1)) -> int:
     payload = {
-        "destination": "Cox's Bazar", "start_date": "2026-11-01",
-        "end_date": str(date(2026, 11, 1) + timedelta(days=days - 1)), "num_travelers": travellers,
+        "destination": "Cox's Bazar", "start_date": str(start),
+        "end_date": str(start + timedelta(days=days - 1)), "num_travelers": travellers,
         "total_budget": budget_bdt, "preference": {"interests": ["Beach", "Nature"], "accommodation_preference": "Standard"},
         "origin": {"city_geonameid": 1185241}, "transport_mode": mode,
     }
@@ -324,21 +324,24 @@ class TestBudgetParts:
 class TestWaysToSave:
 
     def test_a_cheaper_hotel_applied_and_undone(self, client, roads, dhaka):
-        tid = trip_from_dhaka(client)
+        # Since trip upgrades step 4 the cheaper hotel comes from the stay advisor (key "stay"), for nights
+        # that haven't started yet: a trip ahead
+        tid = trip_from_dhaka(client, start=date.today() + timedelta(days=30))
         b = budget(client, tid)
-        s = next(x for x in b["saves"] if x["key"] == "hotel")
-        assert s["detail"]["from"] == b["hotel"]["name"] and s["detail"]["to_rating"] >= 3.5
+        s = next(x for x in b["saves"] if x["key"] == "stay")
+        assert s["detail"]["current"]["name"] == b["hotel"]["name"]
+        assert not s["detail"]["hotel"]["rating_known"] or s["detail"]["hotel"]["rating"] >= 3.5
         before = part(b, "stay")["amount"]
 
         out = save(client, tid, s["action"])
         # the saving is net of the rides from the new hotel
         assert out["budget"]["total"] == pytest.approx(b["total"] - s["saving"], abs=20)
         assert part(out["budget"], "stay")["amount"] < before
-        assert itinerary(client, tid)["hotel"]["name"] == s["detail"]["to"]
+        assert itinerary(client, tid)["hotel"]["name"] == s["detail"]["hotel"]["name"]
 
         back = save(client, tid, out["undo"])
         assert part(back["budget"], "stay")["amount"] == before
-        assert itinerary(client, tid)["hotel"]["name"] == s["detail"]["from"]
+        assert itinerary(client, tid)["hotel"]["name"] == s["detail"]["current"]["name"]
 
     def test_skipping_the_priciest_stop_applied_and_undone(self, client, roads, dhaka):
         tid = trip_from_dhaka(client)
@@ -366,7 +369,8 @@ class TestWaysToSave:
         assert again is None or again["detail"]["item_id"] != s["detail"]["item_id"]
 
     def test_rickshaws_on_short_rides_applied_and_undone(self, client, roads, dhaka):
-        tid = trip_from_dhaka(client)
+        # 4 travellers (2 rickshaws against 2 CNGs): this plan has short CNG rides since the stays (trip upgrades step 1)
+        tid = trip_from_dhaka(client, travellers=4)
         b = budget(client, tid)
         s = next((x for x in b["saves"] if x["key"] == "rickshaw"), None)
         if s is None:
@@ -394,12 +398,12 @@ class TestWaysToSave:
         assert budget(client, tid)["total"] == before
 
     def test_the_chosen_hotel_is_the_trip_hotel_everywhere(self, client, roads, dhaka):
-        tid = trip_from_dhaka(client)
-        s = next(x for x in budget(client, tid)["saves"] if x["key"] == "hotel")
+        tid = trip_from_dhaka(client, start=date.today() + timedelta(days=30))
+        s = next(x for x in budget(client, tid)["saves"] if x["key"] == "stay")   # the stay advisor (step 4)
         save(client, tid, s["action"])
         client.post(f"/api/v1/trips/{tid}/regenerate")
-        assert itinerary(client, tid)["hotel"]["name"] == s["detail"]["to"]
-        assert budget(client, tid)["hotel"]["name"] == s["detail"]["to"]
+        assert itinerary(client, tid)["hotel"]["name"] == s["detail"]["hotel"]["name"]
+        assert budget(client, tid)["hotel"]["name"] == s["detail"]["hotel"]["name"]
 
 
 # ---------------------------------------------------------------------------

@@ -267,6 +267,10 @@ def explain_item(
     )
     if item is None:
         raise HTTPException(status_code=404, detail=f"Item {item_id} not found in trip {trip_id}")
+    # A traveller's own stop (trip upgrades step 6): Vromon knows nothing about it, and its name
+    # (a pin's "Aunt's office") isn't sent to the language model
+    if item.place is not None and item.place.listed is False:
+        raise HTTPException(status_code=422, detail="This is your own stop: Vromon has no information about it.")
 
     llm = _require_llm(llm)  # after the ownership check: strangers get 404, not 503
 

@@ -15,6 +15,9 @@ import Animated, { FadeIn, LinearTransition, useAnimatedStyle, type SharedValue 
 import type { ItineraryItem, TravelMode, Violation } from '../../../types';
 import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
+import { isPrivatePlace, isUnchecked, kindLabel } from '../../places/kinds';
+import { NotCheckedBadge } from '../../places/NotCheckedBadge';
+import { mealTitle, sourceOf } from '../meals/meals';
 import { planColors } from './colors';
 import { forYou, stopTitle, type StopKind } from './timeline';
 import { usePlanFormat, type PlanFormat } from './usePlanFormat';
@@ -27,6 +30,8 @@ const APPEAR = FadeIn.duration(150);
 type T = (k: string, o?: Record<string, unknown>) => string;
 
 export function priceText(item: ItineraryItem, t: T, f: PlanFormat): string {
+  // Your own food costs what you said (nothing when you didn't); where you stay, nothing (step 3)
+  if (sourceOf(item) === 'stay' || (sourceOf(item) === 'own' && !item.cost)) return t('meals.noCost');
   if (item.cost_source === 'placeholder') return t('plan.priceUnknown');
   if (!item.cost) return item.item_type === 'meal' ? t('plan.priceUnknown') : t('plan.priceFree');
   const amount = item.currency === 'BDT' ? f.money(item.cost) : `${f.n(item.cost)} ${item.currency}`;
@@ -34,8 +39,17 @@ export function priceText(item: ItineraryItem, t: T, f: PlanFormat): string {
 }
 
 export function stopSubtitle(item: ItineraryItem, t: T, f: PlanFormat): string {
-  const what = item.item_type === 'meal' ? item.restaurant?.cuisine : item.place?.category ?? item.category;
+  const own = sourceOf(item) === 'own';
+  // A packed meal: where it's eaten ("At Laboni Beach")
+  const what = own ? (item.notes?.startsWith('At ') ? t('meals.atPlace', { place: item.notes.slice(3) }) : null)
+    : item.item_type === 'meal' ? item.restaurant?.cuisine?.replace(/_/g, ' ')
+    : (isPrivatePlace(item.place) ? kindLabel(item.place?.kind, t) : null) ?? item.place?.category ?? item.category;
   return [what, priceText(item, t, f)].filter(Boolean).join(' · ');
+}
+
+/** The card's title: a packed meal or one where you stay in words, else the place or "Lunch · restaurant". */
+export function cardTitle(item: ItineraryItem, t: T): string {
+  return mealTitle(item, t) ?? stopTitle(item);
 }
 
 export type MoveActions = { earlier?: () => void; later?: () => void; toDay?: () => void };
@@ -56,6 +70,7 @@ export function StopCard({
   previewStart,
   move,
   glide = true,
+  onEatNearby,
 }: {
   item: ItineraryItem;
   n: number;
@@ -77,6 +92,8 @@ export function StopCard({
   glide?: boolean;
   /** TalkBack's way to move it */
   move?: MoveActions;
+  /** A packed meal: "Places to eat nearby", in case of a change of mind (step 3) */
+  onEatNearby?: () => void;
 }) {
   const styles = useStyles();
   const theme = useTheme();
@@ -111,8 +128,14 @@ export function StopCard({
       onPress={onPress}
       haptic="selection"
       style={[styles.card, { borderColor: ring }]}
-      accessibilityLabel={t('plan.stopA11y', { n: f.n(n), title: stopTitle(item), time: f.time(item.start_time) })}
-      accessibilityHint={[stopSubtitle(item, t, f), item.pinned ? t('plan.pinned') : drag ? t('plan.dragHint') : null].filter(Boolean).join('. ')}
+      accessibilityLabel={t('plan.stopA11y', { n: f.n(n), title: cardTitle(item, t), time: f.time(item.start_time) })}
+      accessibilityHint={[
+        stopSubtitle(item, t, f),
+        isUnchecked(item.place) ? t('search.notCheckedA11y') : null,
+        item.pinned ? t('plan.pinned') : drag ? t('plan.dragHint') : null,
+      ]
+        .filter(Boolean)
+        .join('. ')}
       accessibilityActions={actions.length ? actions : undefined}
       onAccessibilityAction={(e) => onAction(e.nativeEvent.actionName)}
       testID={`stop-${item.id}`}
@@ -123,8 +146,23 @@ export function StopCard({
         </Text>
       </View>
       <View style={styles.texts}>
-        <Text style={styles.title}>{stopTitle(item)}</Text>
+        <Text style={styles.title}>{cardTitle(item, t)}</Text>
         <Text style={styles.sub}>{stopSubtitle(item, t, f)}</Text>
+        {isUnchecked(item.place) ? <NotCheckedBadge testID={`stop-unchecked-${item.id}`} /> : null}
+        {onEatNearby ? (
+          <PressableScale
+            pressEffect="opacity"
+            haptic="selection"
+            onPress={onEatNearby}
+            hitSlop={8}
+            style={styles.eatNearby}
+            accessibilityRole="button"
+            testID={`eat-nearby-${item.id}`}
+          >
+            <MaterialCommunityIcons name="silverware-fork-knife" size={16} color={theme.colors.link} />
+            <Text style={styles.eatNearbyText}>{t('meals.eatNearby')}</Text>
+          </PressableScale>
+        ) : null}
         {tag ? <Text style={styles.tag}>{t('plan.forYou', { what: tag })}</Text> : null}
         {item.pinned ? (
           <View style={styles.pinnedRow}>
@@ -321,6 +359,8 @@ const useStyles = makeStyles((t) => ({
   },
   pinnedRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   pinnedText: { fontSize: 12, color: t.colors.textSecondary },
+  eatNearby: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 36, marginTop: 2 },
+  eatNearbyText: { ...t.type.callout, fontWeight: '600', color: t.colors.link },
   timeCol: { width: 52, alignItems: 'flex-end', paddingTop: t.spacing.md },
   time: { fontSize: 15, fontWeight: '700', color: t.colors.textPrimary },
   freeTime: { color: t.colors.textSecondary },

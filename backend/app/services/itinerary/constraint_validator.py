@@ -33,9 +33,13 @@ from typing import List, Optional
 from sqlalchemy.orm import object_session
 
 from app.models.models import Destination, Place, Trip, TripPreference, TripConstraint, Itinerary, ItineraryItem
+from app.services import meals
 from app.services.itinerary.trip_rules import TripRules, in_window, m2t, rules_for
 
 logger = logging.getLogger("vromon.validator")
+
+# Minutes of rounding a day may run past its end before "back late" is said
+BACK_TOLERANCE = 5
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +126,11 @@ class ConstraintValidator:
 
         daily_budget_cap = cons.max_daily_budget if cons else 0.0
         visited_place_ids: set = set()
+
+        # Where each day ends (the stays): the traveller is back there by the end of the day (D3)
+        from app.services import stays
+        session_ = object_session(trip)
+        bases = stays.bases(session_, trip) if session_ is not None else None
 
         for day in days:
             day_num = day.day_number
@@ -232,9 +241,9 @@ class ConstraintValidator:
                         day_number=day_num,
                     ))
 
-            # 4. Daily boundary check
+            # 4. Daily boundary check (breakfast and dinner where you stay are outside the day on purpose)
             for item in day.items:
-                if not item.start_time or not item.end_time:
+                if not item.start_time or not item.end_time or meals.is_stay(item):
                     continue
                 item_start = _t2m(item.start_time)
                 item_end = _t2m(item.end_time)
@@ -266,6 +275,17 @@ class ConstraintValidator:
                         day_number=day_num,
                         item_id=item.id,
                     ))
+
+            # 4b. Back where you sleep by the end of the day (D3); an edit can run a day late
+            back = self._back_at(day, bases.end(day_num) if bases is not None else None)
+            leaving = day_num == rules.num_days and rules.leave is not None and end_min == rules.leave
+            if back is not None and back > end_min + BACK_TOLERANCE and not leaving:
+                report.violations.append(Violation(
+                    severity="soft",
+                    code="BACK_LATE",
+                    message=f"Day {day_num}: back where you stay at {m2t(back)}, after your day ends at {m2t(end_min)}.",
+                    day_number=day_num,
+                ))
 
             # 5. A day with no activities at all (e.g. every eligible place is used up)
             if not activity_items:
@@ -303,6 +323,17 @@ class ConstraintValidator:
             )
 
         return report
+
+    @staticmethod
+    def _back_at(day: Itinerary, end) -> Optional[int]:
+        """When the traveller is back at the day's end point, after its last stop or meal (None: unknown)."""
+        from app.services.routing import point_of
+        from app.services.stays import last_point
+        item, point = last_point(day)
+        if item is None or not item.end_time or point_of(end) is None:
+            return None
+        # After the last stop or meal (a packed dinner after the last stop is eaten there), then the way back
+        return meals.back_at(day.items, end)
 
     @staticmethod
     def _rules(trip: Trip) -> TripRules:
@@ -364,7 +395,7 @@ class ConstraintValidator:
         for day in days:
             for item in day.items:
                 has_travel = has_travel or (item.travel_time_to_next or 0) > 0
-                if item.item_type == "meal" and item.restaurant_id is None:
+                if item.item_type == "meal" and item.restaurant_id is None and meals.source_of(item) == "restaurant":
                     report.violations.append(Violation(
                         severity="info",
                         code="PLACEHOLDER_MEAL_COST",

@@ -51,11 +51,14 @@ SYSTEM = (
     "restaurant in that town), make a cautious, typical assumption for Bangladesh in the trip's month, "
     "and list it in `assumptions`. Amounts are for the whole group for the whole trip. Give each "
     "category a low-high range that a careful traveller could expect. Prefer the traveller's chosen "
-    "accommodation level and the recommended way there. Never invent hotel names or prices that are "
+    "accommodation level and the recommended way there, and where the traveller stays each night (`stays`: a night with "
+    "family or friends, or no night at all, costs nothing for accommodation). Never invent hotel names or prices that are "
     "not in the facts. If the trip's `from` is null, where the traveller starts is unknown: leave out "
     "getting_there entirely (never assume a starting city). Write the basis of each category in one short sentence. "
     "In the basis and assumptions, name things in plain words a traveller uses (\"getting there\", \"local travel\"), "
-    "never field names like getting_there or room_rates_in_destination."
+    "never field names like getting_there or room_rates_in_destination. "
+    "Meals (`meals_in_plan.by_source`): only restaurant meals cost a restaurant price. Food the traveller brings "
+    "costs `own_cost_per_person` each (nothing when it's null), and meals where they stay cost nothing."
 )
 
 
@@ -79,7 +82,8 @@ def _facts(db: Session, trip: Trip, journey: Optional[dict], computed: dict) -> 
     tickets = []
     for d in trip.itinerary_days:
         for i in d.items:
-            if i.item_type == "activity" and i.place is not None:
+            # A private stop (step 6) has no known fee, and its name (a pin's "Aunt's office") isn't sent
+            if i.item_type == "activity" and i.place is not None and i.place.listed:
                 tickets.append({"place": i.place.name, "entry_fee_per_person": i.place.estimated_cost if i.place.cost_known else None})
     parts = {p["key"]: p for p in computed.get("parts", [])}
     local = parts.get("local", {})
@@ -104,6 +108,15 @@ def _facts(db: Session, trip: Trip, journey: Optional[dict], computed: dict) -> 
         "ways_there": ways,
         "local_transport_in_plan": {"amount": local.get("amount"), "detail": local.get("detail")},
         "meals_in_plan": parts.get("food", {}).get("detail"),
+        # Where the traveller sleeps, night by night: a family/friend's home or a day trip costs nothing
+        "stays": [
+            {"nights": f"{ln['first_night']}-{ln['last_night']}", "kind": ln["kind"], "hotel": ln.get("hotel"),
+             "per_night": ln.get("per_night"),
+             "note": {"home": "with family or friends: no accommodation cost",
+                      "none": "no night here (day trips from home): no accommodation cost",
+                      "undecided": "not decided yet"}.get(ln["kind"])}
+            for ln in (parts.get("stay", {}).get("detail") or {}).get("blocks", [])
+        ],
     }
 
 

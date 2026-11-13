@@ -33,8 +33,17 @@ from app.schemas.schemas import (
     FeedbackCreate, FeedbackOut, AdaptRequest,
     GenerateResponse, ItineraryResponse,
     MarkVisitedIn, MarkVisitedOut, TripStopIn, TripStopsIn, MustSeeIn, BusyIn, TIME_PATTERN, JourneyPreferences,
+    StaysUpdate,
+    MealPlanIn,
+    DayMealsUpdate,
 )
 from app.services.trip_stops import initial_stops, mark_trip_visited, nearest_city_stop, set_stops, stop_out
+from app.services import meals as meals_service
+from app.services import place_search
+from app.services import reviews as reviews_service
+from app.services.stats.trips import viewer_today
+from app.services import stay_advisor
+from app.services import stays as stays_service
 from app.services.itinerary.itinerary_service import ItineraryService, day_summary
 from app.services.itinerary.constraint_validator import ConstraintValidator
 from app.services.itinerary.cpsat_scheduler import CpSatItineraryService
@@ -42,6 +51,7 @@ from app.services.adaptation.adaptation_service import AdaptationService
 from app.services.itinerary import editing_service as edits
 from app.services.itinerary.editing_service import EditError
 from app.services.itinerary import late_service, trip_rules
+from app.services.itinerary import itinerary_service as itinerary_service_module
 from app.services.itinerary.trip_rules import PACE_STOPS
 from app.services.conditions import service as conditions_service
 from app.services.routing import ROADS, point_of, prepare_destination
@@ -101,6 +111,10 @@ def create_trip(payload: TripCreate, db: Session = Depends(get_db), user: User =
     if payload.origin_point is not None:
         pref.origin_lat, pref.origin_lon = payload.origin_point.lat, payload.origin_point.lon
         pref.origin_label = payload.origin_point.label
+    # Meals (step 3): kept only when something differs from "every meal at a restaurant"
+    if payload.meals is not None:
+        plan = meals_service.normalize(payload.meals.model_dump())
+        pref.meals = None if meals_service.is_default(plan) and plan.get("own_cost_per_person") is None else plan
     db.add(pref)
 
     # Stops a day follow the pace unless the client says otherwise
@@ -125,6 +139,19 @@ def create_trip(payload: TripCreate, db: Session = Depends(get_db), user: User =
     mode = payload.transport_mode or next(({"launch": "boat"}.get(m, m) for m in payload.transport_modes), None)
     initial_stops(db, trip, origin, mode)
 
+    # Where you'll stay (optional; without it, the hotel Vromon picks when the plan is built)
+    wanted = [x.model_dump() for x in payload.stays] if payload.stays else (
+        stays_service.from_choice(trip, payload.stay.model_dump()) if payload.stay else None
+    )
+    if wanted:
+        db.flush()
+        db.refresh(trip, ["preference", "stays"])
+        try:
+            stays_service.replace(db, trip, stays_service.validate(db, trip, wanted))
+        except stays_service.StayError as exc:
+            db.rollback()
+            raise HTTPException(status_code=exc.status, detail=exc.message)
+
     db.commit()
     db.refresh(trip)
     logger.info(f"Created trip {trip.id}: {trip.destination}")
@@ -145,7 +172,7 @@ def list_trips(db: Session = Depends(get_db), user: User = Depends(get_current_u
 def get_trip(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Get a trip with full details including itinerary (owner, or a friend read-only)."""
     trip = _load_trip(db, trip_id, user, friends_may_read=True)
-    return _trip_out(db, trip)
+    return _trip_out(db, trip, user)
 
 
 @router.patch("/{trip_id}", response_model=TripOut)
@@ -382,12 +409,14 @@ def generate_itinerary(
             )
         solver_meta = result.meta()
 
+    # The days' own meal plans (step 3) carry over to the new days
+    meal_overrides = meals_service.day_overrides(trip)
     replaced = _clear_itinerary(db, trip)
 
     if algorithm == "cpsat":
         days = cpsat.persist(db, trip, result, context)
     else:
-        days = itinerary_service.generate(db, trip)
+        days = itinerary_service.generate(db, trip, meal_overrides)
     trip.status = "generated"
     trip.updated_at = datetime.utcnow()
     db.commit()
@@ -442,7 +471,9 @@ def get_itinerary(trip_id: int, db: Session = Depends(get_db), user: User = Depe
     trip = _load_trip(db, trip_id, user, friends_may_read=True)
     days = sorted(trip.itinerary_days, key=lambda d: d.day_number)
     total_cost = sum(d.total_cost for d in days)
-    hotel = _get_hotel_info(db, trip)
+    bases = _hotel(db, trip)
+    private = not stays_service.is_owner(trip, user)
+    hotel = _get_hotel_info(db, trip, bases)
     report = constraint_validator.validate(trip, days) if days else None
     return {
         "trip_id": trip_id,
@@ -456,7 +487,7 @@ def get_itinerary(trip_id: int, db: Session = Depends(get_db), user: User = Depe
         "total_budget": trip.total_budget,
         "estimated_cost": total_cost,
         "hotel": hotel,
-        "days": [_day_out(db, d) for d in days],
+        "days": [_day_out(db, d, bases, private) for d in days],
         "validation": report.to_dict() if report else None,
         "unplaced": _unplaced(db, trip, days) if days else [],
         "getting_there": _getting_there(db, trip),
@@ -504,6 +535,84 @@ def item_alternatives(trip_id: int, item_id: int, db: Session = Depends(get_db),
             for f in fits
         ],
     }
+
+
+def _meal_spot(db: Session, trip: Trip, item: ItineraryItem):
+    """Where the traveller is for a meal: the stop just before it, else the next one, else where the day starts."""
+    day = item.itinerary
+    ordered = sorted(day.items, key=lambda i: (i.start_time, i.order_index))
+    k = ordered.index(item)
+    before = next((i.place for i in reversed(ordered[:k]) if i.item_type == "activity" and i.place is not None), None)
+    after = next((i.place for i in ordered[k + 1:] if i.item_type == "activity" and i.place is not None), None)
+    spot = before or after
+    if spot is None:
+        base = _hotel(db, trip).start(day.day_number)
+        spot = base if base is not None and base.latitude is not None else None
+    return spot
+
+
+@router.get("/{trip_id}/items/{item_id}/places-to-eat")
+def places_to_eat(trip_id: int, item_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    Restaurants for a meal (step 3: "Places to eat nearby", also from a packed meal): open for an hour
+    from the meal's start, nearest to where the traveller is then (the stop before it), up to 8.
+    """
+    trip = _load_trip(db, trip_id, user, friends_may_read=True)
+    item = _load_item(trip, item_id)
+    if item.item_type != "meal":
+        raise HTTPException(status_code=422, detail="Only meals have places to eat.")
+    start = trip_rules.t2m(item.start_time)
+    spot = _meal_spot(db, trip, item)
+    rows = db.query(Restaurant).filter(Restaurant.destination_name == trip.destination, Restaurant.is_active == True).all()  # noqa: E712
+    open_ = [r for r in rows if itinerary_service_module.restaurant_open(r, start, meals_service.RESTAURANT_MINUTES)]
+    def km(r):
+        p = point_of(spot) if spot is not None else None
+        return itinerary_service_module._haversine_km(p[0], p[1], r.latitude, r.longitude) if p else None
+    ranked = sorted(open_, key=lambda r: (km(r) if km(r) is not None else 0, -(r.rating or 0)))[:8]
+    return {
+        "item_id": item.id,
+        "near": getattr(spot, "name", None) if spot is not None and getattr(spot, "kind", None) != "home" else None,
+        "at": item.start_time,
+        "restaurants": [{"restaurant": _restaurant_out(r), "km": round(km(r), 1) if km(r) is not None else None} for r in ranked],
+    }
+
+
+class EatAtRequest(BaseModel):
+    restaurant_id: int
+
+
+@router.put("/{trip_id}/items/{item_id}/restaurant")
+def eat_at(trip_id: int, item_id: int, payload: EatAtRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """This one meal at a restaurant after all (owner only): an hour there; the rest of the day moves as needed."""
+    trip = _load_trip(db, trip_id, user)
+    item = _load_item(trip, item_id)
+    if item.item_type != "meal":
+        raise HTTPException(status_code=422, detail="Only a meal can be at a restaurant.")
+    rest = db.get(Restaurant, payload.restaurant_id)
+    if rest is None or rest.destination_name != trip.destination or not rest.is_active:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    slot = meals_service.slot_of(item) or "Lunch"
+    day = item.itinerary
+    ordered = edits.sorted_items(day)
+    at = ordered.index(item)
+    start = trip_rules.t2m(item.start_time)
+    if meals_service.is_stay(item):
+        # it was before leaving or after getting back: it goes first or last in the day
+        others = [i for i in ordered if i is not item and not meals_service.is_stay(i)]
+        at = 0 if slot == "Breakfast" else len(others)
+        start = trip_rules.rules_for(trip).window(day.day_number)[0] if slot == "Breakfast" else max(
+            [trip_rules.t2m(i.end_time) for i in others], default=start)
+    new = itinerary_service._make_meal_item(slot, rest, start)
+    ordered.remove(item)
+    day.items.remove(item)
+    db.delete(item)
+    day.items.append(new)
+    ordered.insert(min(at, len(ordered)), new)
+    db.flush()
+    bases = _hotel(db, trip)
+    edits.apply_order(day, ordered, edits.day_start_of(day, trip), bases, at, edits.busy_of(trip, day))
+    db.commit()
+    return _edit_response(db, trip_id, user, day, f"{slot} at {rest.name}")
 
 
 class ReplaceRequest(BaseModel):
@@ -766,7 +875,18 @@ def day_route(trip_id: int, day_id: int, db: Session = Depends(get_db), user: Us
         if point_of(i.place if i.item_type == "activity" else i.restaurant) is not None
     ]
     points = [point_of(i.place if i.item_type == "activity" else i.restaurant) for i in stops]
-    lines = ROADS.lines(db, points) if len(points) > 1 else []
+    # From where the day starts to its first stop, and from its last stop back to where you sleep
+    # (neither when it's a home and you aren't the trip's owner: D2). One road request for the whole day
+    bases = _hotel(db, trip)
+    private = not stays_service.is_owner(trip, user)
+    start, end = bases.start(day.day_number), bases.end(day.day_number)
+    show_start = bool(stops) and start is not None and start.latitude is not None and not (private and start.kind == "home")
+    show_end = bool(stops) and end is not None and end.latitude is not None and not (private and end.kind == "home")
+    route_points = ([(start.latitude, start.longitude)] if show_start else []) + points + (
+        [(end.latitude, end.longitude)] if show_end else [])
+    all_lines = ROADS.lines(db, route_points) if len(route_points) > 1 else []
+    lines = all_lines[1:] if show_start else all_lines
+    lines = lines[:len(points) - 1] if len(points) > 1 else []
     legs = []
     for a, b, pa, pb, line in zip(stops, stops[1:], points, points[1:], lines):
         leg: dict[str, Any] = {"from_item_id": a.id, "to_item_id": b.id, "line": line}
@@ -788,6 +908,10 @@ def day_route(trip_id: int, day_id: int, db: Session = Depends(get_db), user: Us
                 {"mode": "road", "line": after or [[gb[1], gb[0]], [pb[1], pb[0]]], "estimate": after is None},
             ]
         legs.append(leg)
+    if show_start:
+        legs.insert(0, {"kind": "from_base", "from_item_id": None, "to_item_id": stops[0].id, "line": all_lines[0]})
+    if show_end:
+        legs.append({"kind": "to_base", "from_item_id": stops[-1].id, "to_item_id": None, "line": all_lines[-1]})
     return {"day_id": day.id, "provider": ROADS.provider_name, "legs": legs}
 
 
@@ -861,26 +985,89 @@ def running_late_undo(trip_id: int, day_id: int, payload: LateUndoRequest, db: S
     return _edit_response(db, trip_id, user, day, "Changed back.")
 
 
+class PinIn(BaseModel):
+    lat: float = Field(..., ge=-90, le=90)
+    lon: float = Field(..., ge=-180, le=180)
+    name: str = Field(..., min_length=1, max_length=80, description="What the traveller calls it")
+
+
 class AddItemRequest(BaseModel):
-    place_id: int
+    """One of: a Vromon place, or (search anything, trip upgrades step 6) a search result from the places
+    index, an address from the geocoder, a restaurant or hotel, or a pin the traveller names."""
+    place_id: Optional[int] = None
+    poi_id: Optional[str] = Field(None, max_length=64)
+    geocode: Optional[str] = Field(None, max_length=40, description="An address result's token, from the search")
+    restaurant_id: Optional[int] = None
+    hotel_id: Optional[int] = None
+    pin: Optional[PinIn] = None
     position: Optional[int] = Field(None, ge=0, description="Where on the day; omitted = at the end")
+
+    @model_validator(mode="after")
+    def _exactly_one(self) -> "AddItemRequest":
+        given = [f for f in ("place_id", "poi_id", "geocode", "restaurant_id", "hotel_id", "pin") if getattr(self, f) is not None]
+        if len(given) != 1:
+            raise ValueError("Give exactly one of place_id, poi_id, geocode, restaurant_id, hotel_id or pin.")
+        return self
 
 
 @router.post("/{trip_id}/days/{day_id}/items", status_code=201)
 def add_item(trip_id: int, day_id: int, payload: AddItemRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Add a place to a day at a position; the day is re-timed from there."""
+    """
+    Add a place to a day at a position; the day is re-timed from there. Anything that isn't one of
+    Vromon's places becomes the traveller's private place first (listed = false, owned by them, a
+    60-minute visit, cost and hours unknown): it works like any stop and is never offered to anyone else.
+    """
     trip = _load_trip(db, trip_id, user)
     day = _load_day(trip, day_id)
-    place = db.get(Place, payload.place_id)
-    if place is None or not place.is_active:
-        raise HTTPException(status_code=404, detail="Place not found")
+    nearby_ok = False
     try:
-        item, notes = edits.add_place(db, trip, day, place, payload.position, _hotel(db, trip))
+        if payload.place_id is not None:
+            place = db.get(Place, payload.place_id)
+            if place is None or not place.is_active or (not place.listed and place.owner_user_id != user.id):
+                raise HTTPException(status_code=404, detail="Place not found")
+            # A sight of the next destination (found by search): fine when the day can reach it
+            nearby_ok = place_search.within_reach(db, trip, day, place.latitude, place.longitude)
+        else:
+            place = place_search.private_place(
+                db, trip, day, user, poi_id=payload.poi_id, geocode_token=payload.geocode,
+                pin=payload.pin.model_dump() if payload.pin else None,
+                restaurant_id=payload.restaurant_id, hotel_id=payload.hotel_id,
+            )
+        item, notes = edits.add_place(db, trip, day, place, payload.position, _hotel(db, trip), nearby_ok=nearby_ok)
+    except place_search.SearchError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status, detail=exc.message)
     except EditError as exc:
         db.rollback()
         raise HTTPException(status_code=exc.status, detail=exc.message)
     db.commit()
     return _edit_response(db, trip_id, user, day, _with_notes(f"Added '{item.title}'.", notes))
+
+
+@router.get("/{trip_id}/days/{day_id}/search")
+def search_day(
+    trip_id: int,
+    day_id: int,
+    q: str = Query(..., min_length=1, max_length=80),
+    near_item_id: Optional[int] = None,
+    limit: int = Query(8, ge=1, le=25),
+    part: Literal["all", "places", "addresses"] = Query("all", description="places: fast; addresses: the geocoder"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Search anything to add to this day (trip upgrades step 6): Vromon's places, other places Vromon knows
+    nearby, the places index ("not checked") and addresses, grouped, ranked by match and nearness to the
+    stop before (`near_item_id`). Never empty: `did_you_mean`, `kind_results` and `pin` when nothing fits.
+    The trip's owner only (it's for adding).
+    """
+    trip = _load_trip(db, trip_id, user)
+    day = _load_day(trip, day_id)
+    near = _load_item(trip, near_item_id) if near_item_id is not None else None
+    try:
+        return place_search.search(db, trip, day, user, q, near, limit, part)
+    except place_search.SearchError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message)
 
 
 @router.get("/{trip_id}/days/{day_id}/suggestions")
@@ -933,6 +1120,64 @@ def submit_feedback(trip_id: int, payload: FeedbackCreate, db: Session = Depends
         db.commit()
         db.refresh(fb)
     return _feedback_out(fb)
+
+
+# ---------------------------------------------------------------------------
+# "How was your trip?" (trip upgrades step 7)
+# ---------------------------------------------------------------------------
+
+class ReviewItemIn(BaseModel):
+    target_type: Literal["place", "restaurant", "hotel", "stay_home", "journey"]
+    target_id: Optional[int] = None
+    item_id: Optional[int] = None
+    verdict: Optional[Literal["good", "bad"]] = Field(None, description="null clears it (and its comment)")
+    comment: Optional[str] = Field(None, max_length=reviews_service.COMMENT_MAX)
+
+
+class ReviewIn(BaseModel):
+    """Only what the traveller touched: the rating and the comment change only when sent (null clears them);
+    each thing sent is set or cleared, the others are left alone."""
+    rating: Optional[int] = Field(None, ge=1, le=5)
+    comment: Optional[str] = Field(None, max_length=reviews_service.COMMENT_MAX)
+    items: List[ReviewItemIn] = Field(default_factory=list, max_length=500)
+
+
+def _review_trip(db: Session, trip_id: int, user: User, today: Optional[date]) -> Trip:
+    """A trip the viewer went on (the owner or a joined trip-room member, D8), from its first day (D7)."""
+    trip = _load_trip(db, trip_id, user, friends_may_read=True)
+    if not reviews_service.can_review(db, trip, user):
+        raise HTTPException(status_code=404, detail="Trip not found")
+    try:
+        reviews_service.check_open(trip, viewer_today(today))
+    except reviews_service.ReviewError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message)
+    return trip
+
+
+@router.get("/{trip_id}/review")
+def get_review(trip_id: int, today: Optional[date] = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    Your review of the trip (null until you rate it) and the things you can rate one by one: getting there,
+    each day's places and meals at restaurants, and where you stayed, each with your verdict and comment.
+    Yours only (D9); `today` is the phone's local date.
+    """
+    trip = _review_trip(db, trip_id, user, today)
+    return reviews_service.out(db, trip, user, viewer_today(today))
+
+
+@router.put("/{trip_id}/review")
+def put_review(trip_id: int, payload: ReviewIn, today: Optional[date] = None, db: Session = Depends(get_db),
+               user: User = Depends(get_current_user)):
+    """Create or update your review: stars and a comment, and things marked good or bad (or cleared)."""
+    trip = _review_trip(db, trip_id, user, today)
+    try:
+        reviews_service.save(db, trip, user, payload.model_fields_set, payload.rating, payload.comment,
+                             [i.model_dump() for i in payload.items])
+    except reviews_service.ReviewError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status, detail=exc.message)
+    db.commit()
+    return reviews_service.out(db, trip, user, viewer_today(today))
 
 
 @router.get("/{trip_id}/feedback", response_model=Optional[FeedbackOut])
@@ -1000,7 +1245,9 @@ def budget_breakdown(trip_id: int, db: Session = Depends(get_db), user: User = D
     is that total; `known_total` stays the activities, meals and hotel from data.
     """
     trip = _load_trip(db, trip_id, user, friends_may_read=True)
-    return _budget(db, trip)
+    out = _budget(db, trip, user, advice=True)
+    db.commit()  # the stay advisor keeps what it worked out
+    return out
 
 
 @router.post("/{trip_id}/budget/ai")
@@ -1044,22 +1291,202 @@ def apply_saving(trip_id: int, payload: SaveRequest, db: Session = Depends(get_d
     return {
         "message": message,
         "undo": undo,
-        "budget": _budget(db, trip),
+        "budget": _budget(db, trip, advice=True),
         "days": [_day_out(db, d) for d in days],
         "validation": constraint_validator.validate(trip, days).to_dict(),
     }
 
 
-def _budget(db: Session, trip: Trip) -> dict:
+@router.get("/{trip_id}/stays")
+def get_stays(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    Where the traveller sleeps, night by night (docs/trip-upgrades step 1). `chosen` is False while
+    the trip has no stays of its own (the hotel Vromon picks). Owner, or a friend read-only: to a
+    friend or trip-room member a family or friend's home is only "home" (D2).
+    """
+    trip = _load_trip(db, trip_id, user, friends_may_read=True)
+    private = not stays_service.is_owner(trip, user)
+    return {
+        "trip_id": trip.id,
+        "nights": trip.num_nights,
+        "chosen": bool(trip.stays),
+        "stays": [stays_service.stay_out(b, private) for b in stays_service.blocks_of(db, trip)],
+    }
+
+
+@router.put("/{trip_id}/stays")
+def put_stays(trip_id: int, payload: StaysUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    Change where you stay (owner only). The stays must cover the trip's nights once. The days whose
+    start or end moved get their legs and travel again; their stops keep their times, and the
+    validation says when a day now gets back after "finish by". Returns the stays, the changed days,
+    the validation and the budget before and after.
+    """
+    trip = _load_trip(db, trip_id, user)
+    before_bases = _hotel(db, trip)
+    before_total = budget_service.full_budget(db, trip, before_bases, _getting_there(db, trip))["total"]
+    try:
+        blocks = stays_service.validate(db, trip, [x.model_dump() for x in payload.stays])
+        stays_service.replace(db, trip, blocks)
+    except stays_service.StayError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status, detail=exc.message)
+    return _stays_changed(db, trip_id, user, trip, before_bases, before_total)
+
+
+def _stays_changed(db: Session, trip_id: int, user: User, trip: Trip, before_bases, before_total: float) -> dict:
+    """
+    After the stays changed: the days whose start or end moved get their legs, travel and meals where you
+    stay again (their stops keep their times, pinned or not); then the stays, those days, the validation
+    and the budget before and after.
+    """
+    after = _hotel(db, trip)
+    changed = [
+        d for d in trip.itinerary_days
+        if (before_bases.start(d.day_number), before_bases.end(d.day_number)) != (after.start(d.day_number), after.end(d.day_number))
+    ]
+    for d in changed:
+        edits.recompute_day(d, after)
+    db.commit()
+    db.expire_all()
+    trip = _load_trip(db, trip_id, user)
+    bases = _hotel(db, trip)
+    days = sorted(trip.itinerary_days, key=lambda d: d.day_number)
+    changed_ids = {d.id for d in changed}
+    after_total = budget_service.full_budget(db, trip, bases, _getting_there(db, trip))["total"]
+    return {
+        "trip_id": trip.id,
+        "nights": trip.num_nights,
+        "chosen": True,
+        "stays": [stays_service.stay_out(b) for b in bases.blocks],
+        "days": [_day_out(db, d, bases) for d in days if d.id in changed_ids],
+        "validation": constraint_validator.validate(trip, days).to_dict() if days else None,
+        "budget": {"before": before_total, "after": after_total, "change": after_total - before_total},
+    }
+
+
+# ---------------------------------------------------------------------------
+# The stay advisor (docs/trip-upgrades, step 4): owner only, reads too (it's about money)
+# ---------------------------------------------------------------------------
+
+@router.get("/{trip_id}/stay-suggestions")
+def get_stay_suggestions(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    "Sleep somewhere else for nights a-b?": at most 2, best first, with their numbers. Worked out again
+    only when the plan changed (its fingerprint); "not now" and "don't suggest this" are kept.
+    """
+    trip = _load_trip(db, trip_id, user)
+    rows = stay_advisor.suggestions(db, trip)
+    db.commit()
+    return {"trip_id": trip.id, "suggestions": [stay_advisor.out(r, trip) for r in rows]}
+
+
+@router.post("/{trip_id}/stay-suggestions/{sid}/accept")
+def accept_stay_suggestion(trip_id: int, sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Switch: sleep there for those nights (as PUT /stays). `undo` has the stays as they were, for PUT /stays."""
+    trip = _load_trip(db, trip_id, user)
+    before_bases = _hotel(db, trip)
+    before_total = budget_service.full_budget(db, trip, before_bases, _getting_there(db, trip))["total"]
+    try:
+        row, before = stay_advisor.accept(db, trip, sid)
+    except stay_advisor.AdviceError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status, detail=exc.message)
+    hotel = row.hotel.name
+    out = _stays_changed(db, trip_id, user, trip, before_bases, before_total)
+    return {**out, "message": f"Staying at {hotel}.", "undo": {"stays": before}}
+
+
+def _answer_suggestion(db: Session, trip_id: int, sid: int, user: User, status: str) -> dict:
+    trip = _load_trip(db, trip_id, user)
+    try:
+        stay_advisor.answer(db, trip, sid, status)
+    except stay_advisor.AdviceError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message)
+    rows = stay_advisor.suggestions(db, trip)
+    db.commit()
+    return {"trip_id": trip.id, "suggestions": [stay_advisor.out(r, trip) for r in rows]}
+
+
+@router.post("/{trip_id}/stay-suggestions/{sid}/not-now")
+def stay_suggestion_not_now(trip_id: int, sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Not now: hidden until the plan changes. Returns the suggestions left."""
+    return _answer_suggestion(db, trip_id, sid, user, "not_now")
+
+
+@router.post("/{trip_id}/stay-suggestions/{sid}/dismiss")
+def stay_suggestion_dismiss(trip_id: int, sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Don't suggest this: hidden unless its saving grows by more than 25%. Returns the suggestions left."""
+    return _answer_suggestion(db, trip_id, sid, user, "dismissed")
+
+
+def _meals_changed(db: Session, trip_id: int, user: User, trip: Trip, days: list, before_total: float) -> dict:
+    """Rebuild the meals of `days`, then: the trip's plan, those days, the validation and the budget change."""
+    bases = _hotel(db, trip)
+    rules = trip_rules.load_rules(db, trip)
+    for d in days:
+        edits.rebuild_meals(db, trip, d, bases, rules)
+    db.commit()
+    db.expire_all()
+    trip = _load_trip(db, trip_id, user)
+    bases = _hotel(db, trip)
+    all_days = sorted(trip.itinerary_days, key=lambda d: d.day_number)
+    changed_ids = {d.id for d in days}
+    after_total = budget_service.full_budget(db, trip, bases, _getting_there(db, trip))["total"]
+    return {
+        "trip_id": trip.id,
+        "meals": meals_service.trip_plan(trip),
+        "days": [_day_out(db, d, bases) for d in all_days if d.id in changed_ids],
+        "validation": constraint_validator.validate(trip, all_days).to_dict() if all_days else None,
+        "budget": {"before": before_total, "after": after_total, "change": after_total - before_total},
+    }
+
+
+@router.put("/{trip_id}/meals")
+def put_meals(trip_id: int, payload: MealPlanIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    The trip's meal plan (owner only, step 3): per meal a restaurant (default), your own food or where
+    you stay. Only the meals of the days without their own plan are rebuilt; their stops stay.
+    """
+    trip = _load_trip(db, trip_id, user)
+    before_total = budget_service.full_budget(db, trip, _hotel(db, trip), _getting_there(db, trip))["total"]
+    plan = meals_service.normalize(payload.model_dump())
+    pref = trip.preference
+    if pref is None:
+        raise HTTPException(status_code=422, detail="This trip has no preferences to keep a meal plan in.")
+    pref.meals = None if meals_service.is_default(plan) and plan.get("own_cost_per_person") is None else plan
+    trip.updated_at = datetime.utcnow()
+    db.flush()
+    days = [d for d in sorted(trip.itinerary_days, key=lambda d: d.day_number) if not d.meals]
+    return _meals_changed(db, trip_id, user, trip, days, before_total)
+
+
+@router.put("/{trip_id}/days/{day_id}/meals")
+def put_day_meals(trip_id: int, day_id: int, payload: DayMealsUpdate, db: Session = Depends(get_db),
+                  user: User = Depends(get_current_user)):
+    """One day's meals (owner only): its own plan, or null to follow the trip's again. Only its meals change."""
+    trip = _load_trip(db, trip_id, user)
+    day = next((d for d in trip.itinerary_days if d.id == day_id), None)
+    if day is None:
+        raise HTTPException(status_code=404, detail="Day not found")
+    before_total = budget_service.full_budget(db, trip, _hotel(db, trip), _getting_there(db, trip))["total"]
+    day.meals = meals_service.normalize(payload.meals.model_dump()) if payload.meals is not None else None
+    trip.updated_at = datetime.utcnow()
+    db.flush()
+    return _meals_changed(db, trip_id, user, trip, [day], before_total)
+
+
+def _budget(db: Session, trip: Trip, viewer: Optional[User] = None, advice: bool = False) -> dict:
+    """`advice`: the owner's open stay suggestions go into the ways to save (step 4)."""
     trip_id = trip.id
     days = sorted(trip.itinerary_days, key=lambda d: d.day_number)
     n = trip.num_travelers
     currency = trip.currency
     nights = max(trip.num_days - 1, 0)
     rooms = -(-n // 2)
-    hotel = _get_hotel_info(db, trip)
-    hotel_ok = bool(hotel) and hotel.get("currency", currency) == currency
-    hotel_total = hotel["price_per_night"] * nights * rooms if hotel_ok else 0.0
+    bases = _hotel(db, trip)
+    private = viewer is not None and not stays_service.is_owner(trip, viewer)
+    hotel = _get_hotel_info(db, trip, bases)
 
     per_day = []
     placeholder_meals = 0
@@ -1093,20 +1520,24 @@ def _budget(db: Session, trip: Trip) -> dict:
     free_activities = sum(
         1 for d in days for i in d.items if i.item_type == "activity" and not i.cost
     )
-    known_total = activities + meals + hotel_total
-    full = budget_service.full_budget(db, trip, _hotel(db, trip), _getting_there(db, trip))
+    suggestions = [stay_advisor.out(r, trip) for r in stay_advisor.suggestions(db, trip)] if advice and not private else None
+    full = budget_service.full_budget(db, trip, bases, _getting_there(db, trip), private, advice=suggestions)
     total = full["total"]
     local = next(p for p in full["parts"] if p["key"] == "local")
+    stay = next(p for p in full["parts"] if p["key"] == "stay")
+    hotel_total = stay["amount"] if stay["known"] else 0.0
+    known_total = activities + meals + hotel_total
 
     incomplete = []
     if not next(p for p in full["parts"] if p["key"] == "getting_there")["known"]:
         incomplete.append("Getting there is not included (no starting city or way to travel set).")
-    if not hotel:
-        incomplete.append("Accommodation is not included (no hotel data for this destination).")
-    elif not hotel.get("price_known", True):
-        incomplete.append(f"Accommodation is not included ({hotel['name']}'s price isn't known).")
-    elif not hotel_ok:
-        incomplete.append(f"Accommodation is priced in {hotel.get('currency')}, not {currency}, and is not included.")
+    why = stay["detail"].get("reason")
+    if why == "no_hotel":
+        incomplete.append("Accommodation is not included (no hotel data for this destination, or a night not decided).")
+    elif why == "no_price":
+        incomplete.append(f"Accommodation is not included ({stay['detail'].get('hotel')}'s price isn't known).")
+    elif why == "currency":
+        incomplete.append(f"Accommodation is priced in {stay['detail'].get('currency')}, not {currency}, and is not included.")
     if placeholder_meals:
         incomplete.append(
             f"{placeholder_meals} meal(s) have no restaurant data; their placeholder price is shown separately, not as a real cost."
@@ -1141,7 +1572,7 @@ def _budget(db: Session, trip: Trip) -> dict:
             f"Accommodation assumes {rooms} room(s) (2 travellers per room) for {nights} night(s).",
             "Prices come from the sample seed dataset and are estimates, not quotes.",
             "Getting there is both ways by your way of travel; local travel is every ride of the plan, "
-            "from and back to the hotel. Both are estimates (fares are bargained, no timetables).",
+            "from and back to where you stay. Both are estimates (fares are bargained, no timetables).",
         ],
         "not_included": ["Shopping, tips and anything not in the plan"],
         "incomplete_reasons": incomplete,
@@ -1166,7 +1597,7 @@ def _drop_gone_places(db: Session, trip: Trip) -> None:
         return
     live = {
         pid for (pid,) in db.query(Place.id).filter(
-            Place.id.in_(ids), Place.destination_name == trip.destination, Place.is_active == True  # noqa: E712
+            Place.id.in_(ids), Place.destination_name == trip.destination, Place.is_active == True, Place.listed == True  # noqa: E712
         )
     }
     if ids <= live:
@@ -1220,7 +1651,7 @@ def _validate_trip_settings(
     if ids:
         known = {
             pid for (pid,) in db.query(Place.id).filter(
-                Place.id.in_(ids), Place.destination_name == destination, Place.is_active == True  # noqa: E712
+                Place.id.in_(ids), Place.destination_name == destination, Place.is_active == True, Place.listed == True  # noqa: E712
             )
         }
         unknown = sorted(ids - known)
@@ -1364,7 +1795,7 @@ def _require_eligible_places(db: Session, trip: Trip) -> None:
     excluded = set(trip.constraints.excluded_places) if trip.constraints else set()
     eligible = [
         pid for (pid,) in db.query(Place.id).filter(
-            Place.destination_name == trip.destination, Place.is_active == True  # noqa: E712
+            Place.destination_name == trip.destination, Place.is_active == True, Place.listed == True  # noqa: E712
         )
         if pid not in excluded
     ]
@@ -1410,6 +1841,8 @@ def _cost_source(item: ItineraryItem) -> str:
     placeholder price, not real data; so does a visit whose entry price isn't known (it counts 0).
     """
     if item.item_type == "meal":
+        if item.meal_source in ("own", "stay"):
+            return "data"  # your own food costs what you said (0 if nothing); where you stay, nothing
         return "placeholder" if item.restaurant_id is None or (item.restaurant is not None and not item.restaurant.cost_known) else "data"
     if item.place is not None and not item.place.cost_known:
         return "placeholder"
@@ -1432,7 +1865,8 @@ def _load_item(trip: Trip, item_id: int) -> ItineraryItem:
 
 
 def _hotel(db: Session, trip: Trip):
-    return ItineraryService()._pick_hotel(db, trip)
+    """Where each day starts and ends (the trip's stays): what the planners and edits travel from and back to."""
+    return stays_service.bases(db, trip)
 
 
 def _edit_response(db: Session, trip_id: int, user: User, day: Itinerary, message: str) -> dict:
@@ -1511,6 +1945,9 @@ def _place_out(p: Place) -> dict | None:
         "source": p.source,
         "url": p.url,
         "checked": p.checked,
+        # A stop from outside Vromon's list (step 6): the traveller's own, never offered to others
+        "listed": p.listed is not False,
+        "kind": (p.tags[0] if p.tags else None) if p.listed is False else None,
     }
 
 
@@ -1560,12 +1997,14 @@ def _item_out(item: ItineraryItem) -> dict:
         "category": item.place.category if item.place else ("Meal" if item.item_type == "meal" else None),
         "currency": _item_currency(item),
         "cost_source": _cost_source(item),
+        "meal_source": (item.meal_source or "restaurant") if item.item_type == "meal" else None,
         "place": _place_out(item.place) if item.place else None,
         "restaurant": _restaurant_out(item.restaurant) if item.restaurant else None,
     }
 
 
-def _day_out(db: Session, day: Itinerary) -> dict:
+def _day_out(db: Session, day: Itinerary, bases=None, private: bool = False) -> dict:
+    """One day for the API. `private`: the viewer isn't the trip's owner, so a home stays hidden (D2)."""
     items = sorted(day.items, key=lambda x: x.order_index)
     out = [_item_out(i) for i in items]
     # How each activity's leg to the next activity goes: by road or estimated, and by what
@@ -1593,10 +2032,33 @@ def _day_out(db: Session, day: Itinerary) -> dict:
         "total_cost": day.total_cost,
         "total_travel_time": day.total_travel_time,
         "items": out,
+        **_bases_out(db, day, bases, private),
+        "meals": day.meals,
+        "meal_plan": meals_service.plans_by_day(day.trip).get(day.day_number) if day.trip is not None else None,
     }
 
 
-def _trip_out(db: Session, trip: Trip) -> dict:
+def _bases_out(db: Session, day: Itinerary, bases=None, private: bool = False) -> dict:
+    """Where the day starts and ends, and the way back (none of it about a home, for others)."""
+    trip = day.trip
+    if trip is None:
+        return {}
+    bases = bases or _hotel(db, trip)
+    start, end = bases.start(day.day_number), bases.end(day.day_number)
+    hidden = private and end is not None and end.kind == "home"
+    hidden_start = private and start is not None and start.kind == "home"
+    return {
+        "start_base": start.out(private) if start is not None else None,
+        "end_base": end.out(private) if end is not None else None,
+        "start_leg": None if hidden_start else stays_service.start_leg(day, start, trip.num_travelers),
+        "return_leg": None if hidden else stays_service.return_leg(day, end, trip.num_travelers),
+    }
+
+
+def _trip_out(db: Session, trip: Trip, viewer: Optional[User] = None) -> dict:
+    """The trip with its days; `viewer` who isn't the owner sees a home stay hidden (D2)."""
+    private = viewer is not None and not stays_service.is_owner(trip, viewer)
+    bases = _hotel(db, trip) if trip.itinerary_days else None
     pref = trip.preference
     cons = trip.constraints
     fb = trip.feedback
@@ -1626,6 +2088,7 @@ def _trip_out(db: Session, trip: Trip) -> dict:
             "preferred_end_time": pref.preferred_end_time,
             "arrive_time": pref.arrive_time,
             "leave_time": pref.leave_time,
+            "meals": pref.meals,
         } if pref else None,
         "constraints": {
             "id": cons.id,
@@ -1638,7 +2101,9 @@ def _trip_out(db: Session, trip: Trip) -> dict:
             "avoid_crowded": cons.avoid_crowded,
             "avoid_high_activity": cons.avoid_high_activity,
         } if cons else None,
-        "itinerary_days": [_day_out(db, d) for d in trip.itinerary_days],
+        "itinerary_days": [_day_out(db, d, bases, private) for d in trip.itinerary_days],
+        # The traveller's own stays (in /me/export; GET /trips/{id} leaves them out: GET /stays has them)
+        "stays": [stays_service.stay_out(b, private) for b in stays_service.blocks_of(db, trip)] if trip.stays else [],
         "feedback": _feedback_out(fb) if fb else None,
     }
 
@@ -1675,8 +2140,9 @@ def _feedback_out(fb: Feedback) -> dict | None:
     }
 
 
-def _get_hotel_info(db: Session, trip: Trip) -> dict | None:
-    hotel = _hotel(db, trip)
+def _get_hotel_info(db: Session, trip: Trip, bases=None) -> dict | None:
+    """Night 1's hotel: the one hotel app versions before the stays know about."""
+    hotel = (bases or _hotel(db, trip)).first_hotel
     if not hotel:
         return None
     return {

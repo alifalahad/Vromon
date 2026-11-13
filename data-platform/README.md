@@ -54,3 +54,20 @@ The pipeline uses the app's database (backend `DATABASE_URL`, default `backend/v
 - **Documented APIs and bulk downloads** (`fetch_policy: usage_policy`): the provider's usage policy applies.
 - **TLS:** always verified, using the operating system's certificate store (needed for `.gov.bd` certificate chains).
 - **No bypassing:** challenges, logins and paywalls are never bypassed. HDX's download challenge is handled by a person downloading the file in a browser.
+
+## The places index (`overture_pois`)
+
+Every kind of place in Bangladesh but hotels and restaurants (colleges, schools, hospitals, banks, markets, offices,
+places of worship…) from Overture Maps, for "search anything" near a trip's stops (docs/trip-upgrades, steps 5–6).
+Kinds come from the backend's `app/core/poi-kinds.yaml` (search reads the same file). Each run downloads the latest release (one DuckDB query on
+Overture's open S3, about 2 minutes), keeps the parquet in `raw/` with its manifest, and replaces the index's
+Overture rows in one transaction:
+
+```bash
+.venv/bin/python -m vromon_data db migrate
+.venv/bin/python -m vromon_data run overture_pois                 # the latest release
+.venv/bin/python -m vromon_data run overture_pois --params '{"release": "2026-10-21.0", "parquet": "path/to/saved.parquet"}'
+```
+
+Run it on a copy of the database first (`VROMON_DATABASE_URL=sqlite:////path/to/copy.db`), then back up the real one.
+The quality report of the first load is `quality-reports/pois-2026-11-13.md`.

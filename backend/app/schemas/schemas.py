@@ -73,6 +73,9 @@ class PlaceOut(PlaceBase):
     source: str = "curated"
     url: Optional[str] = None
     checked: bool = True
+    # A traveller's own stop from outside Vromon's list (trip upgrades step 6)
+    listed: bool = True
+    kind: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -317,6 +320,56 @@ class JourneyPreferences(BaseModel):
     origin_point: Optional[OriginPoint] = None
 
 
+StayKind = Literal["hotel", "home", "none", "undecided"]
+
+
+class StayIn(BaseModel):
+    """Where the traveller sleeps for nights first_night..last_night (docs/trip-upgrades step 1)."""
+    first_night: int = Field(ge=1)
+    last_night: int = Field(ge=1)
+    kind: StayKind
+    hotel_id: Optional[int] = None
+    label: Optional[str] = Field(default=None, max_length=80)
+    lat: Optional[float] = Field(default=None, ge=-90, le=90)
+    lon: Optional[float] = Field(default=None, ge=-180, le=180)
+
+
+class StayChoice(BaseModel):
+    """One stay for all of a new trip's nights."""
+    kind: StayKind
+    hotel_id: Optional[int] = None
+    label: Optional[str] = Field(default=None, max_length=80)
+    lat: Optional[float] = Field(default=None, ge=-90, le=90)
+    lon: Optional[float] = Field(default=None, ge=-180, le=180)
+
+
+class StaysUpdate(BaseModel):
+    stays: List[StayIn] = Field(max_length=31)
+
+
+MealSource = Literal["restaurant", "own", "stay"]
+
+
+class MealPlanIn(BaseModel):
+    """Per meal: the best places to eat (default), your own food, or where you stay (not lunch). Step 3."""
+    Breakfast: MealSource = "restaurant"
+    Lunch: MealSource = "restaurant"
+    Dinner: MealSource = "restaurant"
+    own_cost_per_person: Optional[float] = Field(default=None, ge=0, le=100_000)
+
+    @field_validator("Lunch")
+    @classmethod
+    def lunch_not_at_stay(cls, v):
+        if v == "stay":
+            raise ValueError("Lunch can't be where you stay: you're out for the day.")
+        return v
+
+
+class DayMealsUpdate(BaseModel):
+    """One day's meals; null clears the day's own plan (back to the trip's)."""
+    meals: Optional[MealPlanIn] = None
+
+
 class TripCreate(BaseModel):
     destination: str
     start_date: date
@@ -332,6 +385,11 @@ class TripCreate(BaseModel):
     origin_point: Optional[OriginPoint] = None
     transport_modes: List[JourneyMode] = Field(default_factory=list, max_length=5)
     transport_by_budget: bool = False
+    # Where you'll stay (optional): one choice for all nights, or night by night; neither: the hotel Vromon picks
+    stay: Optional[StayChoice] = None
+    stays: Optional[List[StayIn]] = Field(default=None, max_length=31)
+    # Meals (optional): per meal a restaurant (default), your own food or where you stay
+    meals: Optional[MealPlanIn] = None
 
     @field_validator("end_date")
     @classmethod
@@ -380,6 +438,8 @@ class ItineraryItemOut(BaseModel):
     currency: str = "BDT"
     # "data": cost comes from a place/restaurant record; "placeholder": no record, estimate only
     cost_source: Literal["data", "placeholder"] = "data"
+    # A meal's source (step 3): at a restaurant, your own food, or where you stay; None on other items
+    meal_source: Optional[MealSource] = None
     # The leg to the next activity (trip planner step 5): how, from road data or estimated, and
     # the fare per vehicle (an estimate). None on the last activity and on meals.
     travel_mode: Optional[str] = None
@@ -409,6 +469,15 @@ class ItineraryDayOut(BaseModel):
     total_cost: float
     total_travel_time: float
     items: List[ItineraryItemOut] = []
+    # Where the day starts and ends (the stays), and the way back after its last stop or meal.
+    # A family or friend's home shows only to the trip's owner (D2): to others, kind "home" and nothing else
+    start_base: Optional[Dict[str, Any]] = None
+    end_base: Optional[Dict[str, Any]] = None
+    start_leg: Optional[Dict[str, Any]] = None
+    return_leg: Optional[Dict[str, Any]] = None
+    # This day's own meal plan (None: the trip's), and the plan it follows either way (step 3)
+    meals: Optional[Dict[str, Any]] = None
+    meal_plan: Optional[Dict[str, Any]] = None
 
     model_config = {"from_attributes": True}
 
@@ -512,6 +581,8 @@ class TripPreferenceOut(BaseModel):
     preferred_end_time: str
     arrive_time: Optional[str] = None
     leave_time: Optional[str] = None
+    # The trip's meal plan (step 3); None = every meal at a restaurant
+    meals: Optional[Dict[str, Any]] = None
 
     model_config = {"from_attributes": True}
 

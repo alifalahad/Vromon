@@ -10,22 +10,21 @@ import { create, type AxiosRequestConfig } from 'axios';
 import { getAccessToken } from '../features/auth/session';
 import { supabase } from '../features/auth/supabase';
 import type {
-  AdaptationType,
-  AdaptResult,
+  AddRef,
   AIBudget,
+  AdaptResult,
+  AdaptationType,
   Algorithm,
   AlternativesResult,
   BudgetBreakdown,
   CardKind,
   ChatMessage,
-  Conversation,
-  JourneyMode,
-  TripJourney,
-  Destination,
-  EditResult,
   Compare,
   ConditionWarning,
+  Conversation,
   DayRoute,
+  Destination,
+  EditResult,
   Feedback,
   Friend,
   FriendFootprint,
@@ -37,13 +36,16 @@ import type {
   GroundedAnswer,
   Hotel,
   Itinerary,
-  Me,
-  MessagePage,
-  MeUpdate,
+  JourneyMode,
   LatePlan,
   LateResult,
   LateUndo,
   LegOptions,
+  MealPlan,
+  MealsUpdated,
+  Me,
+  MeUpdate,
+  MessagePage,
   MoveResult,
   MustDosChange,
   MustDosResult,
@@ -53,18 +55,28 @@ import type {
   PhotoFilter,
   PhotoTarget,
   Place,
+  SearchResponse,
+  TripReviewIn,
+  TripReviewResponse,
   PlaceType,
+  PlacesToEat,
   PublicProfile,
   ReactionKind,
   ReportReason,
   SaveAction,
   SaveResult,
+  StayAccepted,
+  StayIn,
+  StaySuggestions,
+  Stays,
+  StaysUpdated,
   Suggestion,
   TravelMode,
   TravelStats,
-  TripConditions,
   Trip,
+  TripConditions,
   TripCreate,
+  TripJourney,
   TripRoom,
   TripStats,
   TripStopInput,
@@ -177,6 +189,8 @@ export const placesApi = {
   list: (params?: { destination?: string; category?: string }) =>
     api.get<Place[]>('/places', { params }).then((r) => r.data),
   get: (id: number) => api.get<Place>(`/places/${id}`).then((r) => r.data),
+  /** "Suggest this place to Vromon": your own stop goes to the data team's review (trip upgrades step 6) */
+  suggest: (id: number) => api.post<{ suggested: boolean; already: boolean }>(`/places/${id}/suggest`).then((r) => r.data),
 };
 
 // ---------------------------------------------------------------------------
@@ -246,6 +260,24 @@ export const tripsApi = {
   setJourneyPreferences: (tripId: number, prefs: { transport_modes: JourneyMode[]; transport_by_budget: boolean; origin_point?: { lat: number; lon: number; label?: string } | null }) =>
     api.put<TripJourney>(`/trips/${tripId}/journey/preferences`, prefs).then((r) => r.data),
   dayRoute: (tripId: number, dayId: number) => api.get<DayRoute>(`/trips/${tripId}/days/${dayId}/route`).then((r) => r.data),
+  /** Where you stay, night by night (docs/trip-upgrades) */
+  stays: (tripId: number) => api.get<Stays>(`/trips/${tripId}/stays`).then((r) => r.data),
+  setStays: (tripId: number, stays: StayIn[]) => api.put<StaysUpdated>(`/trips/${tripId}/stays`, { stays }).then((r) => r.data),
+  // The stay advisor (trip upgrades step 4): suggestions, Switch, Not now, Don't suggest this
+  staySuggestions: (tripId: number) => api.get<StaySuggestions>(`/trips/${tripId}/stay-suggestions`).then((r) => r.data),
+  acceptStaySuggestion: (tripId: number, id: number) =>
+    api.post<StayAccepted>(`/trips/${tripId}/stay-suggestions/${id}/accept`).then((r) => r.data),
+  notNowStaySuggestion: (tripId: number, id: number) =>
+    api.post<StaySuggestions>(`/trips/${tripId}/stay-suggestions/${id}/not-now`).then((r) => r.data),
+  dismissStaySuggestion: (tripId: number, id: number) =>
+    api.post<StaySuggestions>(`/trips/${tripId}/stay-suggestions/${id}/dismiss`).then((r) => r.data),
+  // Meals (trip upgrades step 3): the trip's plan, one day's own plan (null: the trip's again), and places to eat for a meal
+  setMeals: (tripId: number, meals: MealPlan) => api.put<MealsUpdated>(`/trips/${tripId}/meals`, meals).then((r) => r.data),
+  setDayMeals: (tripId: number, dayId: number, meals: MealPlan | null) =>
+    api.put<MealsUpdated>(`/trips/${tripId}/days/${dayId}/meals`, { meals }).then((r) => r.data),
+  placesToEat: (tripId: number, itemId: number) => api.get<PlacesToEat>(`/trips/${tripId}/items/${itemId}/places-to-eat`).then((r) => r.data),
+  eatAt: (tripId: number, itemId: number, restaurantId: number) =>
+    api.put<EditResult>(`/trips/${tripId}/items/${itemId}/restaurant`, { restaurant_id: restaurantId }).then((r) => r.data),
   // Live conditions (trip planner step 6): weather, sea, sun and usual traffic, with warnings per stop
   conditions: (tripId: number, refresh = false) =>
     api.get<TripConditions>(`/trips/${tripId}/conditions`, { params: refresh ? { refresh: true } : undefined }).then((r) => r.data),
@@ -253,6 +285,15 @@ export const tripsApi = {
     api.post<{ item_id: number; kept_warnings: string[] }>(`/trips/${tripId}/items/${itemId}/keep`, { code, kept }).then((r) => r.data),
   addItem: (tripId: number, dayId: number, placeId: number, position?: number) =>
     api.post<EditResult>(`/trips/${tripId}/days/${dayId}/items`, { place_id: placeId, position: position ?? null }).then((r) => r.data),
+  // Search anything in free time (trip upgrades step 6): any result, or a named pin, becomes a stop
+  addStop: (tripId: number, dayId: number, ref: AddRef, position?: number) =>
+    api.post<EditResult>(`/trips/${tripId}/days/${dayId}/items`, { ...ref, position: position ?? null }).then((r) => r.data),
+  search: (tripId: number, dayId: number, params: { q: string; near_item_id?: number; part?: 'places' | 'addresses' | 'all'; limit?: number }) =>
+    api.get<SearchResponse>(`/trips/${tripId}/days/${dayId}/search`, { params }).then((r) => r.data),
+  // "How was your trip?" (trip upgrades step 7): yours only, from the trip's first day (`today`: the phone's date)
+  review: (tripId: number, today: string) => api.get<TripReviewResponse>(`/trips/${tripId}/review`, { params: { today } }).then((r) => r.data),
+  saveReview: (tripId: number, body: TripReviewIn, today: string) =>
+    api.put<TripReviewResponse>(`/trips/${tripId}/review`, body, { params: { today } }).then((r) => r.data),
   suggestions: (tripId: number, dayId: number, params: { near_item_id?: number; q?: string }) =>
     api.get<{ suggestions: Suggestion[] }>(`/trips/${tripId}/days/${dayId}/suggestions`, { params }).then((r) => r.data.suggestions),
 

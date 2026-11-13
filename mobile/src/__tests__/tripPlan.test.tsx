@@ -21,11 +21,20 @@ import type { Itinerary, ItineraryDay, ItineraryItem, Trip } from '../types';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
+const mockTransition: { hold: boolean; end: (() => void) | null } = { hold: false, end: null };
 jest.mock('expo-router', () => ({
   // Runs on mount, as when the screen comes into focus
   useFocusEffect: (effect: () => void) => jest.requireActual<typeof React>('react').useEffect(effect, [effect]),
   useRouter: () => ({ push: mockPush, back: mockBack }),
   useLocalSearchParams: () => ({ id: '5' }),
+  // The screen has finished sliding in (the plan sheet waits for that), unless a test holds it
+  useNavigation: () => ({
+    addListener: (_event: string, cb: (e: { data: { closing: boolean } }) => void) => {
+      if (mockTransition.hold) mockTransition.end = () => cb({ data: { closing: false } });
+      else cb({ data: { closing: false } });
+      return () => {};
+    },
+  }),
 }));
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
 jest.mock('../ui/haptics', () => ({
@@ -39,11 +48,12 @@ jest.mock('@maplibre/maplibre-react-native', () => {
   const R = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
   const Pass = ({ children }: { children?: React.ReactNode }) => R.createElement(View, null, children);
-  return { Map: Pass, Camera: () => null, GeoJSONSource: Pass, RasterDEMSource: Pass, RasterSource: Pass, VectorSource: Pass, Layer: () => null };
+  return { Map: Pass, Camera: () => null, GeoJSONSource: Pass, RasterDEMSource: Pass, RasterSource: Pass, VectorSource: Pass, Layer: () => null, Marker: Pass };
 });
 jest.mock('../services/api', () => ({
   ApiError: class ApiError extends Error {},
   ragApi: { explainItem: jest.fn() },
+  destinationsApi: { list: jest.fn(() => Promise.resolve([])), hotels: jest.fn(() => Promise.resolve([])) },
   tripsApi: {
     get: jest.fn(),
     getItinerary: jest.fn(),
@@ -56,6 +66,16 @@ jest.mock('../services/api', () => ({
     duplicate: jest.fn(),
     delete: jest.fn(),
     alternatives: jest.fn(),
+    stays: jest.fn(() => new Promise(() => {})),
+    setStays: jest.fn(),
+    setMeals: jest.fn(),
+    setDayMeals: jest.fn(),
+    placesToEat: jest.fn(),
+    eatAt: jest.fn(),
+    staySuggestions: jest.fn(() => Promise.resolve({ trip_id: 5, suggestions: [] })),
+    acceptStaySuggestion: jest.fn(),
+    notNowStaySuggestion: jest.fn(),
+    dismissStaySuggestion: jest.fn(),
   },
 }));
 
@@ -247,6 +267,25 @@ describe('trip screen', () => {
     expect(screen.queryByText('Laboni Beach')).toBeNull();
   });
 
+  it('the plan sheet slides in once the screen has finished sliding in (it was never drawn when opened over another trip)', async () => {
+    api.get.mockResolvedValue(TRIP);
+    api.getItinerary.mockResolvedValue(ITIN([DAY1, DAY2]));
+    api.budget.mockResolvedValue(BUDGET);
+    mockTransition.hold = true;
+    try {
+      const start = performance.now();
+      await renderWithQuery(<TripScreen />);
+      expect(await screen.findByTestId('trip-full-map')).toBeTruthy(); // the map is there
+      // the sheet waits (unless the run was so slow that the safety timeout, 0.7 s, already let it in)
+      if (performance.now() - start < 600) expect(screen.queryByTestId('trip-title')).toBeNull();
+      await act(async () => mockTransition.end?.());
+      expect(await screen.findByTestId('trip-title')).toHaveTextContent("Cox's Bazar");
+    } finally {
+      mockTransition.hold = false;
+      mockTransition.end = null;
+    }
+  });
+
   it('removes a stop with Undo, and only sends it when Undo runs out', async () => {
     jest.useFakeTimers();
     try {
@@ -277,6 +316,159 @@ describe('trip screen', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('where you stay: Tonight, the way from and back to it, and re-planning a day that ends late (trip upgrades step 2)', async () => {
+    const SEA_CROWN = { kind: 'hotel' as const, name: 'Hotel Sea Crown', latitude: 21.43, longitude: 92.0, hotel_id: 4, estimate: false };
+    const day1: ItineraryDay = {
+      ...DAY1,
+      start_base: SEA_CROWN,
+      end_base: SEA_CROWN,
+      start_leg: { to_item_id: 1, minutes: 10, km: 2.1, mode: 'cng', cost: 60 },
+      return_leg: { from_item_id: 3, minutes: 20, km: 4.2, mode: 'cng', cost: 120 },
+    };
+    const day2: ItineraryDay = { ...DAY2, start_base: SEA_CROWN, end_base: SEA_CROWN };
+    api.get.mockResolvedValue(TRIP);
+    api.getItinerary.mockResolvedValue({
+      ...ITIN([day1, day2]),
+      validation: {
+        trip_id: 5, valid: true, hard_violation_count: 0, soft_violation_count: 1,
+        violations: [{ code: 'BACK_LATE', severity: 'soft', day_number: 1, item_id: null, message: 'Back at Hotel Sea Crown at 20:45, after 20:00' }],
+      },
+    });
+    api.budget.mockResolvedValue(BUDGET);
+    api.regenerateDay.mockResolvedValue({ message: 'Day 1 re-planned' });
+    await renderWithQuery(<TripScreen />);
+
+    expect(await screen.findByTestId('stays-tonight')).toHaveTextContent(/Tonight: Hotel Sea CrownChange$/);
+    expect(screen.getByTestId('base-from')).toHaveTextContent(/From Hotel Sea Crown · 10 min$/);
+    expect(screen.getByTestId('base-back')).toHaveTextContent(/Back to Hotel Sea Crown · 20 min · ৳120$/);
+    // the stay on the map: one pin when the day starts and ends there
+    expect(screen.getByTestId('map-base-start')).toBeTruthy();
+    expect(screen.queryByTestId('map-base-end')).toBeNull();
+
+    expect(screen.getByText('Back at Hotel Sea Crown at 20:45, after 20:00')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('replan-back-late'));
+    await waitFor(() => expect(api.regenerateDay).toHaveBeenCalledWith(5, 11));
+
+    // the last day has no night: where you leave from
+    await fireEvent.press(screen.getByTestId('day-tab-2'));
+    expect(screen.getByTestId('stays-tonight')).toHaveTextContent(/Last day: leave from Hotel Sea CrownChange$/);
+  });
+
+  it('meals (trip upgrades step 3): where you stay before leaving and after getting back, a packed lunch with places to eat, and the day\'s meals', async () => {
+    const home = { kind: 'home' as const, name: "Uncle's house", latitude: 21.43, longitude: 92.0, hotel_id: null, estimate: false };
+    const meal = (id: number, source: 'own' | 'stay', title: string, start: string, end: string, extra: Partial<ItineraryItem> = {}) =>
+      item({ id, item_type: 'meal', meal_source: source, title, start_time: start, end_time: end, duration_minutes: 30, cost: 0, category: 'Meal', ...extra });
+    const day: ItineraryDay = {
+      ...DAY1,
+      start_base: home,
+      end_base: home,
+      start_leg: { to_item_id: 2, minutes: 10, km: 2, mode: 'cng', cost: 60 },
+      return_leg: { from_item_id: 3, minutes: 20, km: 4, mode: 'cng', cost: 120 },
+      meals: null,
+      meal_plan: { Breakfast: 'stay', Lunch: 'own', Dinner: 'stay', own_cost_per_person: null },
+      items: [
+        meal(41, 'stay', 'Breakfast where you stay', '09:07', '09:52', { order_index: 0 }),
+        { ...DAY1.items[1], order_index: 1 },
+        meal(42, 'own', 'Packed lunch', '12:32', '13:02', { order_index: 2, notes: 'At Laboni Beach' }),
+        { ...DAY1.items[2], order_index: 3 },
+        meal(43, 'stay', 'Dinner where you stay', '19:00', '19:45', { order_index: 4 }),
+      ],
+    };
+    api.get.mockResolvedValue({ ...TRIP, preference: { id: 1, interests: [], travel_style: 'Balanced', activity_level: 'Medium', accommodation_preference: 'Standard', preferred_start_time: '09:00', preferred_end_time: '20:00', meals: { Breakfast: 'stay', Lunch: 'own', Dinner: 'stay', own_cost_per_person: null } } });
+    api.getItinerary.mockResolvedValue(ITIN([day, DAY2]));
+    api.budget.mockResolvedValue(BUDGET);
+    api.placesToEat.mockResolvedValue({
+      item_id: 42, near: 'Laboni Beach', at: '12:32',
+      restaurants: [{ restaurant: { id: 7, name: 'Mermaid Cafe', destination_name: "Cox's Bazar", cuisine: 'Seafood', average_meal_cost: 600, opening_time: '08:00', closing_time: '23:00', cost_known: true }, km: 0.4 }],
+    });
+    api.eatAt.mockResolvedValue({ success: true, message: 'Lunch at Mermaid Cafe', day, validation: null });
+    api.setDayMeals.mockResolvedValue({ trip_id: 5, meals: day.meal_plan, days: [day], validation: null, budget: { before: 9500, after: 9500, change: 0 } });
+    await renderWithQuery(<TripScreen />);
+
+    // Breakfast at home before "From …", dinner after "Back to …"; the packed lunch is a stop card
+    expect(await screen.findByTestId('stay-meal-41')).toHaveTextContent(/09:07–09:52 · Breakfast where you stay · No cost$/);
+    expect(screen.getByTestId('stay-meal-43')).toHaveTextContent(/Dinner where you stay/);
+    const rows = screen.getByTestId('plan-rows');
+    const ids = (node: unknown): string[] => {
+      const out: string[] = [];
+      const walk = (n: { props?: { testID?: string }; children?: unknown[] } | string) => {
+        if (typeof n === 'string' || !n) return;
+        if (n.props?.testID) out.push(n.props.testID);
+        (n.children ?? []).forEach((c) => walk(c as never));
+      };
+      walk(node as never);
+      return out;
+    };
+    const order = ids(rows).filter((x) => /^(stay-meal|base-|stop-)/.test(x));
+    expect(order.indexOf('stay-meal-41')).toBeLessThan(order.indexOf('base-from'));
+    expect(order.indexOf('base-back')).toBeLessThan(order.indexOf('stay-meal-43'));
+    expect(screen.getByTestId('stop-42')).toHaveTextContent(/Packed lunch \(your own\)At Laboni Beach · No cost/);
+
+    // Places to eat nearby, from the packed lunch: pick one and the lunch is there
+    await fireEvent.press(screen.getByTestId('eat-nearby-42'));
+    await fireEvent.press(await screen.findByTestId('eat-at-7'));
+    await waitFor(() => expect(api.eatAt).toHaveBeenCalledWith(5, 42, 7));
+
+    // The day's meals, from the menu
+    await fireEvent.press(screen.getByTestId('trip-menu'));
+    await fireEvent.press(await screen.findByTestId('action-mealsDay'));
+    expect(await screen.findByTestId('meals-sheet')).toBeTruthy();
+    await fireEvent(screen.getByTestId('meals-same-as-trip'), 'valueChange', false);
+    await fireEvent.press(screen.getByTestId('meal-Lunch-restaurant'));
+    await fireEvent.press(screen.getByTestId('meals-save'));
+    await waitFor(() =>
+      expect(api.setDayMeals).toHaveBeenCalledWith(5, 11, { Breakfast: 'stay', Lunch: 'restaurant', Dinner: 'stay', own_cost_per_person: null }),
+    );
+  });
+
+  it('the stay advisor (trip upgrades step 4): a card above its day; Switch with Undo, Not now, and Why?', async () => {
+    const advice = {
+      id: 6, first_night: 2, last_night: 2, nights: 1, day_number: 2,
+      hotel: { id: 9, name: 'Hotel Pashur', destination_name: 'Bagerhat', price_per_night: 2800, currency: 'BDT', rating: 3.5, rating_known: false, latitude: 22.47, longitude: 89.6 },
+      current: { id: 4, name: 'Sea Crown', price_per_night: 2500 },
+      money_saved: 2400, minutes_saved: 104, extra_moves: 1,
+      parts: { rooms: 1, nights: 1, price_now: 2500, price_then: 2800, stay_now: 2500, stay_then: 2800, road_now: 236, road_then: 11,
+        fares_now: 4410, fares_then: 280, transfer_minutes: 76, transfer_cost: 1430, hassle_minutes: 45, days: [2], time_value: 5 },
+    };
+    const before = [{ first_night: 1, last_night: 1, kind: 'hotel', hotel_id: 4, label: null, lat: null, lon: null }];
+    api.get.mockResolvedValue(TRIP);
+    api.getItinerary.mockResolvedValue(ITIN([DAY1, DAY2]));
+    api.budget.mockResolvedValue(BUDGET);
+    api.staySuggestions.mockResolvedValue({ trip_id: 5, suggestions: [advice] });
+    api.acceptStaySuggestion.mockResolvedValue({ trip_id: 5, nights: 1, chosen: true, stays: [], days: [], validation: null,
+      budget: { before: 9500, after: 7100, change: -2400 }, message: 'Staying at Hotel Pashur.', undo: { stays: before } });
+    api.setStays.mockResolvedValue({ trip_id: 5, nights: 1, chosen: true, stays: [], days: [], validation: null, budget: { before: 0, after: 0, change: 0 } });
+    api.notNowStaySuggestion.mockResolvedValue({ trip_id: 5, suggestions: [] });
+    await renderWithQuery(<TripScreen />);
+
+    // not on day 1; on day 2, above the day
+    await waitFor(() => expect(api.staySuggestions).toHaveBeenCalled());
+    expect(screen.queryByTestId('advice-6')).toBeNull();
+    await fireEvent.press(await screen.findByTestId('day-tab-2'));
+    const card = await screen.findByTestId('advice-6');
+    expect(card).toHaveTextContent(/Sleep in Bagerhat for night 2\?/);
+    expect(card).toHaveTextContent(/Hotel Pashur, ৳2,800 a night instead of ৳2,500\./);
+    expect(card).toHaveTextContent(/Saves ৳2,400 and 1 h 44 min on the road/);
+    expect(card).toHaveTextContent(/One extra check-out and check-in\./);
+
+    // Why?
+    await fireEvent.press(screen.getByTestId('advice-why-6'));
+    expect(await screen.findByTestId('advice-why-sheet')).toHaveTextContent(/Moving with your bags: a ride of 1 h 16 min, about ৳1,430\./);
+
+    // Switch, then Undo puts the stays back
+    await fireEvent.press(screen.getByTestId('advice-switch-6'));
+    await waitFor(() => expect(api.acceptStaySuggestion).toHaveBeenCalledWith(5, 6));
+    expect(await screen.findByTestId('trip-snackbar')).toHaveTextContent(/Staying at Hotel Pashur/);
+    await fireEvent.press(screen.getByTestId('trip-snackbar-action'));
+    await waitFor(() => expect(api.setStays).toHaveBeenCalledWith(5, before));
+
+    // Not now: hidden
+    api.staySuggestions.mockResolvedValue({ trip_id: 5, suggestions: [advice] });
+    await waitFor(() => expect(screen.getByTestId('advice-6')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('advice-notNow-6'));
+    await waitFor(() => expect(api.notNowStaySuggestion).toHaveBeenCalledWith(5, 6));
   });
 
   it("opens a friend's trip read-only", async () => {

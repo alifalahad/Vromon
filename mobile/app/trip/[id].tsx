@@ -14,7 +14,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetFooter, BottomSheetScrollView, type BottomSheetFooterProps } from '@gorhom/bottom-sheet';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Text, useWindowDimensions, View } from 'react-native';
@@ -22,12 +22,13 @@ import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AlternativesSheet, ExplanationSheet } from '../../src/components/ItemSheets';
-import { AddStopSheet, type AddTarget } from '../../src/features/trips/plan/AddStopSheet';
+import { isUnchecked } from '../../src/features/places/kinds';
+import { AddStopSheet, type AddChoice, type AddTarget } from '../../src/features/trips/plan/AddStopSheet';
 import { useMe } from '../../src/features/account/useMe';
 import { useConversations } from '../../src/features/chat/queries';
 import { tripCard } from '../../src/features/chat/share';
 import { addDays, localToday } from '../../src/features/trips/dates';
-import { DayMap, type MapPin } from '../../src/features/trips/plan/DayMap';
+import { DayMap, type MapBase, type MapPin } from '../../src/features/trips/plan/DayMap';
 import { DayRibbon } from '../../src/features/trips/plan/DayRibbon';
 import { FreeRow, LegRow, StopCard } from '../../src/features/trips/plan/PlanRows';
 import { ConditionChips } from '../../src/features/trips/conditions/ConditionChips';
@@ -58,16 +59,29 @@ import { useDeferredRemoval } from '../../src/features/trips/plan/useDeferredRem
 import { useStopDrag } from '../../src/features/trips/plan/useStopDrag';
 import { usePlanFormat } from '../../src/features/trips/plan/usePlanFormat';
 import { daySummaryText } from '../../src/features/trips/plan/daySummary';
-import { ApiError, tripsApi } from '../../src/services/api';
+import { BaseRow } from '../../src/features/trips/stays/BaseRow';
+import { baseName, picksFromStays, staysFromPicks, type StayPick } from '../../src/features/trips/stays/stays';
+import { StaysSheet } from '../../src/features/trips/stays/StaysSheet';
+import { TonightRow } from '../../src/features/trips/stays/TonightRow';
+import { DEFAULT_PLAN, slotOf, sourceOf, stayMealsOf } from '../../src/features/trips/meals/meals';
+import { MealsSheet } from '../../src/features/trips/meals/MealsSheet';
+import { PlacesToEatSheet } from '../../src/features/trips/meals/PlacesToEatSheet';
+import { StayMealRow } from '../../src/features/trips/meals/StayMealRow';
+import { adviceForDay } from '../../src/features/trips/stays/advice';
+import { StayAdviceCard, StayAdviceWhy } from '../../src/features/trips/stays/StayAdviceCard';
+import { ApiError, destinationsApi, placesApi, tripsApi } from '../../src/services/api';
 import type {
   AdaptationType,
+  DayBase,
   Destination,
   Itinerary,
   ItineraryDay,
   ItineraryItem,
   LegOptions,
+  MealPlan,
   MustSee,
-  Place,
+  StayIn,
+  StaySuggestion,
   TravelMode,
   Unplaced,
   ValidationReport,
@@ -140,10 +154,17 @@ export default function TripScreen() {
   const [snack, setSnack] = useState<{ message: string; undo?: () => void } | null>(null);
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null);
   const [dropped, setDropped] = useState<number | null>(null);
+  const [pickingStays, setPickingStays] = useState(false);
+  // Meals (trip upgrades step 3): the whole trip's or this day's; places to eat for a meal
+  const [mealsFor, setMealsFor] = useState<'trip' | 'day' | null>(null);
+  const [eatFor, setEatFor] = useState<ItineraryItem | null>(null);
 
   const refresh = useCallback(async () => {
     queryClient.removeQueries({ queryKey: ['alternatives', tripId] });
-    await Promise.all([['itinerary', tripId], ['budget', tripId], ['trip', tripId], ['trips']].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+    // (the stay advisor's suggestions follow every change: step 4)
+    await Promise.all(
+      [['itinerary', tripId], ['budget', tripId], ['trip', tripId], ['trips'], ['staySuggestions', tripId]].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+    );
   }, [queryClient, tripId]);
 
   const removal = useDeferredRemoval(tripId, refresh, (e) => notify(t('plan.removeFailed'), errorText(e), 'error'));
@@ -238,7 +259,93 @@ export default function TripScreen() {
     },
     onError: failed(t('plan.deleteFailed')),
   });
-  const busy = build.isPending || adapt.isPending || regenerateDay.isPending;
+
+  // Where the traveller stays (docs/trip-upgrades, step 2): only the owner sees and changes the stays
+  const stays = useQuery({ queryKey: ['stays', tripId], queryFn: () => tripsApi.stays(tripId), enabled: hasPlan && mine });
+  // The destination's hotels and centre, for the stays sheet (only once it opens)
+  const destinations = useQuery({ queryKey: ['destinations'], queryFn: () => destinationsApi.list(), enabled: pickingStays, staleTime: 10 * 60_000 });
+  const destination = destinations.data?.find((d) => d.name === trip.data?.destination) ?? null;
+  const saveStays = useMutation({
+    mutationFn: (stayIns: NonNullable<ReturnType<typeof staysFromPicks>>) => tripsApi.setStays(tripId, stayIns),
+    onSuccess: (res) => {
+      setPickingStays(false);
+      queryClient.setQueryData(['stays', tripId], { trip_id: res.trip_id, nights: res.nights, chosen: res.chosen, stays: res.stays });
+      queryClient.removeQueries({ queryKey: ['dayRoute', tripId] });
+      const change = Math.round(res.budget.change);
+      done(change === 0 ? t('stays.saved') : t(change < 0 ? 'stays.savedLess' : 'stays.savedMore', { amount: f.money(Math.abs(change)) }));
+    },
+    onError: failed(t('stays.saveFailed')),
+  });
+  const saveMeals = useMutation({
+    mutationFn: ({ scope, plan, dayId }: { scope: 'trip' | 'day'; plan: MealPlan | null; dayId: number }) =>
+      scope === 'trip' ? tripsApi.setMeals(tripId, plan ?? DEFAULT_PLAN) : tripsApi.setDayMeals(tripId, dayId, plan),
+    onSuccess: (res) => {
+      setMealsFor(null);
+      queryClient.removeQueries({ queryKey: ['dayRoute', tripId] });
+      const change = Math.round(res.budget.change);
+      done(change === 0 ? t('meals.saved') : t(change < 0 ? 'meals.savedLess' : 'meals.savedMore', { amount: f.money(Math.abs(change)) }));
+    },
+    onError: failed(t('meals.saveFailed')),
+  });
+  const eatAt = useMutation({
+    mutationFn: ({ itemId, restaurantId }: { itemId: number; restaurantId: number; name: string }) => tripsApi.eatAt(tripId, itemId, restaurantId),
+    onSuccess: (_res, { name }) => {
+      setEatFor(null);
+      queryClient.removeQueries({ queryKey: ['dayRoute', tripId] });
+      done(t('meals.nowAt', { name }));
+    },
+    onError: failed(t('meals.saveFailed')),
+  });
+
+  // The stay advisor (step 4): "sleep somewhere else for nights a-b?", above the day it starts on
+  const advice = useQuery({ queryKey: ['staySuggestions', tripId], queryFn: () => tripsApi.staySuggestions(tripId), enabled: hasPlan && mine });
+  const [adviceBusy, setAdviceBusy] = useState<{ id: number; key: 'switch' | 'notNow' | 'dismiss' } | null>(null);
+  const [whyFor, setWhyFor] = useState<StaySuggestion | null>(null);
+  const putStays = (stayIns: StayIn[]) => {
+    queryClient.removeQueries({ queryKey: ['dayRoute', tripId] });
+    queryClient.invalidateQueries({ queryKey: ['stays', tripId] });
+    return refresh();
+  };
+  const answerAdvice = async (s: StaySuggestion, key: 'switch' | 'notNow' | 'dismiss') => {
+    setAdviceBusy({ id: s.id, key });
+    try {
+      if (key === 'switch') {
+        const res = await tripsApi.acceptStaySuggestion(tripId, s.id);
+        haptics.success();
+        await putStays(res.undo.stays);
+        setSnack({
+          message: t('stayAdvice.switched', { hotel: s.hotel.name }),
+          undo: async () => {
+            setSnack(null);
+            try {
+              await tripsApi.setStays(tripId, res.undo.stays);
+              await putStays(res.undo.stays);
+              setSnack({ message: t('stayAdvice.undone') });
+            } catch (e) {
+              notify(t('stays.saveFailed'), errorText(e), 'error');
+            }
+          },
+        });
+      } else {
+        const res = key === 'notNow' ? await tripsApi.notNowStaySuggestion(tripId, s.id) : await tripsApi.dismissStaySuggestion(tripId, s.id);
+        queryClient.setQueryData(['staySuggestions', tripId], res);
+        queryClient.invalidateQueries({ queryKey: ['budget', tripId] });
+        setSnack({ message: t(key === 'notNow' ? 'stayAdvice.notNowDone' : 'stayAdvice.dismissedDone') });
+      }
+    } catch (e) {
+      notify(t('stayAdvice.failed'), errorText(e), 'error');
+    } finally {
+      setAdviceBusy(null);
+    }
+  };
+
+  const pickStays = (picks: StayPick[]) => {
+    const stayIns = staysFromPicks(picks);
+    if (stayIns) saveStays.mutate(stayIns);
+    else setPickingStays(false);
+  };
+
+  const busy = build.isPending || adapt.isPending || regenerateDay.isPending || saveStays.isPending;
 
   const rows = useMemo(() => (day ? planRows(day, removal.hidden) : []), [day, removal.hidden]);
   const pins = useMemo<MapPin[]>(
@@ -246,10 +353,28 @@ export default function TripScreen() {
       rows.flatMap((r) => {
         if (r.kind !== 'stop') return [];
         const coord = stopCoord(r.item);
-        return coord ? [{ id: r.item.id, n: r.n, kind: r.stopKind, coord, title: stopTitle(r.item) }] : [];
+        return coord ? [{ id: r.item.id, n: r.n, kind: r.stopKind, coord, title: stopTitle(r.item), unchecked: isUnchecked(r.item.place) }] : [];
       }),
     [rows],
   );
+  // "Put a pin on the map" opens at the stop before the free time, else at the day's first stop
+  const addCenter = useMemo(() => {
+    const items = days.find((d) => d.id === addTarget?.dayId)?.items ?? [];
+    const near = items.find((i) => i.id === addTarget?.nearItemId);
+    const coord = (near && stopCoord(near)) ?? items.map(stopCoord).find(Boolean);
+    return coord ? { lat: coord.latitude, lon: coord.longitude } : null;
+  }, [days, addTarget]);
+  // The stay on the map: where the day starts and ends (not a stand-in at the destination's centre)
+  const mapBase = useCallback(
+    (b: DayBase | null | undefined): MapBase | null =>
+      b && !b.estimate && b.latitude != null && b.longitude != null && pins.length
+        ? { kind: b.kind, coord: { latitude: b.latitude, longitude: b.longitude }, name: baseName(b, t) ?? '' }
+        : null,
+    [pins.length, t],
+  );
+  const startBase = useMemo(() => mapBase(day?.start_base), [mapBase, day?.start_base]);
+  const endBase = useMemo(() => mapBase(day?.end_base), [mapBase, day?.end_base]);
+
   // Live conditions: weather, sea, sun and usual traffic (refreshed every 10 minutes while open)
   const conditions = useQuery({
     queryKey: ['conditions', tripId],
@@ -283,7 +408,15 @@ export default function TripScreen() {
     refetchInterval: (q) => (q.state.data && !routeComplete(q.state.data) ? 30_000 : false),
   });
   const roadLines = useMemo(
-    () => Object.fromEntries((route.data?.legs ?? []).flatMap((l) => (l.line ? [[`${l.from_item_id}>${l.to_item_id}`, l.line]] : []))),
+    () => Object.fromEntries((route.data?.legs ?? []).flatMap((l) => (l.line && !l.kind ? [[`${l.from_item_id}>${l.to_item_id}`, l.line]] : []))),
+    [route.data],
+  );
+  // From the stay and back to it, along the road when we have it
+  const baseLines = useMemo(
+    () => ({
+      from: route.data?.legs.find((l) => l.kind === 'from_base')?.line ?? null,
+      to: route.data?.legs.find((l) => l.kind === 'to_base')?.line ?? null,
+    }),
     [route.data],
   );
   // Legs with no road: road to the ghat, across the water, road on
@@ -297,6 +430,27 @@ export default function TripScreen() {
   const sheetHigh = height - insets.top - 72;
   const snapPoints = useMemo(() => [sheetLow, sheetHigh], [sheetLow, sheetHigh]);
   const sheet = useRef<BottomSheet>(null);
+  // The plan sheet slides in once this screen has finished sliding in. Opened from a link (or Today's
+  // "Full plan") over another trip, its first animation could run while the screen was still being swapped
+  // in and never be drawn: the sheet thought it was open, but nothing showed (found on the phone, step 6).
+  const navigation = useNavigation();
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const done = () => setSettled(true);
+    // The native stack's own event (Expo Router doesn't export its type)
+    const stack = navigation as unknown as {
+      addListener: (event: 'transitionEnd', cb: (e: { data?: { closing?: boolean } }) => void) => () => void;
+    };
+    const unsubscribe = stack.addListener('transitionEnd', (e) => {
+      if (!e.data?.closing) done();
+    });
+    // No transition to wait for (the first screen, or animations off): a moment is enough
+    const fallback = setTimeout(done, 700);
+    return () => {
+      unsubscribe();
+      clearTimeout(fallback);
+    };
+  }, [navigation]);
   const rowsTop = useRef(0);
   const rowY = useRef<Record<number, number>>({});
 
@@ -359,7 +513,7 @@ export default function TripScreen() {
     queryClient.setQueryData<Itinerary>(['itinerary', tripId], (old) =>
       old ? { ...old, days: old.days.map((d) => changed.find((c) => c.id === d.id) ?? d), validation: res.validation } : old,
     );
-    for (const queryKey of [['budget', tripId], ['trip', tripId], ['trips']]) queryClient.invalidateQueries({ queryKey });
+    for (const queryKey of [['budget', tripId], ['trip', tripId], ['trips'], ['staySuggestions', tripId]]) queryClient.invalidateQueries({ queryKey });
     queryClient.removeQueries({ queryKey: ['alternatives', tripId] });
     queryClient.removeQueries({ queryKey: ['suggestions', tripId] });
   };
@@ -447,6 +601,16 @@ export default function TripScreen() {
       notify(t('plan.saveFailed'), errorText(e), 'error');
     }
   };
+  // "Suggest this place to Vromon": your own stop goes to the data team's review (trip upgrades step 6)
+  const suggestPlace = async (item: ItineraryItem) => {
+    if (!item.place) return;
+    try {
+      const res = await placesApi.suggest(item.place.id);
+      setSnack({ message: t(res.already ? 'search.alreadySuggested' : 'search.suggested') });
+    } catch (e) {
+      notify(t('search.suggestFailed'), errorText(e), 'error');
+    }
+  };
   const setPinned = async (item: ItineraryItem, pinned: boolean) => {
     try {
       putDays(await tripsApi.updateItem(tripId, item.id, { pinned }));
@@ -455,13 +619,20 @@ export default function TripScreen() {
       notify(t('plan.saveFailed'), errorText(e), 'error');
     }
   };
-  const addPlace = async (place: Place, target: AddTarget) => {
+  // Vromon's place, or (trip upgrades step 6) any search result or a named pin: the server makes it your own stop
+  const addPlace = async (choice: AddChoice, target: AddTarget) => {
+    // A place from outside Vromon's list first gets its roads to the day's other stops: a few seconds
+    if (!('place_id' in choice.ref)) setSnack({ message: t('search.adding', { name: choice.name }) });
     try {
-      const res = await tripsApi.addItem(tripId, target.dayId, place.id, target.position);
+      const before = new Set(days.find((d) => d.id === target.dayId)?.items.map((i) => i.id) ?? []);
+      const res =
+        'place_id' in choice.ref
+          ? await tripsApi.addItem(tripId, target.dayId, choice.ref.place_id, target.position)
+          : await tripsApi.addStop(tripId, target.dayId, choice.ref, target.position);
       putDays(res);
-      const added = res.day.items.find((i) => i.place_id === place.id);
+      const added = res.day.items.find((i) => !before.has(i.id) && i.item_type === 'activity');
       setSnack({
-        message: t('plan.addedStop', { name: place.name }),
+        message: t('plan.addedStop', { name: choice.name }),
         undo: added
           ? async () => {
               setSnack(null);
@@ -475,6 +646,7 @@ export default function TripScreen() {
           : undefined,
       });
     } catch (e) {
+      setSnack(null);
       notify(t('plan.addFailed'), errorText(e), 'error');
     }
   };
@@ -637,6 +809,7 @@ export default function TripScreen() {
             setSheetItem(item);
           }}
           onRemove={() => removeStop(item)}
+          onEatNearby={sourceOf(item) === 'own' ? () => setEatFor(item) : undefined}
         />,
       );
     }
@@ -646,6 +819,11 @@ export default function TripScreen() {
 
   const actions: SheetAction[] = [];
   if (onTrip) actions.push({ key: 'today', label: t('today.open'), icon: 'calendar-today', onPress: openToday });
+  // Meals (step 3): this day's, or the whole trip's
+  if (mine && day) {
+    actions.push({ key: 'mealsDay', label: t('meals.today'), icon: 'silverware-fork-knife', onPress: () => setMealsFor('day') });
+    actions.push({ key: 'mealsTrip', label: t('meals.wholeTrip'), icon: 'silverware-variant', onPress: () => setMealsFor('trip') });
+  }
   // Planning together (friends-chat step 7): invite friends to the trip's room
   if (mine) {
     actions.push({
@@ -713,6 +891,9 @@ export default function TripScreen() {
         fitKey={`${day?.id ?? 'none'}-${fitCount}`}
         roadLines={roadLines}
         crossings={crossings}
+        start={startBase}
+        end={endBase}
+        baseLines={baseLines}
         topPadding={insets.top + 56}
         bottomPadding={fullMap ? insets.bottom + 96 : sheetLow}
         accessibilityLabel={t('plan.mapLabel', { n: f.n(day?.day_number ?? 1) })}
@@ -778,7 +959,7 @@ export default function TripScreen() {
         </PressableScale>
       ) : null}
 
-      {fullMap ? null : (
+      {fullMap || !settled ? null : (
       <BottomSheet
         ref={sheet}
         index={0}
@@ -901,6 +1082,20 @@ export default function TripScreen() {
                   }}
                 />
 
+                {adviceForDay(advice.data?.suggestions, day.day_number).map((s) => (
+                  <StayAdviceCard
+                    key={s.id}
+                    suggestion={s}
+                    destination={data.destination}
+                    canAnswer={mine}
+                    busy={adviceBusy?.id === s.id ? adviceBusy.key : null}
+                    onSwitch={() => answerAdvice(s, 'switch')}
+                    onNotNow={() => answerAdvice(s, 'notNow')}
+                    onDismiss={() => answerAdvice(s, 'dismiss')}
+                    onWhy={() => setWhyFor(s)}
+                  />
+                ))}
+
                 <View style={styles.daySummary}>
                   {(daySummaryText(day.summary, t) ?? day.theme) ? (
                     <Text style={styles.dayTheme} testID="day-summary">
@@ -917,6 +1112,8 @@ export default function TripScreen() {
                       .join(' · ')}
                   </Text>
                 </View>
+
+                <TonightRow day={day} lastDay={dayIndex === days.length - 1} onChange={mine && days.length > 1 ? () => setPickingStays(true) : undefined} />
 
                 {dayConditions && <ConditionChips day={dayConditions} onOpen={openConditions} />}
 
@@ -954,17 +1151,35 @@ export default function TripScreen() {
                   <View style={styles.problems}>
                     <Text style={styles.problemsTitle}>{t('plan.needsAttention')}</Text>
                     {dayProblems.map((v, i) => (
-                      <View key={i} style={styles.problem}>
-                        <MaterialCommunityIcons name="alert-outline" size={18} color={v.severity === 'hard' ? theme.colors.danger : theme.colors.warning} />
-                        <Text style={styles.problemText}>{v.message}</Text>
-                      </View>
+                      <React.Fragment key={i}>
+                        <View style={styles.problem}>
+                          <MaterialCommunityIcons name="alert-outline" size={18} color={v.severity === 'hard' ? theme.colors.danger : theme.colors.warning} />
+                          <Text style={styles.problemText}>{v.message}</Text>
+                        </View>
+                        {/* Back at the stay too late: a fresh plan for the day ends in time */}
+                        {mine && v.code === 'BACK_LATE' ? (
+                          <Button
+                            variant="secondary"
+                            icon="refresh"
+                            label={t('stays.replanDay')}
+                            disabled={busy}
+                            onPress={() => regenerateDay.mutate(day.id)}
+                            testID="replan-back-late"
+                          />
+                        ) : null}
+                      </React.Fragment>
                     ))}
                   </View>
                 )}
 
                 <View ref={attachRows} collapsable={false} onLayout={(e) => (rowsTop.current = e.nativeEvent.layout.y)} style={styles.rows} testID="plan-rows">
                   {stopCount === 0 && <Text style={styles.muted}>{t('plan.emptyDay')}</Text>}
+                  {/* Breakfast where you stay comes before leaving, dinner there after getting back */}
+                  <StayMealRow item={stayMealsOf(day).breakfast} />
+                  {stopCount > 0 && <BaseRow way="from" base={day.start_base} leg={day.start_leg} />}
                   {renderRows(day)}
+                  {stopCount > 0 && <BaseRow way="back" base={day.end_base} leg={day.return_leg} />}
+                  <StayMealRow item={stayMealsOf(day).dinner} />
                 </View>
                 {mine && stopCount > 0 && (
                   <Button
@@ -977,7 +1192,7 @@ export default function TripScreen() {
                       const lastActivity = [...stops].reverse().find((i) => i.item_type === 'activity');
                       // At the end of the day, but before dinner when the day ends with it
                       const last = stops[stops.length - 1];
-                      const beforeDinner = last?.item_type === 'meal' && last.title.startsWith('Dinner');
+                      const beforeDinner = !!last && slotOf(last) === 'Dinner';
                       setAddTarget({ dayId: day.id, position: beforeDinner ? stops.length - 1 : stops.length, nearItemId: lastActivity?.id });
                     }}
                     testID="add-stop"
@@ -1021,7 +1236,7 @@ export default function TripScreen() {
             )
           )}
 
-          <TripDetails trip={data} ownerId={data.user_id ?? me.data?.id} mine={mine} hasPlan={hasPlan} />
+          <TripDetails trip={data} ownerId={data.user_id ?? me.data?.id} mine={mine} hasPlan={hasPlan} went={mine || !!room} />
         </BottomSheetScrollView>
       </BottomSheet>
       )}
@@ -1053,9 +1268,54 @@ export default function TripScreen() {
         onMoveDay={(item, dayId) => {
           if (day) moveToDay(item, day, dayId);
         }}
+        onSuggest={suggestPlace}
       />
-      <AddStopSheet tripId={tripId} destination={data.destination} target={addTarget} onClose={() => setAddTarget(null)} onAdd={addPlace} />
+      <AddStopSheet
+        tripId={tripId}
+        destination={data.destination}
+        target={addTarget}
+        center={addCenter}
+        onClose={() => setAddTarget(null)}
+        onAdd={addPlace}
+      />
       <LegSheet tripId={tripId} itemId={legItem} onClose={() => setLegItem(null)} onPick={setTravelMode} />
+      {mine && day ? (
+        <MealsSheet
+          visible={mealsFor != null}
+          title={mealsFor === 'day' ? t('meals.dayTitle', { n: f.n(day.day_number) }) : t('meals.title')}
+          plan={mealsFor === 'day' ? (day.meals ?? null) : (data.preference?.meals ?? null)}
+          tripPlan={mealsFor === 'day' ? (data.preference?.meals ?? null) : undefined}
+          currency={data.currency}
+          askCost={mealsFor !== 'day'}
+          stayBreakfast={mealsFor === 'trip' ? days.length > 1 : !(day.day_number === 1 && !!data.preference?.arrive_time)}
+          stayDinner={mealsFor === 'trip' ? days.length > 1 : day.day_number < days.length}
+          saving={saveMeals.isPending}
+          onClose={() => setMealsFor(null)}
+          onSave={(plan) => saveMeals.mutate({ scope: mealsFor ?? 'trip', plan, dayId: day.id })}
+        />
+      ) : null}
+      <StayAdviceWhy suggestion={whyFor} destination={data.destination} onClose={() => setWhyFor(null)} />
+      <PlacesToEatSheet
+        tripId={tripId}
+        item={eatFor}
+        canPick={mine}
+        busy={eatAt.isPending}
+        onClose={() => setEatFor(null)}
+        onPick={(restaurantId, name) => eatFor && eatAt.mutate({ itemId: eatFor.id, restaurantId, name })}
+      />
+      {mine && stays.data ? (
+        <StaysSheet
+          visible={pickingStays}
+          nights={stays.data.nights}
+          startDate={data.start_date}
+          destination={destination}
+          picks={picksFromStays(stays.data.stays, stays.data.nights)}
+          allowAuto={false}
+          saving={saveStays.isPending}
+          onClose={() => setPickingStays(false)}
+          onSave={pickStays}
+        />
+      ) : null}
       {why && <ExplanationSheet tripId={tripId} item={why} onClose={() => setWhy(null)} />}
       {replacing && (
         <AlternativesSheet
@@ -1338,7 +1598,7 @@ const useStyles = makeStyles((t) => {
   };
 });
 
-/** Every leg has its road line, or its boat crossing */
-function routeComplete(route: { legs: { line: unknown; segments?: unknown }[] } | undefined): boolean {
-  return !!route && route.legs.every((l) => l.line || l.segments);
+/** Every leg between stops has its road line, or its boat crossing (the way from and back to the stay may be drawn straight) */
+function routeComplete(route: { legs: { line: unknown; segments?: unknown; kind?: string }[] } | undefined): boolean {
+  return !!route && route.legs.every((l) => l.kind || l.line || l.segments);
 }

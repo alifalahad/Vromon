@@ -3,7 +3,7 @@ from app.models.models import (
     User, UserSettings,
     FriendRequest, Friendship, Block, Device,
     Country, Region, City, Visit, Photo,
-    Trip, TripStop, TripPreference, TripConstraint,
+    Trip, TripStop, TripStay, StaySuggestion, TripReview, ReviewItem, TripPreference, TripConstraint,
     Itinerary, ItineraryItem, Feedback,
     SourceDocument, DocumentChunk,
 )
@@ -13,7 +13,7 @@ from app.models.catalog import (  # data platform (docs/DATASET_IMPLEMENTATION_P
     AdminUnit, AdminBoundary, AdminAdjacency,
     AttractionCategory, Attraction, AttractionMedia,
     TransportOperator, TransportHub, TimetableVersion, Train, TrainService, ServiceStop, FareProduct,
-    JourneyCalculation, LocalFood, MapExport, ServicePlace, PriceObservation, GeoMedia, CountryFacts,
+    JourneyCalculation, LocalFood, MapExport, ServicePlace, PriceObservation, GeoMedia, CountryFacts, PoiIndex, GeocodeCache,
 )
 
 __all__ = [
@@ -21,7 +21,7 @@ __all__ = [
     "User", "UserSettings",
     "FriendRequest", "Friendship", "Block", "Device",
     "Country", "Region", "City", "Visit", "Photo",
-    "Trip", "TripStop", "TripPreference", "TripConstraint",
+    "Trip", "TripStop", "TripStay", "StaySuggestion", "TripReview", "ReviewItem", "TripPreference", "TripConstraint",
     "Itinerary", "ItineraryItem", "Feedback",
     "SourceDocument", "DocumentChunk",
     "DataSource", "IngestionJob", "IngestionJobError", "SourceArtifact", "StagingRecord", "SourceClaim",
@@ -29,5 +29,5 @@ __all__ = [
     "AdminUnit", "AdminBoundary", "AdminAdjacency",
     "AttractionCategory", "Attraction", "AttractionMedia",
     "TransportOperator", "TransportHub", "TimetableVersion", "Train", "TrainService", "ServiceStop", "FareProduct",
-    "JourneyCalculation", "LocalFood", "MapExport", "ServicePlace", "PriceObservation", "GeoMedia", "CountryFacts",
+    "JourneyCalculation", "LocalFood", "MapExport", "ServicePlace", "PriceObservation", "GeoMedia", "CountryFacts", "PoiIndex", "GeocodeCache",
 ]

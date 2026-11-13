@@ -713,3 +713,51 @@ class MapExport(Base):
     credits: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="needs_review")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PoiIndex(Base):
+    """
+    Every kind of place in Bangladesh but hotels and restaurants (docs/trip-upgrades, step 5): colleges,
+    schools, hospitals, banks, markets, offices, places of worship … from Overture Maps, for "search
+    anything" in a trip's free time (step 6). Bulk-loaded by the data platform (`overture_pois`), which
+    replaces a source's rows on each run; never edited by the API. Not checked: listings as published.
+    """
+    __tablename__ = "poi_index"
+    __table_args__ = (
+        Index("ix_poi_index_district_kind", "district_id", "kind"),
+        Index("ix_poi_index_name_key", "name_key"),
+        Index("ix_poi_index_source", "source"),
+        Index("ix_poi_index_lat_lon", "lat", "lon"),   # search reads the index around a point (step 6)
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)          # the source's own id
+    source: Mapped[str] = mapped_column(String(20), nullable=False)        # overture
+    name: Mapped[str] = mapped_column(String(300), nullable=False)
+    name_bn: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)   # the source's category
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)          # Vromon's word: college, market, bank … other
+    lat: Mapped[float] = mapped_column(Float, nullable=False)
+    lon: Mapped[float] = mapped_column(Float, nullable=False)
+    district_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("admin_units.id", ondelete="SET NULL"), nullable=True)
+    confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    name_key: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class GeocodeCache(Base):
+    """
+    Addresses and areas from ORS geocoding for "search anything" (docs/trip-upgrades, step 6), kept 7 days
+    by (query, area) so the same search near the same place asks once. Holds no user id: only the text, a
+    rounded area and what came back. Rows fetched today count toward the daily cap (every process shares it).
+    """
+    __tablename__ = "geocode_cache"
+    __table_args__ = (
+        UniqueConstraint("query_key", "area_key", name="uq_geocode_cache_query_area"),
+        Index("ix_geocode_cache_fetched_at", "fetched_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    query_key: Mapped[str] = mapped_column(String(120), nullable=False)    # the normalised query
+    area_key: Mapped[str] = mapped_column(String(24), nullable=False)      # the focus point, rounded (~5 km)
+    results_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

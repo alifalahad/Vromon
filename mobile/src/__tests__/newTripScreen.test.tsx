@@ -21,6 +21,13 @@ jest.mock('../ui/haptics', () => ({
   haptics: { success: jest.fn(), error: jest.fn(), light: jest.fn(), warning: jest.fn(), selection: jest.fn(), medium: jest.fn() },
 }));
 jest.mock('../features/trips/CitySearch', () => ({ CitySearch: () => null }));
+// The map for picking where family live (docs/trip-upgrades, step 2)
+jest.mock('@maplibre/maplibre-react-native', () => {
+  const R = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  const Pass = ({ children }: { children?: React.ReactNode }) => R.createElement(View, null, children);
+  return { Map: Pass, Camera: () => null, GeoJSONSource: Pass, RasterSource: Pass, VectorSource: Pass, Layer: () => null, Marker: Pass };
+});
 jest.mock('../features/account/useMe', () => ({ useMe: () => ({ data: undefined }) }));
 jest.mock('../services/api', () => ({
   destinationsApi: { list: jest.fn(), hotels: jest.fn() },
@@ -244,6 +251,51 @@ describe('planning a new trip', () => {
     await press(await screen.findByTestId('see-plan'));
     expect(mockReplace).toHaveBeenCalledWith({ pathname: '/trip/[id]', params: { id: 77 } });
   }, 20_000);
+
+  it("where you'll stay (step 2) and meals (step 3): with family every night takes the hotel nights off the budget; breakfast and dinner there in one tap", async () => {
+    trips.create.mockResolvedValue({ id: 80 });
+    trips.generate.mockResolvedValue({ unplaced: [], itinerary: [] });
+    await renderScreen();
+    await choose(1);
+    await press(screen.getByTestId('new-next'));
+
+    // Vromon picks a hotel until you choose; the budget is the level's
+    expect(await screen.findByTestId('stays-open')).toHaveTextContent(/Let Vromon pick a hotel/);
+    expect(screen.getByTestId('budget-total').props.value).toBe('25,000');
+
+    // All nights with family: a place on the map
+    await press(screen.getByTestId('stays-open'));
+    await press(await screen.findByTestId('stays-all'));
+    await press(screen.getByTestId('stay-home'));
+    await press(await screen.findByTestId('place-picker-use'));
+    expect(screen.getByTestId('stays-all')).toHaveTextContent(/With family or friends/);
+    await press(screen.getByTestId('stays-save'));
+
+    expect(screen.getByTestId('stays-open')).toHaveTextContent(/With family or friends/);
+    // 2 nights × the middle Standard price (৳2,800 and ৳3,500 → ৳3,150), one room for two
+    expect(screen.getByTestId('budget-total').props.value).toBe('19,000');
+
+    // Meals (step 3): with family, "have breakfast and dinner there?" once, one tap
+    expect(screen.getByTestId('meals-open')).toHaveTextContent(/Best places to eat/);
+    await press(screen.getByTestId('meals-offer-yes'));
+    expect(screen.queryByTestId('meals-offer')).toBeNull();
+    expect(screen.getByTestId('meals-open')).toHaveTextContent(/Breakfast and dinner where you stay/);
+    // and lunch packed, from the sheet
+    await press(screen.getByTestId('meals-open'));
+    await press(await screen.findByTestId('meal-Lunch-own'));
+    await press(screen.getByTestId('meals-save'));
+    expect(screen.getByTestId('meals-open')).toHaveTextContent(/Packed lunch · breakfast and dinner where you stay/);
+
+    await press(screen.getByTestId('build-now'));
+    expect(await screen.findByTestId('see-plan', {}, { timeout: 3000 })).toBeTruthy();
+    expect(trips.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        total_budget: 19000,
+        stays: [expect.objectContaining({ first_night: 1, last_night: 2, kind: 'home', hotel_id: null })],
+        meals: { Breakfast: 'stay', Lunch: 'own', Dinner: 'stay', own_cost_per_person: null },
+      }),
+    );
+  });
 
   it('can build straight from step 2, and leave a must-see out', async () => {
     trips.create.mockResolvedValue({ id: 78 });

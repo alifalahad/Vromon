@@ -23,7 +23,7 @@ def list_destinations(db: Session = Depends(get_db)):
     result = []
     for dest in destinations:
         place_count = db.query(Place).filter(
-            Place.destination_id == dest.id, Place.is_active == True
+            Place.destination_id == dest.id, Place.is_active == True, Place.listed == True  # noqa: E712 (never a private stop: step 6)
         ).count()
         result.append(DestinationOut(
             id=dest.id,
@@ -51,7 +51,7 @@ def get_destination(destination_id: int, db: Session = Depends(get_db)):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Destination not found")
     place_count = db.query(Place).filter(
-        Place.destination_id == dest.id, Place.is_active == True
+        Place.destination_id == dest.id, Place.is_active == True, Place.listed == True  # noqa: E712 (never a private stop: step 6)
     ).count()
     return DestinationOut(
         id=dest.id,
@@ -78,7 +78,7 @@ def get_destination_places(destination_id: int, db: Session = Depends(get_db)):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Destination not found")
     places = db.query(Place).filter(
-        Place.destination_id == dest.id, Place.is_active == True
+        Place.destination_id == dest.id, Place.is_active == True, Place.listed == True  # noqa: E712 (never a private stop: step 6)
     ).order_by(Place.id).all()
     return [_place_out(p) for p in places]
 
@@ -171,4 +171,7 @@ def _hotel_out(h: Hotel) -> HotelOut:
         longitude=h.longitude,
         description=h.description,
         amenities=h.amenities,
+        # without these every hotel looked priced and rated ("৳0 a night" in the stays sheet)
+        price_known=h.price_known,
+        rating_known=h.rating_known,
     )

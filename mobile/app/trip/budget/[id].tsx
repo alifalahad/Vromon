@@ -17,10 +17,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMe } from '../../../src/features/account/useMe';
 import { AIBudgetCard } from '../../../src/features/trips/budget/AIBudgetCard';
+import { StayAdviceCard, StayAdviceWhy } from '../../../src/features/trips/stays/StayAdviceCard';
+import { stayLines } from '../../../src/features/trips/stays/stays';
 import { dayParts } from '../../../src/features/trips/plan/timeline';
 import { usePlanFormat } from '../../../src/features/trips/plan/usePlanFormat';
 import { tripsApi } from '../../../src/services/api';
-import type { BudgetBreakdown, BudgetPart, BudgetSave, Itinerary, SaveAction, SaveResult } from '../../../src/types';
+import type { BudgetBreakdown, BudgetPart, BudgetSave, Itinerary, SaveAction, SaveResult, StaySuggestion } from '../../../src/types';
 import { haptics } from '../../../src/ui/haptics';
 import { PressableScale } from '../../../src/ui/PressableScale';
 import { Snackbar } from '../../../src/ui/Snackbar';
@@ -69,7 +71,7 @@ export default function TripBudgetScreen() {
     queryClient.setQueryData<Itinerary>(['itinerary', tripId], (old) =>
       old ? { ...old, days: old.days.map((d) => res.days.find((c) => c.id === d.id) ?? d), validation: res.validation } : old,
     );
-    for (const queryKey of [['itinerary', tripId], ['trip', tripId], ['trips'], ['conditions', tripId], ['dayRoute']]) {
+    for (const queryKey of [['itinerary', tripId], ['trip', tripId], ['trips'], ['conditions', tripId], ['dayRoute'], ['stays', tripId], ['staySuggestions', tripId]]) {
       queryClient.invalidateQueries({ queryKey });
     }
   };
@@ -89,8 +91,25 @@ export default function TripBudgetScreen() {
     }
   };
 
+  // A stay suggestion's Not now / Don't suggest this (the same answers as on the trip's plan)
+  const answer = async (s: Extract<BudgetSave, { key: 'stay' }>, key: 'notNow' | 'dismiss') => {
+    setBusy(`${key}-${s.detail.id}`);
+    try {
+      const res = key === 'notNow' ? await tripsApi.notNowStaySuggestion(tripId, s.detail.id) : await tripsApi.dismissStaySuggestion(tripId, s.detail.id);
+      queryClient.setQueryData(['staySuggestions', tripId], res);
+      await budget.refetch();
+      setSnack({ message: t(key === 'notNow' ? 'stayAdvice.notNowDone' : 'stayAdvice.dismissedDone') });
+    } catch (e) {
+      setSnack({ message: `${t('budget.failed')}: ${e instanceof Error ? e.message : String(e)}` });
+    } finally {
+      setBusy(null);
+    }
+  };
+  const [whyFor, setWhyFor] = useState<StaySuggestion | null>(null);
+
   const apply = (s: BudgetSave) =>
     run(s.key, s.action, () => {
+      if (s.key === 'stay') return t('stayAdvice.switched', { hotel: s.detail.hotel.name });
       if (s.key === 'hotel') return t('budget.appliedHotel', { name: s.detail.to });
       if (s.key === 'skip') return t('budget.appliedSkip', { name: s.detail.title });
       return t('budget.appliedRickshaw');
@@ -177,18 +196,33 @@ export default function TripBudgetScreen() {
 
         {/* Each part */}
         <View style={styles.list}>
-          {data.parts.map((p, i) => (
-            <View key={p.key} style={[styles.partRow, i < data.parts.length - 1 && styles.rowLine]} testID={`budget-part-${p.key}`}>
-              <View style={[styles.swatch, { backgroundColor: p.known ? colors[p.key] : theme.colors.surfaceInset }]} />
-              <View style={styles.flex}>
-                <Text style={styles.partLabel}>{t(`budget.parts.${p.key}`)}</Text>
-                <Text style={styles.partDetail}>{partDetail(p, data, t, f)}</Text>
+          {data.parts.map((p, i) => {
+            // Several stays, or no hotel at all: a line for each, under the stay (docs/trip-upgrades, step 2)
+            const lines = p.key === 'stay' ? stayLines(p.detail.blocks, t, f) : [];
+            return (
+              <View key={p.key} style={i < data.parts.length - 1 && styles.rowLine}>
+                <View style={styles.partRow} testID={`budget-part-${p.key}`}>
+                  <View style={[styles.swatch, { backgroundColor: p.known ? colors[p.key] : theme.colors.surfaceInset }]} />
+                  <View style={styles.flex}>
+                    <Text style={styles.partLabel}>{t(`budget.parts.${p.key}`)}</Text>
+                    <Text style={styles.partDetail}>{partDetail(p, data, t, f)}</Text>
+                  </View>
+                  <Animated.Text key={`${p.key}-${p.amount}`} entering={reduceMotion ? undefined : FadeIn.duration(250)} style={[styles.amount, !p.known && styles.unknown]}>
+                    {p.known ? `${p.estimate ? '≈ ' : ''}${f.money(p.amount ?? 0)}` : t('budget.unknown')}
+                  </Animated.Text>
+                </View>
+                {lines.map((l) => (
+                  <View key={l.key} style={styles.stayLine} accessible accessibilityLabel={`${l.nights}, ${l.name}, ${l.amount}`} testID={`budget-stay-${l.key}`}>
+                    <Text style={styles.stayNights}>{l.nights}</Text>
+                    <Text style={styles.stayName} numberOfLines={1}>
+                      {l.name}
+                    </Text>
+                    <Text style={[styles.stayAmount, l.free && styles.unknown]}>{l.amount}</Text>
+                  </View>
+                ))}
               </View>
-              <Animated.Text key={`${p.key}-${p.amount}`} entering={reduceMotion ? undefined : FadeIn.duration(250)} style={[styles.amount, !p.known && styles.unknown]}>
-                {p.known ? `${p.estimate ? '≈ ' : ''}${f.money(p.amount ?? 0)}` : t('budget.unknown')}
-              </Animated.Text>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         {/* What Gemini suggests from Vromon's prices; it can become the budget */}
@@ -219,6 +253,24 @@ export default function TripBudgetScreen() {
           <Text style={styles.muted}>{t('budget.noSaves')}</Text>
         ) : (
           data.saves.map((s) => {
+            // Sleeping somewhere else for some nights (step 4): the same card as on the plan
+            if (s.key === 'stay') {
+              const k = busy === s.key ? 'switch' : busy === `notNow-${s.detail.id}` ? 'notNow' : busy === `dismiss-${s.detail.id}` ? 'dismiss' : null;
+              return (
+                <Animated.View key={`stay-${s.detail.id}`} layout={layout} testID="budget-save-stay">
+                  <StayAdviceCard
+                    suggestion={s.detail}
+                    destination={trip.data?.destination ?? ''}
+                    canAnswer={mine}
+                    busy={k}
+                    onSwitch={() => apply(s)}
+                    onNotNow={() => answer(s, 'notNow')}
+                    onDismiss={() => answer(s, 'dismiss')}
+                    onWhy={() => setWhyFor(s.detail)}
+                  />
+                </Animated.View>
+              );
+            }
             const title = saveTitle(s, t, f);
             const saving = t(s.estimate ? 'budget.savingAbout' : 'budget.saving', { amount: f.money(s.saving) });
             return (
@@ -255,6 +307,7 @@ export default function TripBudgetScreen() {
 
         <Text style={styles.footnote}>{t('budget.footnote')}</Text>
       </ScrollView>
+      <StayAdviceWhy suggestion={whyFor} destination={trip.data?.destination ?? ''} onClose={() => setWhyFor(null)} />
       <Snackbar message={snack?.message ?? null} actionLabel={snack?.undo ? t('plan.undo') : undefined} onAction={undo} testID="budget-snackbar" />
     </View>
   );
@@ -283,6 +336,12 @@ function partDetail(p: BudgetPart, data: BudgetBreakdown, t: T, f: F): string {
         who: t(d.fare_per === 'vehicle' ? 'budget.cars' : 'budget.seats', { count: d.count ?? 1, n: f.n(d.count ?? 1) }),
       });
     case 'stay': {
+      const blocks = d.blocks ?? [];
+      if (blocks.length && blocks.every((b) => b.kind === 'home' || b.kind === 'none')) return t('stays.budgetFree');
+      if (!p.known && blocks.some((b) => b.kind === 'undecided')) return t('stays.budgetUndecided');
+      if (blocks.length > 1 || (blocks.length === 1 && blocks[0].kind !== 'hotel')) {
+        return t('stays.budgetMixed', { count: blocks.length, n: f.n(blocks.length) });
+      }
       if (!p.known) {
         if (d.reason === 'currency') return t('budget.otherCurrency', { currency: d.currency });
         return d.reason === 'no_price' ? t('budget.hotelNoPrice', { hotel: d.hotel }) : t('budget.noHotel');
@@ -293,7 +352,14 @@ function partDetail(p: BudgetPart, data: BudgetBreakdown, t: T, f: F): string {
     }
     case 'food': {
       const days = t('budget.days', { count: d.days ?? 0, n: f.n(d.days ?? 0) });
-      return t(d.placeholder_meals ? 'budget.foodSome' : 'budget.food', { days, who: who(d.travellers ?? data.num_travelers) });
+      const base = t(d.placeholder_meals ? 'budget.foodSome' : 'budget.food', { days, who: who(d.travellers ?? data.num_travelers) });
+      // Where the meals are eaten (step 3): "4 at restaurants · 2 packed · 2 where you stay"
+      const by = d.by_source ?? {};
+      if (!(by.own || by.stay)) return base;
+      const parts = (['restaurant', 'own', 'stay'] as const)
+        .filter((k) => by[k])
+        .map((k) => t(`meals.count.${k}`, { count: by[k] ?? 0, n: f.n(by[k] ?? 0) }));
+      return `${base}\n${parts.join(' · ')}`;
     }
     case 'tickets': {
       const base = d.free ? t('budget.ticketsFree', { count: d.free, n: f.n(d.free) }) : t('budget.tickets');
@@ -310,13 +376,13 @@ function partDetail(p: BudgetPart, data: BudgetBreakdown, t: T, f: F): string {
   }
 }
 
-function saveTitle(s: BudgetSave, t: T, f: F): string {
+function saveTitle(s: Exclude<BudgetSave, { key: 'stay' }>, t: T, f: F): string {
   if (s.key === 'hotel') return t('budget.saveHotel', { to: s.detail.to, from: s.detail.from });
   if (s.key === 'skip') return t('budget.saveSkip', { title: s.detail.title });
   return t('budget.saveRickshaw', { count: s.detail.legs, n: f.n(s.detail.legs) });
 }
 
-function saveSub(s: BudgetSave, t: T, f: F): string | null {
+function saveSub(s: Exclude<BudgetSave, { key: 'stay' }>, t: T, f: F): string | null {
   if (s.key === 'hotel') return t('budget.saveHotelSub', { to: f.km(s.detail.to_rating), from: f.km(s.detail.from_rating) });
   if (s.key === 'skip') return t('budget.saveSkipSub', { day: f.n(s.detail.day_number) });
   return t('budget.saveRickshawSub', { time: f.duration(s.detail.extra_min) });
@@ -342,6 +408,10 @@ const useStyles = makeStyles((t) => ({
   swatch: { width: 12, height: 12, borderRadius: 4 },
   partLabel: { ...t.type.body, fontWeight: '600', color: t.colors.textPrimary },
   partDetail: { ...t.type.footnote, color: t.colors.textSecondary, marginTop: 2 },
+  stayLine: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, minHeight: 32, paddingLeft: 12 + t.spacing.md, paddingBottom: t.spacing.xs },
+  stayNights: { ...t.type.footnote, color: t.colors.textSecondary, minWidth: 72 },
+  stayName: { ...t.type.footnote, color: t.colors.textPrimary, flex: 1 },
+  stayAmount: { ...t.type.footnote, fontWeight: '600', color: t.colors.textPrimary },
   amount: { ...t.type.body, fontWeight: '700', color: t.colors.textPrimary },
   unknown: { fontWeight: '400', color: t.colors.textTertiary },
   h2: { ...t.type.headline, fontSize: 19, color: t.colors.textPrimary, marginTop: t.spacing.sm },

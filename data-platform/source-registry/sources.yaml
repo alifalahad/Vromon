@@ -237,6 +237,26 @@ sources:
     notes: Hotels and restaurants are published from it as business listings (not checked), with its confidence score.
     probe:
       - https://docs.overturemaps.org/guides/places
+  - source_id: overture_pois
+    source_name: Overture Maps Places (every category but lodging and food)
+    organization: Overture Maps Foundation
+    source_type: open_dataset
+    website_url: https://docs.overturemaps.org/guides/places
+    access_method: download
+    license_name: CDLA-Permissive-2.0 (rows derived from OpenStreetMap are ODbL; Foursquare rows Apache-2.0)
+    license_url: https://cdla.dev/permissive-2-0/
+    attribution_text: "© OpenStreetMap contributors, Overture Maps Foundation"
+    terms_review_status: open_license
+    coverage: global
+    update_frequency: monthly releases
+    reliability_class: licensed_provider
+    recommended_use: production
+    notes: >-
+      The places index (poi_index) for searching anything near a trip's stops: colleges, schools, hospitals, banks,
+      markets, offices, places of worship… Listings as published (not checked), confidence >= 0.4. Kinds from
+      the backend's app/core/poi-kinds.yaml (shared with search). Each run replaces the index's Overture rows.
+    probe:
+      - https://docs.overturemaps.org/guides/places
 
   - source_id: wikimedia_commons
     source_name: Wikimedia Commons

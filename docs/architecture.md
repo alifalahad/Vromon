@@ -308,6 +308,112 @@ Code: `app/services/chat_push.py`, called after the response from sending a mess
 - deleting an account with a planned trip failed: the ORM deleted the user before the trip (nothing relates them), and the database's cascade from users to trips hit the plan's foreign keys (`delete_me` flushes the trips first);
 - the destination, place, restaurant and hotel lists had no `ORDER BY`; they're ordered by id now.
 
+## Where the traveller stays (docs/trip-upgrades, step 1)
+
+Code: `app/services/stays.py`, the `trip_stays` table (migration `0030`), and the trip endpoints. Each row covers nights `first_night`..`last_night` (1-based) with one kind: `hotel` (a `hotel_id`), `home` (a family or friend's home: `lat`, `lon`, optional `label`; no cost), `none` (no night there: day trips from the trip's start point; no cost) or `undecided`. A trip's rows cover its nights once. A trip without rows sleeps in the hotel `stays.pick_hotel` chooses (decision D11: a priced hotel with a real name, at or near the budget's level, near the destination's centre; else the best-rated real-named one, cost unknown). Building a plan writes that choice down (`stays.freeze`), so the hotel doesn't change under a plan. Migration `0030` did the same for every trip that already had a plan, with the hotel it used then.
+
+- **Each day:** day *d* starts at night *d−1*'s stay (day 1: night 1's) and ends at night *d*'s (the last day: the last night's). `stays.bases(db, trip)` gives a `TripBases` with `start(day)` / `end(day)`; everything that used "the trip's hotel" takes it (`trips._hotel` returns it).
+- **"Finish by" means back at the stay** (D3): both planners leave the last visit time to get back, and move dinner earlier by the way back when needed. The day's `total_travel_time` includes the way back. The validator reports a day that gets back late after an edit as a soft `BACK_LATE`.
+- **Budget:** the stay part is per stay (`detail.blocks`): hotel nights × rooms at their price; homes and day trips 0. Local travel runs from the day's start and back to its end. "Ways to save" offers a cheaper hotel per hotel stay; applying it rewrites the stays, and the undo restores them (`{"kind": "stays", …}`).
+- **Privacy (D2):** to anyone but the trip's owner (trip-room members, friends who can read the trip), a home is `{kind: "home"}` with no name, coordinates or way back. The route leaves out its legs, the budget its label. A copy of a trip never takes the stays.
+
+| Endpoint | What it does |
+|---|---|
+| `GET /trips/{id}/stays` | The stays (`chosen`: false while Vromon picks the hotel). Owner, or a reader with homes hidden |
+| `PUT /trips/{id}/stays` `{stays: [...]}` | Owner only. Validates the cover (422), the hotel (404, or 422 when over 80 km away) and a home's place. Re-computes the legs of the days whose start or end moved (their stops keep their times). Returns the stays, those days, the validation and the budget before and after |
+| `POST /trips` | Optional `stay` (one choice for all nights) or `stays` (night by night) |
+| `GET /trips/{id}/itinerary` (and every day in other responses) | Each day has `start_base`, `end_base` (`{kind, name, latitude, longitude, hotel_id, estimate}`) and `return_leg` (`{from_item_id, minutes, km, mode, cost}`). `hotel` stays: night 1's hotel, for app versions before the stays |
+| `GET /trips/{id}/days/{day_id}/route` | Adds a `from_base` leg (the day's start to its first stop) and a `to_base` leg (its last stop back to where you sleep), in the same single road request |
+
+## Meals (docs/trip-upgrades, step 3)
+
+Code: `app/services/meals.py`, migration `0031` (`trip_preferences.meals_json`, `itineraries.meals_json`, `itinerary_items.meal_source`), and the planners. Per meal (decision D6): `restaurant` (the default; as before), `own` (a 30-min "Packed lunch" where the traveller is, no restaurant and no leg to one; it costs `own_cost_per_person`, 0 when unset) or `stay` (breakfast before leaving the day's start, dinner after the way back to its end; never lunch; no cost). The trip's plan is in `trip_preferences.meals_json`; a day's own plan in `itineraries.meals_json` wins over it. NULL everywhere means every meal at a restaurant, and the planners take exactly the old path.
+
+- **Rules:** `TripRules.meals` has each day's plan (`trip_rules.rules_for`). `breakfast_minutes` (60 / 30 / 0) sets when visits can start; `meal_starts` only reserves restaurant dinners and sizes lunch by its source.
+- **Quick planner:** a packed breakfast is at the day's start; a packed lunch moves with the day like a restaurant lunch and is eaten at the stop just seen (it tries one more stop first when that's a park, a view or a beach and lunch still fits by 14:30); a packed dinner comes after the last stop, which keeps 30 min before the way back. Meals where you stay are added last (`meals.place_stay_meals`): breakfast ends when the traveller leaves (the first stop's start less the way there), dinner starts after getting back (not before 19:00). No breakfast there on a day 1 with an arrival time; no dinner there on the last day.
+- **Optimiser (CP-SAT):** breakfast and lunch intervals take the source's length, a dinner interval only for restaurants, and a packed dinner keeps 30 min before the last arc back. `persist` writes the own and stay meals.
+- **Edits:** `editing_service.sequence(day)` leaves meals where you stay out of reorder, move and add positions; `recompute_day` re-times them after every edit (`meals.sync_stay_meals`). `rebuild_meals` changes only the meals of a day when the plan changes (each takes the old meal's place; the day is re-timed from the first change). Running late doesn't move them; they follow.
+- **Validation:** meals where you stay are outside the day on purpose (no window warnings); "back at the stay" counts a packed dinner eaten after the last stop; own and stay meals aren't placeholders.
+- **Budget:** the food part counts restaurant meals at their price, own meals × `own_cost_per_person` × travellers, meals where you stay 0, and lists `by_source`. The AI estimate is told not to price meals the traveller won't buy.
+- **A re-plan of the whole trip** keeps each day's own plan (read before the days are replaced).
+
+| Endpoint | What it does |
+|---|---|
+| `PUT /trips/{id}/meals` | Owner only. The trip's plan; rebuilds the meals of the days without their own plan. Returns the plan, those days, the validation and the budget before and after |
+| `PUT /trips/{id}/days/{day_id}/meals` `{meals}` | Owner only. One day's own plan; `null` follows the trip's again |
+| `POST /trips` | Optional `meals` |
+| `GET /trips/{id}/items/{item_id}/places-to-eat` | Restaurants open for an hour from the meal's start, nearest to the stop before it (up to 8). Readers too |
+| `PUT /trips/{id}/items/{item_id}/restaurant` `{restaurant_id}` | Owner only. This one meal at that restaurant (an hour); the rest of the day moves as needed |
+| `GET /trips/{id}/itinerary` | Items have `meal_source`; days have `meals` (their own plan) and `meal_plan` (what they follow) |
+
+## The stay advisor (docs/trip-upgrades, step 4)
+
+Code: `app/services/stay_advisor.py`, the `stay_suggestions` table (migration `0032`), and the trip endpoints. "Sleep somewhere else for nights a-b?" (decisions D4, D5):
+
+- **What's looked at:** every run of nights now at one hotel that hasn't started (`first_open_night`: a night on today's date or before has). Candidate hotels:
+  - priced, real-named, rated 3.5 or more when the rating is known (unknown is allowed and said), in the trip's currency, where a stay may be (the destination or within 80 km of it);
+  - within 3 km of those days' stops (or their middle);
+  - for a day out of town (its stops more than 25 km from the stay), also the 3 nearest hotels to its stops within 40 km (a must-see town: Mongla for the Sundarbans).
+- **The numbers** (`evaluate`), against the plan as it is, on the days whose start or end changes:
+  - **money_saved** = (current price - its price) × nights × rooms - the moves' bag-ride fares + the change in the day's ride fares (as the budget counts them, so Switch changes the budget by exactly this). It's `None` when the current price isn't known.
+  - **minutes_saved** = road time to and from the stay now - then - the bag rides' minutes - 45 min per extra move.
+  - **extra_moves** = the moves between stays it adds (or saves). Road time is the planner's (`ROADS`, prepared in one request).
+- **Worth it** (`worth_it`, D4):
+  - money ≥ max(৳1,000, 10% of that stay) with road time not worse by more than 30 min, or road time ≥ 60 min saved with money not worse by more than ৳500 a night;
+  - a one-night stay between two moves only for ≥ 2 h a night;
+  - best first by money + minutes × ৳5 (D5), at most 2, never two for the same night.
+- **Kept** (`suggestions`): worked out again only when the plan's fingerprint changes (stays, dates, travellers, stops, meals, nearby hotel prices). Answers:
+  - **Not now:** quiets those nights (any hotel) until the fingerprint changes.
+  - **Don't suggest this:** hides that hotel for those nights until its money or time saving grows by more than 25%.
+  - **Accepted:** it's the stay now; it comes back if the stays change back.
+- **The budget:** ways to save list the open suggestions (`key: "stay"`, action `stay_advice`) instead of the old cheaper-hotel line. Local travel counts a ride with the bags on a day you move between stays (`budget.move_legs`).
+
+| Endpoint | What it does |
+|---|---|
+| `GET /trips/{id}/stay-suggestions` | Owner only (it's about money): at most 2, with the hotel, the current one, the numbers and how they add up (`parts`) |
+| `POST /trips/{id}/stay-suggestions/{sid}/accept` | Switch: the stays split (as `PUT /stays`; the days' legs, travel and meals where you stay follow, stops keep their times). `undo.stays` puts them back with `PUT /stays` |
+| `POST …/{sid}/not-now`, `POST …/{sid}/dismiss` | The answers; return the suggestions left |
+
+## Search anything and private stops (docs/trip-upgrades, steps 5–6)
+
+Code: `app/services/place_search.py`, `app/core/names.py` (the name fold, shared with the data platform), `app/core/poi_kinds.py` with `poi-kinds.yaml` (kinds and their English and Bangla words, shared with the places index connector), migration `0034` (`places.owner_user_id`, `places.listed`, the `geocode_cache` table, a `(lat, lon)` index on `poi_index`). The "Add a stop" sheet's search (decision D10):
+
+- **Reading the query:** lower case, Bangla digits, initials joined ("B.L." = "BL"). The last kind word is the kind ("Medical College" → college); a query of kind words only asks for the nearest of that kind.
+- **Where:** the stop before the free time (`near_item_id`), else the day's centre, its start, or the destination. 25 km first; with fewer than 5 good results, the rest of that district, then exact names within a day's reach (80 km).
+- **Sources and score:** Vromon's places of the destination → other places Vromon knows within 25 km (the next destination's sights, restaurants, hotels) → the places index (two passes: its stored keys for the whole area, then a close look at the best 300) → ORS geocoding (`ors_geocode_url`) only when the others found fewer than 5 good results. Score = name × 0.7 + nearness × 0.3 (+10 for the kind asked). Names match **word by word**: every word typed must match a word of the name (a slip in a long word counts, a different short word doesn't, the first letter must agree), checked as typed and folded (`search_key`: Bangla in Latin letters, sh/s, c/k, অ's o/a; vowels otherwise kept, so Bogura isn't Bagerhat).
+- **Never empty:** the same name within 150 m once (the more trusted source); with nothing good, `did_you_mean` (3 closest names), `kind_results` (the 5 nearest of the kind asked or misspelt, within 60 km) and always `pin`.
+- **The geocoder:** gets only the text and the area's centre. Results are kept 7 days by (query, area) in `geocode_cache` (no user id); 1 call per user per 2 s (in memory); a daily cap (`geocode_daily_cap`, 800) counted from today's cache rows, so every backend process shares it.
+- **Private stops:** adding a result that isn't one of Vromon's places makes the traveller's own `places` row: `listed = false`, `owner_user_id`, source `poi` / `geocode` / `pin` / `restaurant` / `hotel`, a 60-minute visit, cost unknown, hours unknown (a restaurant's known hours are kept), checked only for Vromon's restaurants and hotels. The same result added again is reused. Road data between it and the day's stops is asked for **before** the request writes anything (on SQLite the road cache saves on its own connection and would wait for the request's lock).
+- **Never offered to anyone else:** every query that offers places filters `listed = true`: the planner's candidates and the day's suggestions, destination places and counts, `/places` and recommendations, must-see checks, road preparation, chat place cards and room suggestions; the data platform's publish (demo hiding) and tidy, and the destination file sync, leave private rows alone. `GET /places/{id}` of a private place: its owner and the trip room's joined members, else 404. The AI budget and "More about this place" never send a private stop's name to the language model.
+
+| Endpoint | What it does |
+|---|---|
+| `GET /trips/{id}/days/{day_id}/search?q=&near_item_id=&limit=&part=` | Owner only. Grouped results (`vromon`, `nearby`, `other`, `addresses`) with source, kind, distance and `checked`; `part=places` is fast and says whether `addresses_wanted`; `part=addresses` asks the geocoder (`geocoder`: used / cached / wait with `retry_after` / capped / off / unavailable) |
+| `POST /trips/{id}/days/{day_id}/items` | Exactly one of `place_id`, `poi_id`, `geocode` (a result's token), `restaurant_id`, `hotel_id`, `pin {lat, lon, name}`; a place of another destination is fine when the day can reach it (80 km) |
+| `POST /places/{id}/suggest` | The owner's private stop goes to the data platform's review queue (`new_entity`, entity type `app_place`, its name, place, kind and source; no user id); once while open |
+
+## Rate your trip (docs/trip-upgrades, step 7)
+
+Code: `app/services/reviews.py`, the `trip_reviews` and `review_items` tables (migration `0035`), the trip endpoints; in the app `src/features/trips/review/` and `app/trip/review/[id].tsx`. Decisions D7–D9:
+
+- **When:** from the trip's first day, and any time after (D7); before it, 409 with the date. `today` is the phone's local date (`viewer_today`: within a day of the server's).
+- **Who:** the owner and each joined member of the trip room, each with their own review (D8). Anyone else, a friend who can read the trip included, gets 404. No endpoint returns someone else's review (D9).
+- **What:** five stars (`rating`, 1–5, null while only things one by one are rated) and an optional comment (280 characters); things one by one, each `good` or `bad` with an optional comment (280). The things come from the plan (`reviews.things`):
+  - getting there: the route's first city to the destination, by the arrival stop's mode, keyed by that `trip_stops` row;
+  - each day's places and meals at a restaurant (own food and meals where you stay aren't rated), keyed by the place or restaurant and the itinerary item;
+  - hotels (one per hotel, with its nights) and stays with family or friends. A home is named only for the owner (D2); others see "With family or friends".
+- **Saving** (`PUT`): partial. The rating and the comment change only when sent (null clears them). Each thing sent is set, or cleared with a verdict of null. The others are left alone. A thing that isn't in the plan is refused (422). `item_id` is a plain number, so a verdict follows its place or restaurant when the day is re-planned.
+- **Deleting:** with the account (`reviews.delete_for`, a member's reviews in friends' rooms too) and with the trip. The ORM deletes the rows, since SQLite here doesn't enforce `ON DELETE CASCADE`. `/me/export` lists them (`trip_reviews`).
+- **In the app:**
+  - **"How was your trip?"** sits below "Rate this plan", from the first day, for the owner and room members. One tap on a star saves; then a summary with Edit and "Rate things one by one".
+  - **The list:** "Mark all good / bad" sets every thing not rated yet; Save sends only the changes, and leaving with changes asks first (`usePreventRemove`). After Save the screen stays and says "Saved": going back in the same moment the guard switched off crashed react-native-screens.
+  - **The Trips tab:** asks once, from the day after a trip ends, for two weeks, unless it's rated. "Not now" is kept on the phone (`rateReminderDismissed` in the preferences store).
+
+| Endpoint | What it does |
+|---|---|
+| `GET /trips/{id}/review?today=` | Your review (or null) and the things to rate with your verdicts and comments |
+| `PUT /trips/{id}/review?today=` | `{rating?, comment?, items?: [{target_type, target_id, item_id, verdict: good / bad / null, comment?}]}`; returns the same as `GET` |
+
 ## Deployment shapes
 
 - **Local dev:** SQLite, `uvicorn --reload`, Expo Go on a phone.

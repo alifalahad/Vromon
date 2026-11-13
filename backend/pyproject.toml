@@ -41,6 +41,9 @@ dependencies = [
     "ortools>=9.15.6755,<10",
     "numpy>=1.26.0",
 
+    # Name matching (search anything, shared with the data platform: app/core/names.py)
+    "rapidfuzz>=3.9",
+
     # Testing
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.0",

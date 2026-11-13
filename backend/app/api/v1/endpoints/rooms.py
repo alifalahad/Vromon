@@ -272,7 +272,7 @@ def accept(
             raise HTTPException(status_code=409, detail="Build the plan first, then add places to its days")
         raise HTTPException(status_code=422, detail="This trip has no such day")
     place = db.get(Place, (message.payload or {}).get("id"))
-    if place is None or not place.is_active:
+    if place is None or not place.is_active or not place.listed:
         raise HTTPException(status_code=404, detail="Place not found")
     try:
         item, _ = edits.add_place(db, trip, day, place, None, _hotel(db, trip))

@@ -5,15 +5,18 @@
  * selects that stop; selecting a stop elsewhere eases the camera to it.
  * `bottomPadding` keeps pins clear of the plan sheet. Two buttons: satellite imagery or the
  * street map, and 2D or 3D (the camera tilts, relief is shaded, buildings stand up).
+ * Where the traveller stays (docs/trip-upgrades, step 2): a bed or house pin, joined to the day's
+ * first stop and from its last one, like the other legs.
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Camera, GeoJSONSource, Layer, Map, type CameraRef } from '@maplibre/maplibre-react-native';
+import { Camera, GeoJSONSource, Layer, Map, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { boundsFor } from '../../../components/TripMap';
+import type { StayKind } from '../../../types';
 import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
 import { useReduceMotion } from '../../../ui/useReduceMotion';
@@ -22,13 +25,25 @@ import { PITCH_3D, Relief3D } from './Map3D';
 import { ANCHORS, ESRI_CREDIT, useStreetStyle } from './mapStyle';
 import { SatelliteLayer } from './SatelliteLayer';
 import { localDigits } from './usePlanFormat';
+import { stayIcon } from '../stays/stays';
 import type { Coord, StopKind } from './timeline';
 
 const FONT = ['Noto Sans Bold'];
 /** Bangladesh, when a day has nothing to show */
 const DEFAULT_CENTER: [number, number] = [90.35, 23.7];
+/** A stay farther than this from the day's first stop isn't fitted into view */
+const NEAR_KM = 40;
 
-export type MapPin = { id: number; n: number; kind: StopKind; coord: Coord; title: string };
+function kmBetween(a: Coord, b: Coord): number {
+  const x = (b.longitude - a.longitude) * Math.cos(((a.latitude + b.latitude) / 2) * (Math.PI / 180));
+  const y = b.latitude - a.latitude;
+  return Math.sqrt(x * x + y * y) * 111.32;
+}
+
+/** `unchecked`: a stop from outside Vromon's list (trip upgrades step 6), drawn hollow and named "Not checked" */
+export type MapPin = { id: number; n: number; kind: StopKind; coord: Coord; title: string; unchecked?: boolean };
+/** Where the day starts or ends: the stay */
+export type MapBase = { kind: StayKind; coord: Coord; name: string };
 
 export function DayMap({
   pins,
@@ -41,6 +56,9 @@ export function DayMap({
   bottomPadding,
   accessibilityLabel,
   onFullMap,
+  start = null,
+  end = null,
+  baseLines = {},
 }: {
   pins: MapPin[];
   selectedId: number | null;
@@ -56,6 +74,11 @@ export function DayMap({
   accessibilityLabel: string;
   /** Shows a "Full map" button next to Satellite and 3D */
   onFullMap?: () => void;
+  /** The stay the day starts from and the one it ends at */
+  start?: MapBase | null;
+  end?: MapBase | null;
+  /** Road lines from the stay to the first stop and from the last stop back */
+  baseLines?: { from?: number[][] | null; to?: number[][] | null };
 }) {
   const styles = useStyles();
   const theme = useTheme();
@@ -70,8 +93,24 @@ export function DayMap({
   const mapStyle = useStreetStyle(theme.scheme);
   // Our lines go under the map's labels, so road names stay readable
   const under = ANCHORS[theme.scheme].route;
-  const padding = useMemo(() => ({ top: topPadding + 24, right: 48, bottom: bottomPadding + 24, left: 48 }), [topPadding, bottomPadding]);
-  const bounds = useMemo(() => boundsFor(pins.map((p) => p.coord)), [pins]);
+  // Room at the top for the Satellite / 3D / Full map buttons, and for a stay's pin, which stands above its spot
+  const hasBase = !!(start || end);
+  const padding = useMemo(
+    () => ({ top: topPadding + (hasBase ? 104 : 24), right: 48, bottom: bottomPadding + 24, left: 48 }),
+    [topPadding, bottomPadding, hasBase],
+  );
+  // The stay is in view too, unless it's far away (day trips from home): then the day's stops fill the map
+  const bounds = useMemo(() => {
+    const coords = pins.map((p) => p.coord);
+    const near = (c: Coord) => !coords.length || kmBetween(c, coords[0]) <= NEAR_KM;
+    return boundsFor([...coords, ...[start?.coord, end?.coord].filter((c): c is Coord => !!c && near(c))]);
+  }, [pins, start, end]);
+  // One pin when the day ends where it started
+  const basePins = useMemo(() => {
+    const out = start ? [{ key: 'start', ...start }] : [];
+    if (end && !(start && start.coord.latitude === end.coord.latitude && start.coord.longitude === end.coord.longitude)) out.push({ key: 'end', ...end });
+    return out;
+  }, [start, end]);
 
   // A new day: fit all of its stops
   useEffect(() => {
@@ -121,12 +160,23 @@ export function DayMap({
       ];
       (known ? road : straight).push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } });
     });
+    // From the stay to the first stop, and from the last stop back to it
+    const toBase = (a: Coord, b: Coord, known: number[][] | null | undefined) =>
+      (known ? road : straight).push({
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'LineString', coordinates: known ?? [[a.longitude, a.latitude], [b.longitude, b.latitude]] },
+      });
+    const first = pins[0];
+    const last = pins[pins.length - 1];
+    if (start && first) toBase(start.coord, first.coord, baseLines.from);
+    if (end && last) toBase(last.coord, end.coord, baseLines.to);
     return [
       { type: 'FeatureCollection', features: road },
       { type: 'FeatureCollection', features: straight },
       { type: 'FeatureCollection', features: boat },
     ];
-  }, [pins, roadLines, crossings]);
+  }, [pins, roadLines, crossings, start, end, baseLines.from, baseLines.to]);
   const points = useMemo<GeoJSON.FeatureCollection>(
     () => ({
       type: 'FeatureCollection',
@@ -135,16 +185,18 @@ export function DayMap({
         id: p.id,
         properties: {
           id: p.id,
-          title: p.title,
+          title: p.unchecked ? `${p.title} · ${t('search.notChecked')}` : p.title,
           label: localDigits(String(p.n), lang),
-          color: p.kind === 'meal' ? colors.meal : colors.visit,
-          text: p.kind === 'meal' ? colors.onMeal : colors.onVisit,
+          // Not checked: hollow (the surface inside a ring of the visit colour), its number in link blue
+          color: p.unchecked ? theme.colors.surface : p.kind === 'meal' ? colors.meal : colors.visit,
+          text: p.unchecked ? theme.colors.link : p.kind === 'meal' ? colors.onMeal : colors.onVisit,
+          ring: p.unchecked ? colors.visit : '#FFFFFF',
           selected: p.id === selectedId ? 1 : 0,
         },
         geometry: { type: 'Point', coordinates: [p.coord.longitude, p.coord.latitude] },
       })),
     }),
-    [pins, selectedId, colors.meal, colors.visit, colors.onMeal, colors.onVisit, lang],
+    [pins, selectedId, colors.meal, colors.visit, colors.onMeal, colors.onVisit, lang, t, theme.colors.surface, theme.colors.link],
   );
 
   return (
@@ -224,8 +276,8 @@ export function DayMap({
             paint={{
               'circle-radius': ['case', ['==', ['get', 'selected'], 1], 18, 14],
               'circle-color': ['get', 'color'],
-              'circle-stroke-color': '#FFFFFF',
-              'circle-stroke-width': ['case', ['==', ['get', 'selected'], 1], 3, 2],
+              'circle-stroke-color': ['get', 'ring'],
+              'circle-stroke-width': ['case', ['==', ['get', 'selected'], 1], 3, 2.5],
             }}
           />
           <Layer
@@ -256,6 +308,17 @@ export function DayMap({
             paint={{ 'text-color': theme.colors.textPrimary, 'text-halo-color': theme.colors.surface, 'text-halo-width': 2 }}
           />
         </GeoJSONSource>
+        {/* A pin whose tip is on the stay, so a stop at the same spot (breakfast at the hotel) stays visible under it */}
+        {basePins.map((b) => (
+          <Marker key={b.key} id={`base-${b.key}`} lngLat={[b.coord.longitude, b.coord.latitude]} anchor="bottom">
+            <View style={styles.basePin} accessible accessibilityLabel={b.name} testID={`map-base-${b.key}`}>
+              <View style={[styles.base, { backgroundColor: colors.stay }]}>
+                <MaterialCommunityIcons name={stayIcon(b.kind)} size={18} color={colors.onStay} />
+              </View>
+              <View style={[styles.baseTip, { borderTopColor: colors.stay }]} />
+            </View>
+          </Marker>
+        ))}
       </Map>
       <View style={[styles.toggles, { top: topPadding + 8 }]}>
         <PressableScale
@@ -325,5 +388,17 @@ const useStyles = makeStyles((t) => ({
   },
   toggleRow: { flexDirection: 'row', gap: 6 },
   toggleText: { color: t.colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  basePin: { alignItems: 'center' },
+  // A small triangle under the pin, pointing at the stay
+  baseTip: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', marginTop: -1 },
+  base: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
   credit: { position: 'absolute', left: 8, fontSize: 10, color: '#333333', backgroundColor: 'rgba(255,255,255,0.7)', paddingHorizontal: 4 },
 }));
