@@ -17,7 +17,7 @@ import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
 import { isPrivatePlace, isUnchecked, kindLabel } from '../../places/kinds';
 import { NotCheckedBadge } from '../../places/NotCheckedBadge';
-import { mealTitle, sourceOf } from '../meals/meals';
+import { mealTitle, slotOf, sourceOf } from '../meals/meals';
 import { planColors } from './colors';
 import { forYou, stopTitle, type StopKind } from './timeline';
 import { usePlanFormat, type PlanFormat } from './usePlanFormat';
@@ -43,13 +43,20 @@ export function stopSubtitle(item: ItineraryItem, t: T, f: PlanFormat): string {
   // A packed meal: where it's eaten ("At Laboni Beach")
   const what = own ? (item.notes?.startsWith('At ') ? t('meals.atPlace', { place: item.notes.slice(3) }) : null)
     : item.item_type === 'meal' ? item.restaurant?.cuisine?.replace(/_/g, ' ')
-    : (isPrivatePlace(item.place) ? kindLabel(item.place?.kind, t) : null) ?? item.place?.category ?? item.category;
+    : (isPrivatePlace(item.place) ? kindLabel(item.place?.kind, t) : null) ?? categoryLabel(item.place?.category ?? item.category, t);
   return [what, priceText(item, t, f)].filter(Boolean).join(' · ');
 }
 
 /** The card's title: a packed meal or one where you stay in words, else the place or "Lunch · restaurant". */
 export function cardTitle(item: ItineraryItem, t: T): string {
+  const slot = slotOf(item);
+  if (slot && item.restaurant && sourceOf(item) === 'restaurant') return `${t(`meals.slot.${slot}`)} · ${item.restaurant.name}`;
   return mealTitle(item, t) ?? stopTitle(item);
+}
+
+/** A Vromon category in the traveller's language ("Family" → "পরিবার"), as the interests name them; else as it is. */
+export function categoryLabel(category: string | null | undefined, t: T): string | null {
+  return category ? t(`interests.${category}`, { defaultValue: category }) : null;
 }
 
 export type MoveActions = { earlier?: () => void; later?: () => void; toDay?: () => void };
@@ -187,7 +194,13 @@ export function StopCard({
       onLayout={(e) => onLayoutRow?.(e.nativeEvent.layout.y, e.nativeEvent.layout.height)}
     >
       <View style={[styles.timeCol, dragging && styles.hidden]}>
-        <Text style={[styles.time, shownStart !== item.start_time && { color: theme.colors.link }]} maxFontSizeMultiplier={1.3}>
+        {/* One line, shrunk to fit: Bangla digits with large text wrapped "০৯:০" / "০" (step 8) */}
+        <Text
+          style={[styles.time, shownStart !== item.start_time && { color: theme.colors.link }]}
+          maxFontSizeMultiplier={1.3}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
           {f.time(shownStart)}
         </Text>
         <Text style={styles.duration} maxFontSizeMultiplier={1.3}>
@@ -323,7 +336,13 @@ export function FreeRow({ start, minutes, onAdd }: { start: string; minutes: num
   return (
     <Animated.View layout={GLIDE} entering={APPEAR} style={styles.row}>
       <View style={styles.timeCol}>
-        <Text style={[styles.time, styles.freeTime]} maxFontSizeMultiplier={1.3} accessibilityLabel={`${t('plan.freeTime')}, ${f.time(start)}, ${f.duration(minutes)}`}>
+        <Text
+          style={[styles.time, styles.freeTime]}
+          maxFontSizeMultiplier={1.3}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          accessibilityLabel={`${t('plan.freeTime')}, ${f.time(start)}, ${f.duration(minutes)}`}
+        >
           {f.time(start)}
         </Text>
         <Text style={styles.duration} maxFontSizeMultiplier={1.3}>

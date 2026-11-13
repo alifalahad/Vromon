@@ -25,7 +25,7 @@ import { durationDays, localToday, parseDay } from '../../../src/features/trips/
 import { isUnchecked } from '../../../src/features/places/kinds';
 import { NotCheckedBadge } from '../../../src/features/places/NotCheckedBadge';
 import { cardTitle, MODE_ICON } from '../../../src/features/trips/plan/PlanRows';
-import { dayParts, stopTitle } from '../../../src/features/trips/plan/timeline';
+import { dayParts } from '../../../src/features/trips/plan/timeline';
 import { usePlanFormat } from '../../../src/features/trips/plan/usePlanFormat';
 import { allowNotifications } from '../../../src/features/trips/today/reminders';
 import { useTodaySettings } from '../../../src/features/trips/today/settings';
@@ -225,7 +225,7 @@ export default function TodayScreen() {
             </View>
             {late > 0 ? <Text style={styles.behind}>{t('today.behind', { time: f.duration(late) })}</Text> : null}
             {leave?.far ? (
-              <Text style={styles.beforeEnd} testID="today-far">{t('today.far', { place: stopTitle(state.next) })}</Text>
+              <Text style={styles.beforeEnd} testID="today-far">{t('today.far', { place: cardTitle(state.next, t) })}</Text>
             ) : null}
             {late <= 0 && leave && state.current && leave.atMin < t2m(state.current.end_time) ? (
               // The plan has no time to get there after this stop (a meal "on the way"): say so
@@ -247,12 +247,12 @@ export default function TodayScreen() {
                         ? baseName(day?.start_base, t)
                           ? t('stays.from', { place: baseName(day?.start_base, t) })
                           : t('today.fromHotel')
-                        : t('today.fromPrev', { place: state.previous ? stopTitle(state.previous) : '' }),
+                        : t('today.fromPrev', { place: state.previous ? cardTitle(state.previous, t) : '' }),
                   ].join(' · ')}
                 </Text>
               </View>
             ) : null}
-            <Text style={styles.nextText}>{t('today.nextAt', { place: stopTitle(state.next), time: f.time(state.next.start_time) })}</Text>
+            <Text style={styles.nextText}>{t('today.nextAt', { place: cardTitle(state.next, t), time: f.time(state.next.start_time) })}</Text>
             {isUnchecked(state.next.place) ? <NotCheckedBadge testID="today-next-unchecked" /> : null}
             <View style={styles.buttons}>
               <PressableScale
@@ -263,7 +263,7 @@ export default function TodayScreen() {
                   if (to) void Linking.openURL(directionsUrl(to, leave?.mode ?? 'cng'));
                 }}
                 accessibilityRole="link"
-                accessibilityLabel={t('today.directionsA11y', { place: stopTitle(state.next) })}
+                accessibilityLabel={t('today.directionsA11y', { place: cardTitle(state.next, t) })}
                 testID="today-directions"
               >
                 <MaterialCommunityIcons name="navigation-variant-outline" size={20} color={theme.colors.onAccent} />

@@ -50,7 +50,8 @@ name: 05 Plan a trip with must-sees, fix one that can't fit, see the plan
 - tapOn:
     id: new-next
 
-# 3 Your must-dos: Inani Beach on day 1 at sunset, and the hilltop viewpoint at sunset (it closes before)
+# 3 Your must-dos: Inani Beach on day 1, and Himchari at sunset (it closes at 17:00, before).
+# Since the catalogue of 2026-11-11 every Cox's Bazar place closes by 17:00 (the hilltop viewpoint is gone)
 - tapOn:
     id: add-must-see
 - tapOn:
@@ -63,13 +64,10 @@ name: 05 Plan a trip with must-sees, fix one that can't fit, see the plan
     id: "ms-\\d+-day-1"
     index: 0
 - tapOn:
-    id: "ms-\\d+-sunset"
-    index: 0
-- tapOn:
     id: add-must-see
 - tapOn:
     id: place-search
-- inputText: "Hilltop"
+- inputText: "Himchari"
 - tapOn:
     id: "pick-place-\\d+"
     index: 0
@@ -81,7 +79,7 @@ name: 05 Plan a trip with must-sees, fix one that can't fit, see the plan
 - tapOn:
     id: build-plan
 
-# Building: the viewpoint doesn't fit, so its choices come before the plan
+# Building: Himchari at sunset doesn't fit, so its choices come before the plan
 - extendedWaitUntil:
     visible:
       id: "unplaced-\\d+"
@@ -91,6 +89,18 @@ name: 05 Plan a trip with must-sees, fix one that can't fit, see the plan
     id: see-plan
 - tapOn:
     id: fix-suggestion
+- extendedWaitUntil:
+    notVisible: ".*closes at 17:00, before sunset.*"
+    timeout: 30000
+# Every Cox's Bazar place is open 09:00-17:00 in the catalogue of 2026-11-11: once Himchari takes the afternoon,
+# Inani Beach can need its own fix ("Go in the morning instead"). Take it too.
+- runFlow:
+    when:
+      visible:
+        id: "unplaced-\\d+"
+    commands:
+      - tapOn:
+          id: fix-suggestion
 - extendedWaitUntil:
     visible:
       id: see-plan

@@ -788,7 +788,7 @@ def leg_options(trip: Trip, day: Itinerary, item: ItineraryItem) -> dict:
         by_id = {i.id: i for i in ordered}
         options.append({
             "mode": mode,
-            "minutes": round(travel.minutes),
+            "minutes": M.shown_minutes(travel.minutes),   # as the plan shows this leg
             "fare": M.fare(mode, road.km),
             "arrive": _minutes_to_time(max(leave + round(travel.minutes), _time_to_minutes(ordered[ordered.index(nxt) - 1].end_time))),
             "recommended": road.source == "road" and mode == M.default_mode(road.km),

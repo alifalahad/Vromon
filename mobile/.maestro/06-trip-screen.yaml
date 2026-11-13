@@ -50,7 +50,13 @@ name: 06 Open a trip, build its plan, look at a stop and the menu
     duration: 600
 - assertVisible:
     id: day-ribbon
-# The first stop's details, then close them by tapping above the sheet
+# The first stop's details, then close them by tapping above the sheet. A day's warnings and "Getting there"
+# can push the stops below the screen: scroll to the first one
+- scrollUntilVisible:
+    element:
+      id: "stop-\\d+"
+    direction: DOWN
+    timeout: 20000
 - tapOn:
     id: "stop-\\d+"
     index: 0
@@ -72,5 +78,6 @@ name: 06 Open a trip, build its plan, look at a stop and the menu
 - assertVisible:
     id: budget-part-stay
 - back
+# Back on the trip (scrolled down, so its menu rather than its title)
 - assertVisible:
-    id: trip-title
+    id: trip-menu

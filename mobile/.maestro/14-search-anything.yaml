@@ -1,0 +1,101 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: 14 Search anything - a college added as a stop, marked Not checked
+---
+# Trip upgrades step 6: "Add a stop" finds a place outside Vromon's list, and it becomes a stop
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
+- tapOn:
+    id: tab-trips
+- tapOn:
+    id: plan-trip-fab
+- extendedWaitUntil:
+    visible:
+      id: destination-search
+    timeout: 20000
+- tapOn:
+    id: destination-search
+- extendedWaitUntil:
+    visible:
+      id: where-input
+    timeout: 5000
+- inputText: "Cox"
+- tapOn:
+    id: where-hit-1
+- tapOn:
+    id: new-next
+- tapOn:
+    id: new-next
+- tapOn:
+    id: build-plan
+- extendedWaitUntil:
+    visible:
+      id: "see-plan|unplaced-\\d+"
+    timeout: 90000
+- runFlow:
+    when:
+      visible:
+        id: "unplaced-\\d+"
+    commands:
+      - tapOn:
+          id: fix-suggestion
+      - extendedWaitUntil:
+          visible:
+            id: see-plan
+          timeout: 30000
+- tapOn:
+    id: see-plan
+- extendedWaitUntil:
+    visible:
+      id: trip-title
+    timeout: 30000
+
+# "Add a stop" at the end of day 1: a kind of place alone gives the nearest ones, not checked
+- swipe:
+    start: "50%,56%"
+    end: "50%,12%"
+    duration: 600
+- scrollUntilVisible:
+    element:
+      id: add-stop
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: add-stop
+# The sheet opens on suggestions; "Put a pin" is further down
+- extendedWaitUntil:
+    visible:
+      id: add-search
+    timeout: 15000
+- tapOn:
+    id: add-search
+- inputText: "college"
+- extendedWaitUntil:
+    visible:
+      id: search-group-other
+    timeout: 15000
+- assertVisible: "Other places \\(not checked\\)|OTHER PLACES \\(NOT CHECKED\\)"
+- tapOn:
+    id: "search-result-poi_id:.*"
+    index: 0
+
+# It's a stop now, with the badge
+- extendedWaitUntil:
+    visible:
+      id: "stop-unchecked-\\d+"
+    timeout: 30000
+
+# Leave nothing behind: delete the trip
+- tapOn:
+    id: trip-menu
+- tapOn:
+    id: action-delete
+- tapOn: "(?i)delete"
+- extendedWaitUntil:
+    visible:
+      id: tab-index|tab-trips
+    timeout: 20000

@@ -158,6 +158,7 @@ def full_budget(db: "Session", trip: "Trip", hotel, getting_there: Optional[dict
     food_total = tickets_total = local_total = 0.0
     meals = placeholder = paid = free = unknown = legs_count = 0
     by_source = {"restaurant": 0, "own": 0, "stay": 0}   # step 3: where each meal is eaten
+    own_total = 0.0                                      # what the food you bring costs the group
     local_modes: set[str] = set()
     for d in days:
         food = tickets = 0.0
@@ -172,6 +173,8 @@ def full_budget(db: "Session", trip: "Trip", hotel, getting_there: Optional[dict
                 by_source[kind] = by_source.get(kind, 0) + 1
                 # Your own food costs what you said it does (0 when unset); where you stay, nothing
                 food += (i.cost or 0.0) * n
+                if kind == "own":
+                    own_total += (i.cost or 0.0) * n
                 if i.restaurant_id is None and kind == "restaurant":
                     placeholder += 1
                     day_estimate = True
@@ -201,6 +204,8 @@ def full_budget(db: "Session", trip: "Trip", hotel, getting_there: Optional[dict
     food_part = _part("food", food_total, placeholder > 0, {
         "meals": meals, "placeholder_meals": placeholder, "days": len(days), "travellers": n,
         "by_source": by_source, "own_cost_per_person": meal_plan.trip_plan(trip).get("own_cost_per_person"),
+        # A day can set its own amount, so the trip's amount alone doesn't say what the plan counts
+        "own_total": round(own_total),
     })
     tickets_part = _part("tickets", tickets_total, False, {"paid": paid, "free": free, "unknown": unknown})
     local_part = _part("local", local_total, local_total > 0, {"legs": legs_count, "modes": sorted(local_modes)})

@@ -63,6 +63,15 @@ def minutes(mode: str, km: float, drive_min: Optional[float]) -> float:
     return car
 
 
+def shown_minutes(exact: float) -> int:
+    """
+    Whole minutes as the plan shows a leg: the stored time (to 0.1 min) rounded halves up, as the
+    app's Math.round does. Rounding the exact time instead gave 3 min in "How to get there" for a
+    leg the plan showed as 4 (3.46 is stored as 3.5).
+    """
+    return int(round(exact, 1) + 0.5)
+
+
 def fare(mode: str, km: float) -> float:
     """The fare per vehicle (0 for walking)."""
     f = FARES.get(mode)

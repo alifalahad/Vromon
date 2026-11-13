@@ -124,7 +124,7 @@ class RoadNetwork:
         self._no_road: set[tuple] = set()        # pairs the routing service found no road between
         self._ghats: list = []                   # ferry/launch ghats for crossings (water.py)
         self._loaded = False
-        self._failed_at = 0.0
+        self._failed_at: Optional[float] = None    # monotonic time of the last failure (None: none yet)
         self._lock = threading.Lock()
 
     # -- setup -----------------------------------------------------------------
@@ -136,7 +136,7 @@ class RoadNetwork:
             self._no_road.clear()
             self._ghats = []
             self._loaded = False
-            self._failed_at = 0.0
+            self._failed_at = None
             self.provider = provider
             self._provider_ready = not use_settings
 
@@ -148,7 +148,11 @@ class RoadNetwork:
 
     @property
     def available(self) -> bool:
-        return self._get_provider() is not None and time.monotonic() - self._failed_at > RETRY_AFTER_S
+        # Not 0.0 for "never failed": the monotonic clock counts from boot, so a machine started under
+        # 5 minutes ago (a fresh server, a CI runner) would skip road data until then
+        if self._get_provider() is None:
+            return False
+        return self._failed_at is None or time.monotonic() - self._failed_at > RETRY_AFTER_S
 
     @property
     def provider_name(self) -> Optional[str]:

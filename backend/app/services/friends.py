@@ -69,17 +69,15 @@ def unfriend(db: Session, a: uuid.UUID, b: uuid.UUID) -> bool:
 
 
 def cancel_pending_between(db: Session, a: uuid.UUID, b: uuid.UUID) -> None:
-    db.execute(
-        update(FriendRequest)
-        .where(
-            FriendRequest.status == "pending",
-            or_(
-                and_(FriendRequest.from_user_id == a, FriendRequest.to_user_id == b),
-                and_(FriendRequest.from_user_id == b, FriendRequest.to_user_id == a),
-            ),
+    # One statement per direction: SQLite 3.45-3.46 (Ubuntu 24.04, GitHub CI) fails with "internal
+    # query planner error" on `status = ? AND (pair OR reversed pair)` next to the partial index
+    # uq_friend_requests_pending.
+    for from_id, to_id in ((a, b), (b, a)):
+        db.execute(
+            update(FriendRequest)
+            .where(FriendRequest.status == "pending", FriendRequest.from_user_id == from_id, FriendRequest.to_user_id == to_id)
+            .values(status="cancelled")
         )
-        .values(status="cancelled")
-    )
 
 
 def friend_ids(db: Session, user_id: uuid.UUID) -> list[tuple[uuid.UUID, object]]:

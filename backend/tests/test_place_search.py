@@ -251,6 +251,13 @@ def test_vromon_places_first_then_what_vromon_knows_nearby(client, act_as):
     assert _results(near, "nearby")[0]["ref"] == {"place_id": w["other"]}
     # places already in the trip aren't offered again
     assert "Divisional Museum" not in _names(_search(client, tid, day, "museum"))
+    # …nor their copy in the places index, as a "not checked" place (found on the phone in step 8)
+    with _ApiTestSession() as db:
+        db.add(PoiIndex(id=f"copy-{uuid.uuid4().hex[:8]}", source="overture", name="Divisional Museum", category="museum",
+                        kind="museum", lat=round(w["lat"] + 0.0003, 6), lon=round(w["lon"] + 0.0002, 6), confidence=0.9,
+                        name_key=names.match_key("Divisional Museum", drop_generic=False)))
+        db.commit()
+    assert "Divisional Museum" not in _names(_search(client, tid, day, "divisional museum"))
 
 
 def test_nonsense_is_never_a_dead_end(client, act_as):
@@ -560,3 +567,21 @@ def test_your_own_stop_is_never_sent_to_the_language_model(client, act_as):
         item = db.scalar(select(ItineraryItem).join(Itinerary).where(Itinerary.trip_id == tid, ItineraryItem.title == "Aunt's office"))
     r = client.post(f"{API}/rag/trips/{tid}/items/{item.id}/explanation")
     assert r.status_code == 422 and "your own stop" in r.json()["detail"]
+
+
+def test_the_days_line_names_vromon_places_and_says_personal_for_your_own(client, act_as):
+    """Found in step 8: a pin made the day's line "Nature morning, culture afternoon, other evening" (and
+    "সন্ধ্যায় other" in Bangla): your own stops have no category the line can name."""
+    act_as(_user("psline"))
+    w = _world()
+    tid, day, _ = _trip(client, w, stops=[w["sights"][0]])
+    _add(client, tid, day, {"pin": {"lat": w["lat"] + 0.002, "lon": w["lon"], "name": "Cousin's office"}})
+
+    def lines() -> list[list]:
+        days = client.get(f"{API}/trips/{tid}/itinerary").json()["days"]
+        return [[(p["part"], p.get("what")) for p in d["summary"]] for d in days]
+
+    assert lines()[0] == [("morning", "historical")]          # the pin shares the morning with the museum
+    day2 = client.get(f"{API}/trips/{tid}/itinerary").json()["days"][1]["id"]
+    _add(client, tid, day2, {"pin": {"lat": w["lat"] - 0.002, "lon": w["lon"], "name": "Aunt's house"}})
+    assert lines()[1] == [("morning", "own")]                 # "personal morning": a day of your own stops

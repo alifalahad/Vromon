@@ -16,6 +16,10 @@ name: 07 A friend's trip opens read-only
     timeout: 60000
 - tapOn:
     id: tab-friends
+- extendedWaitUntil:
+    visible:
+      id: friends-segment-friends
+    timeout: 10000
 - tapOn:
     id: friends-segment-friends
 - tapOn:

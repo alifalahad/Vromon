@@ -16,7 +16,7 @@ name: 01 Four tabs in order, no Passport
 - assertVisible:
     id: tab-friends
 - assertVisible:
-    id: tab-settings
+    id: tab-explore
 - assertNotVisible: "Passport"
 - tapOn:
     id: tab-trips
@@ -29,8 +29,18 @@ name: 01 Four tabs in order, no Passport
     id: tab-friends
 - assertVisible: "Friends"
 - tapOn:
-    id: tab-settings
+    id: tab-explore
+- extendedWaitUntil:
+    visible:
+      id: explore-home
+    timeout: 15000
+# Settings: from the profile button on the Map tab
+- tapOn:
+    id: tab-index
+- tapOn:
+    id: map-profile-button
 - assertVisible: "Settings"
+- back
 - tapOn:
     id: tab-index
 - assertVisible:

@@ -157,6 +157,35 @@ class TestServiceDown:
         finally:
             ROADS.reset()
 
+    def test_a_machine_started_a_minute_ago_still_asks(self, client, monkeypatch):
+        """The monotonic clock counts from boot. "Never failed" was stored as 0.0, so for the first
+        5 minutes after a server (or a GitHub CI runner) started, no road data was asked for."""
+        import types
+
+        import app.services.routing.roads as roads_module
+        now = [60.0]
+        # Only the road service's clock (the event loop keeps the real one)
+        monkeypatch.setattr(roads_module, "time", types.SimpleNamespace(monotonic=lambda: now[0]))
+        fake = FakeRoads()
+        ROADS.reset(provider=fake)
+        try:
+            trip = create_trip(client, days=1)
+            assert fake.matrix_calls == 1
+            assert all(i["travel_source"] == "road" for i in legs(itinerary(client, trip["id"])["days"][0]))
+            # After a failure it still waits 5 minutes before asking again
+            s = _Session()
+            s.query(RouteCache).delete()
+            s.commit()
+            s.close()
+            down = FakeRoads(fail=True)
+            ROADS.reset(provider=down)
+            create_trip(client, days=1)
+            assert down.matrix_calls == 1 and not ROADS.available
+            now[0] += 301
+            assert ROADS.available
+        finally:
+            ROADS.reset()
+
 
 class TestChoosingHowToGo:
 
@@ -213,7 +242,13 @@ class TestChoosingHowToGo:
                 out = client.get(f"/api/v1/trips/{trip['id']}/items/{leg['id']}/leg").json()
                 current = next(o for o in out["options"] if o["mode"] == out["mode"])
                 assert current["moves"] == [], (algorithm, out["from"], out["to"], current)
-                assert current["minutes"] == round(leg["travel_time_to_next"])
+                # The minutes the plan shows for this leg (the app rounds the stored 0.1 min halves up)
+                assert current["minutes"] == math.floor(leg["travel_time_to_next"] + 0.5)
+
+    def test_the_sheet_shows_a_leg_as_the_plan_does(self):
+        # Stored to 0.1 min, then rounded halves up (Math.round): 3.46 is stored as 3.5, shown as 4
+        # (Python's round would give 2 for 2.5)
+        assert [M.shown_minutes(m) for m in (3.46, 3.44, 2.5, 0.0, 12.04)] == [4, 3, 3, 0, 12]
 
     def test_no_leg_after_the_last_stop(self, client, roads):
         trip = create_trip(client, days=1)

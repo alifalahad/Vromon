@@ -32,7 +32,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 import httpx
 import numpy as np
@@ -499,13 +499,24 @@ def geocode_result(db: "Session", token: str) -> dict:
 # 5–6. Merge, group, never empty
 # ---------------------------------------------------------------------------
 
-def _dedup(hits: list[Hit]) -> list[Hit]:
+def _dedup(hits: list[Hit], seeds: Sequence[Hit] = ()) -> list[Hit]:
+    """One hit per place, the most trusted source kept; none for a place among `seeds` (already in the trip)."""
     kept: list[Hit] = []
     for h in sorted(hits, key=lambda h: (TRUST[h.group], -h.score)):
-        if any(k.key == h.key and haversine_km((k.lat, k.lon), (h.lat, h.lon)) <= DEDUP_KM for k in kept if h.key):
+        if h.key and any(k.key == h.key and haversine_km((k.lat, k.lon), (h.lat, h.lon)) <= DEDUP_KM for k in (*seeds, *kept)):
             continue
         kept.append(h)
     return kept
+
+
+def _in_trip(db: "Session", used: set[int]) -> list[Hit]:
+    """The trip's places (and skipped ones), for _dedup: a copy of one from the places index isn't offered as a new
+    "not checked" place (step 8: "Divisional Museum" was offered on a day that had "Divisional Museum, Khulna")."""
+    if not used:
+        return []
+    return [Hit("vromon", "vromon", {"place_id": p.id}, p.name, p.latitude, p.longitude, bool(p.checked),
+                key=match_key(p.name, drop_generic=False))
+            for p in db.scalars(select(Place).where(Place.id.in_(used))) if p.latitude is not None and p.longitude is not None]
 
 
 def _did_you_mean(pool: list[Hit], query: Query) -> list[str]:
@@ -550,13 +561,14 @@ def search(db: "Session", trip: "Trip", day: "Itinerary", user: "User", q: str, 
     if not query.text:
         return out
     used, refs = _used(trip)
+    in_trip = _in_trip(db, used)
     hits: list[Hit] = []
     timings = {}
     if part in ("places", "all"):
         pool = _vromon(db, trip, query, area, used) + _nearby(db, trip, query, area, used, refs) + _poi_area(db, query, area, refs)
         if sum(h.score >= GOOD and h.name_score >= SHOW for h in pool) < 5:
             pool += _poi_wider(db, query, area, refs)
-        hits = _dedup([h for h in pool if h.name_score >= SHOW])
+        hits = _dedup([h for h in pool if h.name_score >= SHOW], in_trip)
         good = sum(h.score >= GOOD for h in hits)
         timings["places_ms"] = round((time.perf_counter() - t0) * 1000)
         # Not for a kind (the index has them all), nor for the first letters of a word still being typed
@@ -572,7 +584,7 @@ def search(db: "Session", trip: "Trip", day: "Itinerary", user: "User", q: str, 
         row, status, wait = geocode(db, str(user.id), query, area)
         out["geocoder"], out["retry_after"] = status, wait or None
         address = _address_hits(row, query, area, refs)
-        hits = _dedup(hits + [h for h in address if h.name_score >= FALLBACK]) if hits else _dedup(address)
+        hits = _dedup(hits + [h for h in address if h.name_score >= FALLBACK], in_trip) if hits else _dedup(address, in_trip)
         timings["geocoder_ms"] = round((time.perf_counter() - t1) * 1000)
     out["groups"] = _grouped(hits, limit)
     logger.info("search part=%s results=%d %s", part, len(hits), timings)

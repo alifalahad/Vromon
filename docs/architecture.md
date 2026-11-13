@@ -334,7 +334,7 @@ Code: `app/services/meals.py`, migration `0031` (`trip_preferences.meals_json`, 
 - **Optimiser (CP-SAT):** breakfast and lunch intervals take the source's length, a dinner interval only for restaurants, and a packed dinner keeps 30 min before the last arc back. `persist` writes the own and stay meals.
 - **Edits:** `editing_service.sequence(day)` leaves meals where you stay out of reorder, move and add positions; `recompute_day` re-times them after every edit (`meals.sync_stay_meals`). `rebuild_meals` changes only the meals of a day when the plan changes (each takes the old meal's place; the day is re-timed from the first change). Running late doesn't move them; they follow.
 - **Validation:** meals where you stay are outside the day on purpose (no window warnings); "back at the stay" counts a packed dinner eaten after the last stop; own and stay meals aren't placeholders.
-- **Budget:** the food part counts restaurant meals at their price, own meals × `own_cost_per_person` × travellers, meals where you stay 0, and lists `by_source`. The AI estimate is told not to price meals the traveller won't buy.
+- **Budget:** the food part counts restaurant meals at their price, own meals × `own_cost_per_person` × travellers (a day's own amount wins), meals where you stay 0, and lists `by_source` and `own_total` (what the food you bring costs the group, as counted). The AI estimate is told not to price meals the traveller won't buy, and that own food costs `own_total`.
 - **A re-plan of the whole trip** keeps each day's own plan (read before the days are replaced).
 
 | Endpoint | What it does |
@@ -413,6 +413,18 @@ Code: `app/services/reviews.py`, the `trip_reviews` and `review_items` tables (m
 |---|---|
 | `GET /trips/{id}/review?today=` | Your review (or null) and the things to rate with your verdicts and comments |
 | `PUT /trips/{id}/review?today=` | `{rating?, comment?, items?: [{target_type, target_id, item_id, verdict: good / bad / null, comment?}]}`; returns the same as `GET` |
+
+## Hardening (docs/trip-upgrades, step 8)
+
+What the full check changed (`docs/trip-upgrades/reports/step-8-report.md`):
+
+- **Getting there is the trip's own way.** `_getting_there` takes the journey option of the trip's mode wherever it is in the list, not only when it comes first. With "by budget" on, the journey puts its recommendation first (a car); the trip's bus was then priced with the rough estimate instead of the journey's bus fare. A way whose priced legs are all per vehicle (a hired car) stays per vehicle (`fare_per`).
+- **The AI budget gets what the plan counts:** `way_there_in_plan` (the plan's mode and both-ways amount), `in_plan` on each way there, and `meals_in_plan.own_total`. It had priced the recommended car for a trip by bus, and called a day's packed lunch free.
+- **Search doesn't offer a copy of a stop the trip has:** the trip's places (and skipped ones) seed the duplicate check (`place_search._in_trip`), so the places index's "Divisional Museum" isn't offered as "not checked" next to Vromon's "Divisional Museum, Khulna".
+- **The day's line** (`itinerary_service.day_summary`) names Vromon's places only; a part of the day with only your own stops is `own` ("personal evening", "সন্ধ্যায় নিজের পরিকল্পনা"), not "other".
+- **Road data on a machine that just started:** `RoadNetwork` kept "never failed" as `0.0` on the monotonic clock, which counts from boot, so for 5 minutes after a server (or a CI runner) started no road data was asked for. It's `None` now.
+- **SQLite 3.45-3.46** (Ubuntu 24.04, GitHub CI) fails with "internal query planner error" on `status = ? AND (pair OR reversed pair)` next to the partial index `uq_friend_requests_pending`; `friends.cancel_pending_between` runs one statement per direction.
+- **"How to get there" minutes** are rounded as the plan shows the leg (`modes.shown_minutes`: the stored 0.1 min, halves up), so the sheet and the plan row say the same.
 
 ## Deployment shapes
 

@@ -67,7 +67,8 @@ export function SegmentedControl<T extends string>({
             onPress={() => !on && onChange(o.value)}
             testID={testID ? `${testID}-${o.value}` : undefined}
           >
-            <Text style={[styles.label, on && styles.labelOn]} numberOfLines={1}>
+            {/* Shrunk to fit one line: with large text "থাকার জায়গায়" was cut to "থাকার …", and two lines broke "Restaur-ant" (step 8) */}
+            <Text style={[styles.label, on && styles.labelOn]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
               {o.label}
             </Text>
           </PressableScale>
@@ -80,7 +81,7 @@ export function SegmentedControl<T extends string>({
 const useStyles = makeStyles((t) => ({
   track: { flexDirection: 'row', padding: PAD, minHeight: 48, borderRadius: 14, backgroundColor: t.colors.surfaceInset },
   thumb: { position: 'absolute', top: PAD, bottom: PAD, left: PAD, borderRadius: 10, backgroundColor: t.colors.segmentThumb },
-  item: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 40 },
-  label: { ...t.type.body, fontSize: 17, color: t.colors.textPrimary },
+  item: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 40, paddingHorizontal: 4 },
+  label: { ...t.type.body, fontSize: 17, color: t.colors.textPrimary, textAlign: 'center' },
   labelOn: { fontWeight: '700' },
 }));

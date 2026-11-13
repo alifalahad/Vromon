@@ -71,3 +71,5 @@ Overture rows in one transaction:
 
 Run it on a copy of the database first (`VROMON_DATABASE_URL=sqlite:////path/to/copy.db`), then back up the real one.
 The quality report of the first load is `quality-reports/pois-2026-11-13.md`.
+Size (2026-11-13, trip upgrades step 8): 179,490 rows, 44 MB in SQLite plus 32 MB for its five indexes; the whole
+database is 356 MB.

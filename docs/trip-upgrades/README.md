@@ -15,7 +15,7 @@
 | 5 | Data: an index of every kind of place in Bangladesh (colleges, offices, markets…) | [step-5](prompts/step-5-places-index.md) | ✅ done 2026-11-13 (179,490 places, spot check 20/20) | [step-5-report.md](reports/step-5-report.md) |
 | 6 | Search anything in free time: best related results, never "nothing found" | [step-6](prompts/step-6-search-anything.md) | ✅ done 2026-11-13 (pytest 810, jest 638, phone; 9 bugs found and fixed) | [step-6-report.md](reports/step-6-report.md) |
 | 7 | Rate your trip: overall stars, optional good/bad per item with a comment | [step-7](prompts/step-7-rate-trip.md) | ✅ done 2026-11-13 (pytest 825 with Postgres, jest 655, phone; CI-equivalent run) | [step-7-report.md](reports/step-7-report.md) |
-| 8 | Hardening, Maestro, release-build checks, the friends' APK | [step-8](prompts/step-8-hardening.md) | not started | — |
+| 8 | Hardening, Maestro, release-build checks, the friends' APK | [step-8](prompts/step-8-hardening.md) | ✅ done 2026-11-13 (pytest 825, jest 657, data platform 62, Maestro on the phone, release build, Bangla and 1.6×; 9 bugs fixed; the 3 CI failures fixed; friends' APK rebuilt) | [step-8-report.md](reports/step-8-report.md) |
 
 ## How to use this folder
 

@@ -296,6 +296,20 @@ class TestBudgetParts:
         gt = part(budget(client, tid), "getting_there")
         assert gt["detail"]["fare_per"] == "vehicle" and gt["detail"]["count"] == 1
 
+    def test_the_trips_own_way_is_priced_from_the_journey(self, client, roads, dhaka):
+        """Found in step 8: with "by budget" on, the journey put a car first for a trip by bus, and the plan and
+        its budget then fell back to the rough bus estimate instead of the journey's bus fare."""
+        tid = trip_from_dhaka(client, mode="bus", budget_bdt=200000)
+        j = client.put(f"/api/v1/trips/{tid}/journey/preferences", json={"transport_modes": [], "transport_by_budget": True})
+        assert j.status_code == 200, j.text
+        options = j.json()["options"]
+        assert options[0]["mode"] != "bus"                        # by budget, another way comes first
+        bus = next(o for o in options if o["mode"] == "bus")
+        g = itinerary(client, tid)["getting_there"]
+        assert (g["mode"], g["fare"], g["minutes"]) == ("bus", bus["cost_per_person"], bus["minutes"])
+        gt = part(budget(client, tid), "getting_there")
+        assert gt["detail"]["mode"] == "bus" and gt["amount"] == round(bus["cost_per_person"] * 2 * 2 / 10) * 10
+
     def test_without_a_starting_city_getting_there_is_unknown_not_guessed(self, client):
         trip = create_trip(client, days=2)
         b = budget(client, trip["id"])

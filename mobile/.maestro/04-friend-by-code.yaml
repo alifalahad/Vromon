@@ -53,8 +53,24 @@ name: 04 Add a friend by code, the friend accepts, compare maps
 - back
 - tapOn:
     id: tab-trips
+- extendedWaitUntil:
+    visible:
+      id: trip-stats-card
+    timeout: 15000
 - tapOn:
     id: tab-friends
+# A tap while the Trips tab is still settling can be lost (2026-11-13): tap again if Friends didn't open
+- runFlow:
+    when:
+      notVisible:
+        id: friends-segment-friends
+    commands:
+      - tapOn:
+          id: tab-friends
+- extendedWaitUntil:
+    visible:
+      id: friends-segment-friends
+    timeout: 10000
 - tapOn:
     id: friends-segment-friends
 - extendedWaitUntil:

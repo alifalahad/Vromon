@@ -141,9 +141,12 @@ def day_summary(day: Itinerary) -> list[dict]:
     acts = [i for i in sorted(day.items, key=lambda x: x.order_index) if i.item_type == "activity" and i.place is not None]
     if not acts:
         return []
+    # Your own stops (a pin, a place from search) have no category the line can name ("other evening" in step 8):
+    # the line is about Vromon's places, "personal" for a part that has only your own
+    own = {a.id for a in acts if not a.place.listed}
     ss = sunset_min(acts[0].place.latitude, acts[0].place.longitude, day.day_date) if day.day_date else 17 * 60 + 45
     at_sunset = next((
-        a for a in acts if _time_to_minutes(a.start_time) <= ss - 10 and _time_to_minutes(a.end_time) >= ss
+        a for a in acts if a.id not in own and _time_to_minutes(a.start_time) <= ss - 10 and _time_to_minutes(a.end_time) >= ss
     ), None)
     parts: list[dict] = []
     for name, lo, hi in (("morning", 0, 12 * 60), ("afternoon", 12 * 60, 17 * 60), ("evening", 17 * 60, 24 * 60)):
@@ -151,7 +154,7 @@ def day_summary(day: Itinerary) -> list[dict]:
         if at_sunset is not None and name == "evening":
             parts.append({"part": "sunset", "place": at_sunset.title})
         if here:
-            cats = [(a.place.category or "").lower() for a in here]
+            cats = [(a.place.category or "").lower() for a in here if a.id not in own] or ["own"]
             parts.append({"part": name, "what": max(cats, key=lambda c: (cats.count(c), -cats.index(c)))})
     return parts[:3]
 

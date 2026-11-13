@@ -1271,7 +1271,8 @@
       "food": "food",
       "family": "family",
       "scenic": "views",
-      "photography": "photo"
+      "photography": "photo",
+      "own": "personal"
     }
   },
   "today": {

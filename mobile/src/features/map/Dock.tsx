@@ -22,7 +22,8 @@ import { makeStyles, useTheme } from '../../ui/theme';
 import { SUNSET_CARD } from '../../ui/theme/cards';
 import { resolveLanguage } from '../../i18n';
 import { usePreferences } from '../preferences/store';
-import { friendlyRange, stopTitle } from '../trips/plan/timeline';
+import { cardTitle } from '../trips/plan/PlanRows';
+import { friendlyRange } from '../trips/plan/timeline';
 import { usePlanFormat } from '../trips/plan/usePlanFormat';
 import { directionsUrl, pointOf, type Point } from '../trips/today/today';
 import { localToday } from '../trips/dates';
@@ -96,7 +97,7 @@ function TodayCard({ trip, day, days, here }: { trip: Trip; day: number; days: n
             {next ? t('map.dock.nextAt', { time: f.time(next.start_time) }) : t('map.dock.dayOf', { day: f.n(day), days: f.n(days) })}
           </Text>
           <Text style={styles.title} numberOfLines={2}>
-            {next ? stopTitle(next) : trip.title || trip.destination}
+            {next ? cardTitle(next, t) : trip.title || trip.destination}
           </Text>
           <Text style={styles.line} numberOfLines={1}>
             {next && leave

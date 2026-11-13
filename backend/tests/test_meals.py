@@ -164,9 +164,22 @@ def test_the_budget_counts_meals_by_where_they_are_eaten(client):
     assert food["detail"]["by_source"] == counts
     assert counts["own"] == 2 and counts["stay"] == 2 and counts["restaurant"] == 2  # breakfast at the stay both days
     assert food["detail"]["own_cost_per_person"] == 120
+    assert food["detail"]["own_total"] == 2 * 120 * 2       # two packed lunches, for the 2 travellers
     # restaurant meals at their price, own food at 120 each, where you stay nothing; for the 2 travellers
     restaurant = sum(i["cost"] for d in it["days"] for i in d["items"] if i.get("meal_source") == "restaurant")
     assert food["amount"] == pytest.approx(round((restaurant + 2 * 120) * 2 / 10) * 10, abs=10)
+
+
+def test_a_days_own_food_amount_is_counted_though_the_trip_has_none(client):
+    """Found in step 8: day 2's packed lunch at ৳150 was in the budget, but the food part said only the trip's
+    amount (none), so the AI budget was told your own food costs nothing."""
+    tid = _trip(client, days=2)
+    day2 = _itinerary(client, tid)["days"][1]["id"]
+    r = client.put(f"{API}/trips/{tid}/days/{day2}/meals", json={"meals": {**OWN_LUNCH, "own_cost_per_person": 150}})
+    assert r.status_code == 200, r.text
+    food = _food(client, tid)
+    assert food["detail"]["own_cost_per_person"] is None and food["detail"]["by_source"]["own"] == 1
+    assert food["detail"]["own_total"] == 150 * 2
 
 
 def test_your_own_food_costs_nothing_when_no_amount_is_given(client):

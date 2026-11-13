@@ -3,8 +3,11 @@ appId: ${APP_ID}
 env:
   APP_ID: com.vromon.app.dev
 ---
+# Settings opens from the profile button on the Map tab (there's no Settings tab since the map home redesign)
 - tapOn:
-    id: tab-settings
+    id: tab-index
+- tapOn:
+    id: map-profile-button
 - scrollUntilVisible:
     element:
       id: settings-sign-out

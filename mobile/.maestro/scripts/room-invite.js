@@ -25,16 +25,11 @@ const trip = ok(
 );
 ok(http.post(`${API_URL}/api/v1/trips/${trip.id}/generate?algorithm=heuristic`, { headers, body: '{}' }), 'Planning the trip');
 const plan = ok(http.get(`${API_URL}/api/v1/trips/${trip.id}/itinerary`, { headers }), 'Reading the plan');
-const planned = plan.days.flatMap((d) => d.items.map((i) => i.place_id));
-// Names the "Where to?" search finds once each
-const candidates = [
-  [17, 'Dulahazara'],
-  [24, 'Ramu Rubber'],
-  [20, 'Naf River'],
-  [8, 'Teknaf'],
-  [11, 'Maheshkhali'],
-];
-const pick = candidates.find(([id]) => planned.indexOf(id) === -1);
+const planned = plan.days.flatMap((d) => d.items.map((i) => i.title.toLowerCase()));
+// Words the search finds one place for, in the catalogue since 2026-11-11 (the old sample places' ids are gone);
+// one that isn't in the plan yet. The flow types the word and looks for it in the plan's stop names.
+const candidates = ['Dulhazra', 'Ramkot', 'Adinath', 'Sonadia', 'Ajgobi'];
+const pick = candidates.find((word) => !planned.some((t) => t.indexOf(word.toLowerCase()) !== -1));
 if (!pick) throw new Error('Every candidate place is already in the plan');
 ok(http.post(`${API_URL}/api/v1/trips/${trip.id}/members`, { headers, body: JSON.stringify({ user_ids: [friend.id] }) }), 'Inviting');
 const direct = ok(http.get(`${API_URL}/api/v1/conversations`, { headers }), 'Listing chats').find(
@@ -46,4 +41,4 @@ const card = ok(http.get(`${API_URL}/api/v1/conversations/${direct.id}/messages`
 if (!card) throw new Error('No invite card in the chat');
 output.roomTripId = String(trip.id);
 output.inviteId = String(card.id);
-output.roomPlace = pick[1];
+output.roomPlace = pick;

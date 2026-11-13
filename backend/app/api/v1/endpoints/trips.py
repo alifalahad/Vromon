@@ -1695,7 +1695,7 @@ def _journey(db: Session, trip: Trip) -> dict | None:
 
 
 def _getting_there(db: Session, trip: Trip) -> dict | None:
-    """The recommended way there (door to door, services.journey), as the budget and the plan show it."""
+    """The trip's way there (door to door, services.journey), as the budget and the plan show it."""
     try:
         plan = _journey(db, trip)
     except Exception:  # the journey is extra: a failure must not break the trip
@@ -1703,11 +1703,17 @@ def _getting_there(db: Session, trip: Trip) -> dict | None:
         plan = None
     pref = trip.preference
     chosen = list(pref.transport_modes) if pref and pref.transport_modes else         [m for m in [list(trip.stops)[-1].transport_mode if trip.stops else None] if m]
-    if plan and plan["options"] and (not chosen or plan["options"][0]["mode"] in chosen):
-        best = plan["options"][0]
+    # The trip's own way when the journey has it, even when "by budget" recommends another one first
+    # (a trip by bus was priced with the rough bus estimate while the journey showed its bus fare)
+    best = next((o for o in (plan or {}).get("options") or [] if not chosen or o["mode"] in chosen), None)
+    if best is not None:
         on_road = best["mode"] in ("bus", "car") and plan["road_source"].startswith("road distance")
-        return {"from": plan["from"], "to": plan["to"], "mode": best["mode"], "km": best["km"],
-                "minutes": best["minutes"], "fare": best["cost_per_person"], "fare_per": "person",
+        # A hired car is paid once for the group; a way with any fare per person is priced per person
+        priced = [leg for leg in best.get("legs") or [] if leg.get("fare") is not None]
+        by_vehicle = bool(priced) and all(leg.get("fare_per") == "vehicle" for leg in priced)
+        return {"from": plan["from"], "to": plan["to"], "mode": best["mode"], "km": best["km"], "minutes": best["minutes"],
+                "fare": sum(leg["fare"] for leg in priced) if by_vehicle else best["cost_per_person"],
+                "fare_per": "vehicle" if by_vehicle else "person",
                 "source": "road" if on_road else ("timetable" if best["mode"] == "train" else "estimate")}
     # The chosen way isn't possible from the catalog (no airport or station near): the simple estimate for it
     return _getting_there_simple(db, trip)

@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { tripsApi } from '../../../services/api';
 import type { AddRef, SearchResponse, SearchResult } from '../../../types';
 import { haptics } from '../../../ui/haptics';
+import { PERF_ON, perfLog } from '../../../utils/devPerf';
 import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
 import { useSheetPresentation } from '../../../ui/useSheetPresentation';
@@ -99,7 +100,12 @@ export function AddStopSheet({
   // The places first (fast); the old results stay on screen while the next ones load
   const found = useQuery({
     queryKey: ['search', tripId, target?.dayId, target?.nearItemId, query],
-    queryFn: () => tripsApi.search(tripId, target!.dayId, { q: query, near_item_id: target?.nearItemId, part: 'places' }),
+    queryFn: async () => {
+      const started = Date.now();
+      const res = await tripsApi.search(tripId, target!.dayId, { q: query, near_item_id: target?.nearItemId, part: 'places' });
+      if (PERF_ON) perfLog(`add-stop search: ${Date.now() - started} ms (${res.groups.reduce((n, g) => n + g.results.length, 0)} results)`);
+      return res;
+    },
     enabled: !!target && searching,
     placeholderData: keepPreviousData,
     staleTime: 60_000,

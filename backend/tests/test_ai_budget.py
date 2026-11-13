@@ -60,6 +60,36 @@ def test_with_a_start_the_way_there_counts(client, monkeypatch):
     assert b["start_known"] and b["total"] == 13000 and b["per_person"] == 6500
 
 
+def test_the_way_there_and_own_food_are_what_the_plan_counts(client):
+    """Found in step 8: the AI budget priced the recommended car for a trip that goes by bus, and called the
+    food you bring free while a day's packed lunch cost ৳150 in the plan."""
+    from app.models.models import Trip
+    from tests.test_phase10_editing import _Session
+    trip = create_trip(client, days=2)
+    computed = {"parts": [
+        {"key": "getting_there", "known": True, "amount": 2380,
+         "detail": {"mode": "bus", "from": "Dhaka", "to": "Khulna", "fare_per": "person", "count": 2, "both_ways": True}},
+        {"key": "food", "known": True, "amount": 5700,
+         "detail": {"by_source": {"restaurant": 9, "own": 1, "stay": 2}, "own_cost_per_person": None, "own_total": 300}},
+    ]}
+    journey = {"from": "Dhaka", "options": [
+        {"mode": "car", "cost_per_person": 2850, "minutes": 155, "recommended": True},
+        {"mode": "bus", "cost_per_person": 595, "minutes": 260, "recommended": False},
+    ]}
+    s = _Session()
+    try:
+        facts = ai._facts(s, s.get(Trip, trip["id"]), journey, computed)
+        unknown = ai._facts(s, s.get(Trip, trip["id"]), journey, {"parts": []})
+    finally:
+        s.close()
+    assert facts["way_there_in_plan"]["mode"] == "bus" and facts["way_there_in_plan"]["both_ways_for_the_group"] == 2380
+    assert [(w["mode"], w["recommended"], w["in_plan"]) for w in facts["ways_there"]] == [("car", True, False), ("bus", False, True)]
+    assert facts["meals_in_plan"]["own_total"] == 300
+    assert "way_there_in_plan" in ai.SYSTEM and "own_total" in ai.SYSTEM
+    # Without a way there in the plan, nothing is marked and the recommended way is the guide
+    assert unknown["way_there_in_plan"] is None and not any(w["in_plan"] for w in unknown["ways_there"])
+
+
 def _with_start(facts):
     def wrapped(*a, **k):
         f = facts(*a, **k)

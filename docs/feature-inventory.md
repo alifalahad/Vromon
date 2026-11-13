@@ -255,6 +255,23 @@ Mockup 11 ([friends-chat-plan.md](friends-chat-plan.md), step 8; report in [frie
 | Maestro 12: a trip room from the invite to Day 1; the whole suite | ✅ | `.maestro/12-trip-room.yaml` (and 06, 09, 10 made safe on trip days) | the whole suite on the phone: 14/14 passed |
 | A read-only look at the owner's account (Friends, a chat, Settings) | ✅ | `scripts/dev/readonly_proxy.py` | phone: real data shown right, no write tried |
 
+## Trip upgrades (steps 1–8, done 2026-11-13)
+
+([trip-upgrades/README.md](trip-upgrades/README.md); reports in [trip-upgrades/reports/](trip-upgrades/reports/).) "Phone" = the realme; step 8 checked everything together on a release build of the dev app, as test account A.
+
+| Feature | Status | Where | How it was verified |
+|---|---|---|---|
+| Where you stay, night by night: a hotel, family or friends (a place on the map), no night there, or not decided | ✅ | `services/stays.py`, `StaysSheet`, the plan's "Tonight" line | pytest; Jest; phone (trip 123: hotel nights 1–2, "Uncle's house" night 3) |
+| Meals: at a restaurant, your own food (a packed lunch) or where you stay, for the trip or one day | ✅ | `services/meals.py`, `MealsSheet` | pytest; Jest; phone (day 2 packed lunch at ৳150, day 3 breakfast and dinner where you stay) |
+| The stay advisor: "sleep somewhere else for nights a–b?" with what it saves, Switch / Not now / Don't suggest this | ✅ | `services/stay_advisor.py`, the plan's advice card | pytest; Jest; phone (trip 121: Hotel Ambassador, saves ৳4,200 and 8 min; Switch took the total from ৳25,170 to ৳20,970) |
+| The places index: 179,490 places of every kind from Overture Maps | ✅ | `data-platform` connector `overture_pois`, `poi_index` | data platform pytest; the first load's quality report |
+| Search anything when adding a stop: Vromon's places, what Vromon knows nearby, other places (not checked), addresses, a pin | ✅ | `services/place_search.py`, `AddStopSheet` | pytest; Jest; phone (90–390 ms a search on the phone; a museum added, "Not checked") |
+| Rate your trip: one tap on the stars, then things one by one; only you see it | ✅ | `services/reviews.py`, `app/trip/review/[id].tsx`, the Trips tab reminder | pytest (privacy matrix); Jest; phone |
+| The plan, map, Today, budget and AI budget agree on one trip that uses everything | ✅ | step 8: the way there, own food and the day's line fixed | phone and API (trip 123: ৳24,900; getting there ৳2,380 by bus everywhere) |
+| Bangla and the largest text (1.6×) on every new screen | ✅ | step 8: meal titles, categories, the time column, the meal choices | phone, both languages |
+| A trip opened 10 times in a release build: the plan sheet drawn every time | ✅ | | phone (10 of 10) |
+| Maestro 13 (stays and meals), 14 (search anything), 15 (rate a trip) | ✅ | `.maestro/13-…`, `14-…`, `15-…` | the whole suite on the phone: 17 of 17 (flows 01, 04, 05, 06, 07, 12 and the sign-out subflow updated) |
+
 ## Demo endpoint → real API mapping
 
 | Demo | Real (`/api/v1`) |
