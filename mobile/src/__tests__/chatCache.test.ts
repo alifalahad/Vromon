@@ -81,8 +81,9 @@ describe('merging messages', () => {
     await waitFor(() => expect(result.current.data?.messages).toHaveLength(50));
     const before = result.current.data!.messages;
     await act(() => loadOlder(fresh, 5));
+    // Under a busy test run the hook's new value can land a moment after loadOlder resolves
+    await waitFor(() => expect(result.current.data?.messages).toHaveLength(100));
     const after = result.current.data!.messages;
-    expect(after).toHaveLength(100);
     expect(after.slice(50).every((m, i) => m === before[i])).toBe(true);
     fresh.clear();
   });

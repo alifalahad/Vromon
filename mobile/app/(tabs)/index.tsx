@@ -10,7 +10,7 @@
 
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigation, useRouter } from 'expo-router';
+import { useIsFocused, useNavigation, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -29,9 +29,9 @@ import { MapSheet } from '../../src/features/map/MapSheet';
 import { mapCountryName } from '../../src/features/map/mapCountries';
 import { PlaceSheet } from '../../src/features/map/PlaceSheet';
 import { PosterPreview } from '../../src/features/map/Poster';
+import { useMapRequest } from '../../src/features/map/mapRequest';
 import { QuickMark } from '../../src/features/map/QuickMark';
 import { StoryCapsule } from '../../src/features/map/StoryCapsule';
-import { StoryPanel } from '../../src/features/map/StoryPanel';
 import { TodayLayers } from '../../src/features/map/TodayLayers';
 import { todayBounds, todayGeoJSON } from '../../src/features/map/todayGeo';
 import { destinationsGeoJSON, homePoint, trailsGeoJSON, upcomingGeoJSON } from '../../src/features/map/tripGeo';
@@ -44,7 +44,7 @@ import { WorldMap, type MapScope, type PressedPlace, type WorldMapHandle } from 
 import { useMapTheme } from '../../src/features/mapThemes/useMapTheme';
 import { usePreferences } from '../../src/features/preferences/store';
 import { localToday } from '../../src/features/trips/dates';
-import { useTrips, useTripStats } from '../../src/features/trips/queries';
+import { useTrips } from '../../src/features/trips/queries';
 import { usePlanFormat } from '../../src/features/trips/plan/usePlanFormat';
 import { useTodaySettings } from '../../src/features/trips/today/settings';
 import { pointOf } from '../../src/features/trips/today/today';
@@ -78,12 +78,10 @@ export default function MapScreen() {
   const [place, setPlace] = useState<PressedPlace | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [scope, setScope] = useState<MapScope>('home');
-  const [storyOpen, setStoryOpen] = useState(false);
   // The poster (step 10): its map picture is taken with location and friends off
   const [poster, setPoster] = useState<{ uri: string | null } | null>(null);
   const { data: stats } = useTravelStats(me?.id);
   const { data: trips } = useTrips();
-  const { data: tripStats } = useTripStats();
   const { data: destinations } = useQuery({ queryKey: ['destinations'], queryFn: destinationsApi.list });
   const today = localToday();
   const mapLayers = usePreferences((s) => s.mapLayers);
@@ -192,6 +190,25 @@ export default function MapScreen() {
       wants: { type: 'FeatureCollection', features: wantPoints },
     };
   }, [dock, visits, destinations, trips, today, home]);
+
+  // What "Your travels" asked for when it closed: frame a place, or make the poster
+  const request = useMapRequest((s) => s.request);
+  const isFocused = useIsFocused();
+  useEffect(() => {
+    if (!request || !isFocused) return;
+    const r = useMapRequest.getState().take();
+    if (!r) return;
+    // After the screen has slid back in, so the camera moves where it's seen
+    // (not cancelled when the effect re-runs: taking the request clears it, which re-runs this)
+    setTimeout(() => {
+      setPlace(null);
+      if (r.kind === 'poster') setPoster({ uri: null });
+      else {
+        userMoved.current = true;
+        map.current?.show(r.target);
+      }
+    }, 250);
+  }, [request, isFocused]);
 
   // Re-tapping the Map tab flies back home
   useEffect(() => {
@@ -304,7 +321,7 @@ export default function MapScreen() {
           onPress={() => {
             setPlace(null);
             if (capsuleToday && todayTrip) router.push(`/trip/today/${todayTrip.id}`);
-            else setStoryOpen(true);
+            else router.push('/map/dashboard');
           }}
         />
         {pending > 0 ? (
@@ -463,22 +480,6 @@ export default function MapScreen() {
           }}
         />
       ) : null}
-      <StoryPanel
-        open={storyOpen}
-        onClose={() => setStoryOpen(false)}
-        visits={visits}
-        home={home}
-        tripsPlanned={trips?.length}
-        tripStats={tripStats}
-        onReplay={() => {
-          setStoryOpen(false);
-          router.push('/map/replay');
-        }}
-        onPoster={() => {
-          setStoryOpen(false);
-          setPoster({ uri: null });
-        }}
-      />
       {poster ? (
         <PosterPreview
           mapUri={poster.uri}

@@ -478,6 +478,13 @@ export const fxApi = {
 export const geoApi = {
   regions: (country: string) => api.get<GeoRegion[]>('/geo/regions', { params: { country } }).then((r) => r.data),
   cities: (q: string, country?: string) => api.get<GeoCity[]>('/geo/cities', { params: { q, country } }).then((r) => r.data),
+  /** Names and points of marked regions and cities, by code (the travel dashboard, UI refresh step 2) */
+  places: (regions: string[], cities: string[]) =>
+    api
+      .get<{ regions: (GeoRegion & { lat: number | null; lon: number | null })[]; cities: GeoCity[] }>('/geo/places', {
+        params: { regions: regions.join(',') || undefined, cities: cities.join(',') || undefined },
+      })
+      .then((r) => r.data),
 };
 
 // Bump when scripts/geo/build.sh rebuilds the tiles: MapLibre caches them (the server

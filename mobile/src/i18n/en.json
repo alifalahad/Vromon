@@ -82,17 +82,8 @@
     "storyCountries_one": "{{n}} country",
     "storyCountries_other": "{{n}} countries",
     "story": {
-      "eyebrow": "Your story",
-      "title": "Your {{country}}",
-      "openHint": "Opens your story",
-      "worldPercent": "{{pct}}% of the world",
-      "countries": "countries",
-      "tripsPlanned": "trips planned with Vromon",
-      "daysOnTheRoad": "days on the road",
-      "wantList": "places on your Want list",
-      "perYear": "New places each year",
-      "undated_one": "{{n}} place has no date yet. Add when you first went, and it joins its year.",
-      "undated_other": "{{n}} places have no date yet. Add when you first went, and they join their year."
+      "openHint": "Opens today on your trip",
+      "worldPercent": "{{pct}}% of the world"
     },
     "dock": {
       "nextTrip": "Your next trip",
@@ -2265,5 +2256,97 @@
     "reminderBody": "One tap is enough. Only you see it.",
     "rate": "Rate",
     "notNow": "Not now"
+  },
+  "travels": {
+    "title": "Your travels",
+    "worldSoFar": "The world so far",
+    "heroCount_one": "{{n}} country",
+    "heroCount_other": "{{n}} countries",
+    "worldShare": "{{pct}}% of the world",
+    "continents_one": "{{n}} continent",
+    "continents_other": "{{n}} continents",
+    "countries": "Countries",
+    "divisions": "Divisions",
+    "regions": "Regions",
+    "districts": "Districts",
+    "cities": "Cities",
+    "of": "of {{total}}",
+    "finished": "finished",
+    "trips": "Trips",
+    "tripsComing_one": "Trips · {{n}} coming up",
+    "tripsComing_other": "Trips · {{n}} coming up",
+    "days": "Days on the road",
+    "want": "Want list",
+    "wantSub_one": "{{n}} place you want to go",
+    "wantSub_other": "{{n}} places you want to go",
+    "wantNone": "Places you'd like to go",
+    "replay": "Replay your map",
+    "poster": "Make a poster",
+    "openHint": "Opens your travels",
+    "status": {
+      "lived": "Lived",
+      "visited": "Visited",
+      "want": "Want to go"
+    },
+    "here": {
+      "lived": "Lived here",
+      "visited": "Visited",
+      "want": "Want to go"
+    },
+    "since": "since {{year}}",
+    "firstVisited": "first visited {{year}}",
+    "districtsOf": "{{done}} of {{total}} districts",
+    "notVisited": "Not visited yet · {{n}}",
+    "mark": "Mark",
+    "markA11y": "Mark {{name}}",
+    "tripIn_one": "Trip in {{n}} day",
+    "tripIn_other": "Trip in {{n}} days",
+    "showOnMap": "Show on map",
+    "showOnMapA11y": "Show {{name}} on the map",
+    "places": "Places",
+    "type": {
+      "country": "Country",
+      "region": "Region",
+      "division": "Division",
+      "district": "District",
+      "city": "City"
+    },
+    "tripsTitle": "Finished trips",
+    "tripLine_one": "{{dates}} · {{n}} day",
+    "tripLine_other": "{{dates}} · {{n}} days",
+    "placeLine": "{{trip}} · Day {{day}}",
+    "nameNeedsConnection": "A city (its name loads with a connection)",
+    "openMap": "Open the map",
+    "openTrips": "Open Trips",
+    "empty": {
+      "countries": {
+        "title": "No countries yet",
+        "body": "Zoom out on the map, then press and hold a country to mark it."
+      },
+      "regions": {
+        "title": "None yet",
+        "body": "Press and hold one on the map to mark it."
+      },
+      "districts": {
+        "title": "No districts yet",
+        "body": "Zoom in on the map, then press and hold a district to mark it."
+      },
+      "cities": {
+        "title": "No cities yet",
+        "body": "Zoom in on the map, then press and hold a city to mark it."
+      },
+      "trips": {
+        "title": "No finished trips yet",
+        "body": "A trip shows here once its last day has passed."
+      },
+      "want": {
+        "title": "Nothing on your Want list",
+        "body": "Press and hold a place on the map and choose Want."
+      },
+      "places": {
+        "title": "No places from trips here yet",
+        "body": "The places of your trips here show up once a trip is over."
+      }
+    }
   }
 }

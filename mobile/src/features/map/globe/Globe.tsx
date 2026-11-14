@@ -61,6 +61,41 @@ half4 main(float2 p) {
 }
 `)!;
 
+/**
+ * A still globe of your marks (the travel dashboard's hero, docs/ui-refresh step 2): the same
+ * picture and shader, facing one place, no names, no gestures.
+ */
+export function GlobeImage({ visits, theme, size, lon, lat, glow }: { visits: readonly Visit[]; theme: ResolvedMapTheme; size: number; lon: number; lat: number; glow: string }) {
+  const texture = useMemo(() => worldTexture(visits, theme), [visits, theme]);
+  const rgb = hexToRgb(glow);
+  const r = size / 2 - 4;
+  const uniforms = {
+    center: [size / 2, size / 2],
+    radius: r,
+    lon0: lon * RAD,
+    lat0: clampTilt(lat * RAD),
+    size: [TEXTURE.width, TEXTURE.height],
+    glow: [rgb[0], rgb[1], rgb[2], 0.5],
+  };
+  if (!texture) return <View style={{ width: size, height: size }} />;
+  return (
+    <Canvas style={{ width: size, height: size }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Fill>
+        <Shader source={SHADER} uniforms={uniforms}>
+          <ImageShader
+            image={texture}
+            tx="repeat"
+            ty="clamp"
+            fit="none"
+            rect={{ x: 0, y: 0, width: TEXTURE.width, height: TEXTURE.height }}
+            sampling={{ filter: FilterMode.Linear, mipmap: MipmapMode.None }}
+          />
+        </Shader>
+      </Fill>
+    </Canvas>
+  );
+}
+
 /** A friend's country marker (map home step 9): initials in a coloured circle, "+N" for more */
 export type GlobeFriend = { iso2: string; lon: number; lat: number; color: string; initials: string; more: string };
 

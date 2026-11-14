@@ -39,6 +39,7 @@ import { BUNDLED_HOMES, countryBounds } from './home';
 import { CountryLabels, CountryLayers, LAYER, TerrainLayer, WaterLayers, type FeaturePress } from './layers';
 import { CITIES_FROM, DISTRICTS_TAP_FROM, fadeInFrom, GLOBE_UNTIL, levelAt, REGIONS_FROM, type MapLevel } from './levels';
 import { countriesWithNothingInside, DISTRICTS_FROM, LABEL_FONT, MAP_STYLE, markedCodes, PLACE_NAME_SIZE, placeNamePaint, statusColorExpression, withImpliedCountries } from './style';
+import type { MapTarget } from './travelPlaces';
 import type { PlaceRef } from './visits';
 
 export type PressedPlace = PlaceRef & { name: string };
@@ -50,6 +51,8 @@ export type WorldMapHandle = {
   fit: (bounds: LngLatBounds, padding?: { top: number; bottom: number; left: number; right: number }) => void;
   /** Centre on a point, close up ("Centre on me") */
   focus: (center: [number, number]) => void;
+  /** Frame a place from "Your travels" ("Show on map"): a box, or a point at a zoom */
+  show: (target: MapTarget) => void;
   /** A picture of the map as it is now (a file URI), for the poster */
   snapshot: () => Promise<string | null>;
 };
@@ -172,6 +175,11 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
     focus: (center) => {
       closeGlobe();
       camera.current?.easeTo({ center, zoom: 13, duration: 500 });
+    },
+    show: (target) => {
+      closeGlobe();
+      if ('bounds' in target) camera.current?.fitBounds(target.bounds, { padding: homePadding, duration: 700 });
+      else camera.current?.easeTo({ center: target.center, zoom: target.zoom, duration: 700 });
     },
     snapshot: async () => {
       const uri = await mapRef.current?.createStaticMapImage({ output: 'file' });

@@ -1,14 +1,15 @@
 /**
- * The story capsule, top-left on the map (map home steps 2–3, mockups 1 and 4).
+ * The button top-left on the map (map home steps 2–3; restyled in docs/ui-refresh step 2, frame 1).
  *
  * At home: a ring of home regions visited, "3 of 8 divisions", and the number of
- * countries. Zoomed out to the world: countries, and the share of the world from
- * the server's count (left out until it has loaded). Counted from the visit list,
- * so it updates the moment a place is marked, offline too. Tapping it opens
- * "Your story". On a trip day (step 7) it shows the day instead ("Day 2 of 3 ·
+ * countries. Zoomed out to the world: countries, and the share of the world and the
+ * continents from the server's count (left out until it has loaded). Counted from the
+ * visit list, so it updates the moment a place is marked, offline too. Tapping it opens
+ * "Your travels". On a trip day (step 7) it shows the day instead ("Day 2 of 3 ·
  * Sylhet", a blue ring) and opens Today.
  */
 
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
@@ -18,13 +19,13 @@ import type { TravelStats, Visit } from '../../types';
 import { glass } from '../../ui/GlassSurface';
 import { PressableScale } from '../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../ui/theme';
-import { SUNSET_CARD } from '../../ui/theme/cards';
+import { useMapTheme } from '../mapThemes/useMapTheme';
 import { localDigits } from '../trips/plan/usePlanFormat';
 import { countriesVisited, homeRegionProgress, regionWord } from './home';
 import { ringFraction } from './story';
 
-const SIZE = 36;
-const STROKE = 3.5;
+const SIZE = 40;
+const STROKE = 4.5;
 const R = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * R;
 
@@ -48,6 +49,7 @@ export function StoryCapsule({
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
+  const map = useMapTheme();
   const { t, i18n } = useTranslation();
   const n = (v: number) => localDigits(String(v), i18n.language);
 
@@ -71,7 +73,14 @@ export function StoryCapsule({
     fraction = ringFraction(progress.done, progress.total);
   } else {
     title = countriesText;
-    subtitle = stats ? t('map.story.worldPercent', { pct: localDigits(String(stats.world_percent), i18n.language) }) : null;
+    subtitle = stats
+      ? [
+          t('map.story.worldPercent', { pct: localDigits(String(stats.world_percent), i18n.language) }),
+          stats.continents > 0 ? t('travels.continents', { count: stats.continents, n: n(stats.continents) }) : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : null;
     ringValue = countries;
     fraction = stats ? ringFraction(stats.world_countries, stats.world_total) : 0;
   }
@@ -84,17 +93,17 @@ export function StoryCapsule({
       disabled={!onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityHint={onPress ? t('map.story.openHint') : undefined}
+      accessibilityHint={onPress ? (today ? t('map.story.openHint') : t('travels.openHint')) : undefined}
       testID="story-capsule"
     >
       <Svg width={SIZE} height={SIZE} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Circle cx={SIZE / 2} cy={SIZE / 2} r={R} stroke={colors.glassBorder} strokeWidth={STROKE} fill="none" />
+        <Circle cx={SIZE / 2} cy={SIZE / 2} r={R} stroke={colors.border} strokeWidth={STROKE} fill="none" />
         {fraction > 0 ? (
           <Circle
             cx={SIZE / 2}
             cy={SIZE / 2}
             r={R}
-            stroke={today ? colors.link : SUNSET_CARD}
+            stroke={today ? colors.link : map.status.visited}
             strokeWidth={STROKE}
             strokeLinecap="round"
             fill="none"
@@ -117,6 +126,7 @@ export function StoryCapsule({
           </Text>
         ) : null}
       </View>
+      {onPress && !today ? <MaterialCommunityIcons name="chevron-down" size={20} color={colors.textTertiary} /> : null}
     </PressableScale>
   );
 }
@@ -126,16 +136,16 @@ const useStyles = makeStyles((t) => ({
     ...glass(t),
     flexDirection: 'row',
     alignItems: 'center',
-    gap: t.spacing.md,
+    gap: 10,
     minHeight: 56,
-    paddingLeft: 10,
-    paddingRight: t.spacing.xl,
+    paddingLeft: 8,
+    paddingRight: 12,
     paddingVertical: 8,
     borderRadius: 28,
   },
-  // Centred over the ring (the ring is 36 wide, starting at paddingLeft)
-  ringValue: { position: 'absolute', left: 10, width: SIZE, textAlign: 'center', ...t.type.footnote, fontWeight: '700', color: t.colors.textPrimary },
+  // Centred over the ring (the ring is 40 wide, starting at paddingLeft)
+  ringValue: { position: 'absolute', left: 8, width: SIZE, textAlign: 'center', fontFamily: t.type.title.fontFamily, fontSize: 16, color: t.colors.textPrimary },
   texts: { gap: 1, flexShrink: 1 },
-  title: { ...t.type.callout, fontWeight: '700', color: t.colors.textPrimary },
-  subtitle: { ...t.type.caption, color: t.colors.textSecondary },
+  title: { fontFamily: t.type.title.fontFamily, fontSize: 16.5, lineHeight: 20, color: t.colors.textPrimary },
+  subtitle: { ...t.type.caption, fontSize: 12.5, color: t.colors.textSecondary },
 }));

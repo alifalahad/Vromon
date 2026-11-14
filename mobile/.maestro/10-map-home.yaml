@@ -1,9 +1,9 @@
 appId: ${APP_ID}
 env:
   APP_ID: com.vromon.app.dev
-name: 10 Map home - story, divisions, press and hold to mark
+name: 10 Map home - your travels, divisions, press and hold to mark
 ---
-# Map home redesign (docs/map-home-redesign-plan.md): the story panel, Divisions
+# Map home redesign (docs/map-home-redesign-plan.md): Your travels (docs/ui-refresh step 2), Divisions
 # view from the Map sheet, a division's sheet, and marking by press and hold.
 - runFlow: subflows/launch.yaml
 - extendedWaitUntil:
@@ -12,19 +12,20 @@ name: 10 Map home - story, divisions, press and hold to mark
     timeout: 60000
 - tapOn:
     id: story-capsule
-# On a trip day the capsule shows the day and opens Today mode instead of the story
+# On a trip day the capsule shows the day and opens Today mode instead of Your travels
 # (map home step 7): either is right, and the flow goes on from the map either way
 - extendedWaitUntil:
     visible:
-      id: "story-panel|today-full-plan"
+      id: "travels-screen|today-full-plan"
     timeout: 15000
 - runFlow:
     when:
       visible:
-        id: story-panel
+        id: travels-screen
     commands:
-      - tapOn:
-          id: story-close
+      - assertVisible:
+          id: travels-countries
+      - back
 - runFlow:
     when:
       visible:

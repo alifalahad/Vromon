@@ -190,6 +190,9 @@ function ThemedStack() {
             <Stack.Screen name="map/add-place" options={{ title: t('map.addPlace'), presentation: 'modal' }} />
             <Stack.Screen name="map/theme" options={{ title: t('mapTheme.title') }} />
             <Stack.Screen name="map/replay" options={{ headerShown: false }} />
+            <Stack.Screen name="map/dashboard" options={{ title: t('travels.title') }} />
+            <Stack.Screen name="map/list/[kind]" options={{ title: '' }} />
+            <Stack.Screen name="map/country/[iso2]" options={{ title: '' }} />
             <Stack.Screen name="friends/add" options={{ title: t('friends.addFriend') }} />
             <Stack.Screen name="friends/[id]" options={{ title: '' }} />
             <Stack.Screen name="friends/compare/[id]" options={{ title: t('friends.compare') }} />

@@ -86,6 +86,19 @@ class TestReferenceData:
         mymensingh = client.get("/api/v1/geo/cities", params={"q": "mymensingh", "country": "BD"}).json()[0]
         assert mymensingh["region_code"] == "BD-H"
 
+    def test_places_lookup_names_marked_regions_and_cities(self, client):
+        dhaka = client.get("/api/v1/geo/cities", params={"q": "dhak", "country": "BD"}).json()[0]
+        r = client.get("/api/v1/geo/places", params={"regions": "BD-H,BD-A,XX-NOPE", "cities": f"{dhaka['geonameid']},999999999,abc"})
+        assert r.status_code == 200
+        body = r.json()
+        assert [x["code"] for x in body["regions"]] == ["BD-A", "BD-H"]  # unknown codes left out, by name
+        assert body["regions"][1]["name"] == "Mymensingh" and body["regions"][1]["lat"] is not None
+        assert [c["name"] for c in body["cities"]] == ["Dhaka"]
+        assert body["cities"][0]["region_code"] and body["cities"][0]["lat"] > 20
+        assert client.get("/api/v1/geo/places").json() == {"regions": [], "cities": []}
+        too_many = ",".join(str(i) for i in range(501))
+        assert client.get("/api/v1/geo/places", params={"cities": too_many}).status_code == 422
+
     def test_tiles_support_range_requests(self, client):
         if not (geo_api.TILES_DIR / "regions.pmtiles").is_file():
             pytest.skip("PMTiles not built")

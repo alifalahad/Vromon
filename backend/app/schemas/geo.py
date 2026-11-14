@@ -36,6 +36,12 @@ class RegionOut(BaseModel):
     type: Optional[str]
 
 
+class RegionPlaceOut(RegionOut):
+    """A region with where it is (its label point), for listing and framing it."""
+    lat: Optional[float]
+    lon: Optional[float]
+
+
 class CityOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -46,6 +52,12 @@ class CityOut(BaseModel):
     lat: float
     lon: float
     population: int
+
+
+class PlacesLookupOut(BaseModel):
+    """GET /geo/places: names and points for the regions and cities a user marked."""
+    regions: List[RegionPlaceOut]
+    cities: List[CityOut]
 
 
 class VisitIn(BaseModel):
