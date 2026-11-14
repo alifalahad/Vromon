@@ -4,6 +4,16 @@ require('react-native-gesture-handler/jestSetup');
 jest.mock('react-native-worklets', () => require('react-native-worklets/lib/module/mock'));
 require('react-native-reanimated').setUpTests();
 
+// Skia (the Map tab's globe, UI refresh step 1) is native code; no test draws the globe, so its
+// components render nothing and its factories return empty objects
+jest.mock('@shopify/react-native-skia', () => {
+  const Nothing = () => null;
+  const handler = { get: (_target, name) => (name === '__esModule' ? true : name === 'Skia' ? skia : name === 'matchFont' ? () => ({ measureText: () => ({ width: 0 }) }) : Nothing) };
+  const deep = new Proxy(function () {}, { get: () => deep, apply: () => deep });
+  const skia = deep;
+  return new Proxy({}, handler);
+});
+
 // __esModule so `import BottomSheet from …` gets the mock's default export; the
 // mock's sheet also draws its footer (the trip screen's snackbar lives there)
 jest.mock('@gorhom/bottom-sheet', () => {

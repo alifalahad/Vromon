@@ -64,6 +64,10 @@ export type ThemeColors = {
   highlight: string;
   /** The solid blue tint (the pill behind the selected tab, quiet blue buttons), with `onAccentSoft` text */
   accentTint: string;
+  /** The Map tab's globe (UI refresh step 1, frame 2): the sky behind it, the glow at its rim, its shadow */
+  globeSky: string;
+  globeGlow: string;
+  globeShadow: string;
 };
 
 /** Names over other people's bubbles in a trip room, one per person; each 4.5:1 on `bubbleTheirs` (contrast.test.ts) */
@@ -111,6 +115,9 @@ export const darkColors: ThemeColors = {
   onHeroSecondary: '#B9C6DA',
   highlight: '#FFB547',
   accentTint: '#17284A',
+  globeSky: '#070C15',
+  globeGlow: '#4F7FD9',
+  globeShadow: 'rgba(0, 0, 0, 0)',
 };
 
 export const lightColors: ThemeColors = {
@@ -153,6 +160,9 @@ export const lightColors: ThemeColors = {
   onHeroSecondary: '#B9C6DA',
   highlight: '#FFB547',
   accentTint: '#E7EEFC',
+  globeSky: '#E9F1FA',
+  globeGlow: '#FFFFFF',
+  globeShadow: 'rgba(15, 27, 45, 0.16)',
 };
 
 export const radius = {

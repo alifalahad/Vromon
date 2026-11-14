@@ -11,7 +11,7 @@
 |---|---|---|---|---|
 | 0 | all | Look at today's screens, try the globe, make mockups, answer the decisions (no app code) | ✅ done 2026-11-13 (look approved; D1–D14 answered); Explore and Settings frames (D15, D16) and the trip plan, Conditions and Budget frames (D17–D23) added 2026-11-14 | [step-0-report.md](reports/step-0-report.md) |
 | 0b | (whole app) | The look's foundations: colours, the title font, the tab bar, the Default map colours | ✅ done 2026-11-14 | [step-0b-report.md](reports/step-0b-report.md) |
-| 1 | 1 | Map: a globe when zoomed far out | not started | |
+| 1 | 1 | Map: a globe when zoomed far out | ✅ done 2026-11-14 (friends' APK not rebuilt yet: asked) | [step-1-report.md](reports/step-1-report.md) |
 | 2 | 2 | Map: the top-left button and a travel dashboard in place of "Your story" | not started | |
 | 3 | 3 | Map: the Map sheet's switches and themes, and a new Map Theme screen | not started | |
 | 4 | 4 | New trip: weekday only under the dates; type the number of travellers | not started | |

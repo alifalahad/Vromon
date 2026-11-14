@@ -11,6 +11,10 @@
  *   country's zoom its divisions (regions elsewhere) take over, closer in Bangladesh's districts,
  *   and closest every city's dot; a tap marks what's showing there. A country you marked with
  *   nothing marked inside keeps its colour all the way in.
+ * - Zoomed out past the world (docs/ui-refresh step 1): a globe (globe/Globe.tsx) over the flat
+ *   map, which can't go further out than the screen's width (so no edge ever shows). Pinching in
+ *   on the globe hands back to the flat map at the place under the fingers; the earth button
+ *   shows the globe turned to the home country.
  * Colours come from the active map theme. Status colours are paint expressions
  * rebuilt from the visit list, so marking a place repaints one property instead
  * of reloading data, and switching a theme repaints without reloading the style.
@@ -19,12 +23,18 @@
 import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { Camera, GeoJSONSource, Layer, Map, VectorSource, type CameraRef, type LngLatBounds, type MapRef } from '@maplibre/maplibre-react-native';
 import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { tilesUrl } from '../../services/api';
 import type { Visit } from '../../types';
+import { makeStyles, useTheme } from '../../ui/theme';
+import { useReduceMotion } from '../../ui/useReduceMotion';
 import type { ResolvedMapTheme } from '../mapThemes/resolve';
-import { HOME_DISTRICT_AREAS, HOME_DISTRICTS, HOME_REGION_BORDERS, HOME_REGION_LABELS, HOME_REGIONS } from './geoData';
+import { countryLabelPoint, HOME_DISTRICT_AREAS, HOME_DISTRICTS, HOME_REGION_BORDERS, HOME_REGION_LABELS, HOME_REGIONS } from './geoData';
+import { Globe, type GlobeFriend } from './globe/Globe';
+import { FLAT_FROM_GLOBE_ZOOM, FLAT_MIN_ZOOM, GLOBE_FROM_ZOOM } from './globe/projection';
 import { BUNDLED_HOMES, countryBounds } from './home';
 import { CountryLabels, CountryLayers, LAYER, TerrainLayer, WaterLayers, type FeaturePress } from './layers';
 import { CITIES_FROM, DISTRICTS_TAP_FROM, fadeInFrom, GLOBE_UNTIL, levelAt, REGIONS_FROM, type MapLevel } from './levels';
@@ -46,7 +56,6 @@ export type WorldMapHandle = {
 
 export type MapScope = 'home' | 'world';
 
-const WORLD_ZOOM = 1.6;
 // Closer than this counts as "home" (the toggle then offers the world)
 const HOME_SCOPE_ZOOM = 3.5;
 // Room for the story capsule above and the round buttons below
@@ -74,6 +83,8 @@ type Props = {
   onLongPressPlace?: (place: PressedPlace, point: [number, number]) => void;
   /** What a tap marks now (country, region, district or city), as the zoom changes */
   onLevelChange?: (level: MapLevel) => void;
+  /** Friends' country markers, for the globe (the flat map draws them as a child layer) */
+  globeFriends?: readonly GlobeFriend[];
 };
 
 // What a long press can mark: whatever's showing under the finger, the smallest first
@@ -103,7 +114,11 @@ function firstProps(e: FeaturePress): Record<string, unknown> | null {
   return (e.nativeEvent.features?.[0]?.properties as Record<string, unknown> | undefined) ?? null;
 }
 
-export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ visits, theme, home, onPressPlace, onScopeChange, onUserMove, children, selected, onLongPressPlace, onLevelChange, bottomInset = 0, namedPlaces = [] }, ref) {
+export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ visits, theme, home, onPressPlace, onScopeChange, onUserMove, children, selected, onLongPressPlace, onLevelChange, bottomInset = 0, namedPlaces = [], globeFriends = [] }, ref) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const styles = useStyles();
+  const reduceMotion = useReduceMotion();
   const camera = useRef<CameraRef>(null);
   const mapRef = useRef<MapRef>(null);
   // The zoom decides what a tap marks: countries, then divisions/regions, districts, cities
@@ -116,11 +131,48 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
   const homePadding = { ...HOME_PADDING, bottom: Math.max(HOME_PADDING.bottom, bottomInset + 24) };
   const reported = useRef<MapLevel | null>(null);
 
+  // The globe: mounted the first time it's needed and kept (its world picture is drawn once),
+  // faded in over the flat map and out again
+  const [globe, setGlobe] = useState<{ open: boolean; facing: { lon: number; lat: number; key: number } } | null>(null);
+  const [hint, setHint] = useState(true);
+  // The globe's state for map events, which fire before a re-render
+  const globeOpen = useRef(false);
+  const globeOpacity = useSharedValue(0);
+  const globeStyle = useAnimatedStyle(() => ({ opacity: globeOpacity.get() }));
+  const fade = (to: number) => {
+    globeOpacity.set(reduceMotion ? to : withTiming(to, { duration: 260 }));
+  };
+  const openGlobe = (lon: number, lat: number) => {
+    globeOpen.current = true;
+    setGlobe((g) => ({ open: true, facing: { lon, lat, key: (g?.facing.key ?? 0) + 1 } }));
+    fade(1);
+    onScopeChange?.('world');
+    if (reported.current !== 'country') {
+      reported.current = 'country';
+      onLevelChange?.('country');
+    }
+  };
+  const closeGlobe = () => {
+    globeOpen.current = false;
+    setGlobe((g) => (g ? { ...g, open: false } : g));
+    fade(0);
+  };
+  const homePoint = countryLabelPoint(home) ?? centre(homeBounds);
+
   useImperativeHandle(ref, () => ({
-    home: () => camera.current?.fitBounds(homeBounds, { padding: homePadding, duration: 600 }),
-    world: () => camera.current?.flyTo({ center: centre(homeBounds), zoom: WORLD_ZOOM, duration: 600 }),
-    fit: (b, padding = HOME_PADDING) => camera.current?.fitBounds(b, { padding, duration: 600 }),
-    focus: (center) => camera.current?.easeTo({ center, zoom: 13, duration: 500 }),
+    home: () => {
+      closeGlobe();
+      camera.current?.fitBounds(homeBounds, { padding: homePadding, duration: 600 });
+    },
+    world: () => openGlobe(homePoint[0], homePoint[1]),
+    fit: (b, padding = HOME_PADDING) => {
+      closeGlobe();
+      camera.current?.fitBounds(b, { padding, duration: 600 });
+    },
+    focus: (center) => {
+      closeGlobe();
+      camera.current?.easeTo({ center, zoom: 13, duration: 500 });
+    },
     snapshot: async () => {
       const uri = await mapRef.current?.createStaticMapImage({ output: 'file' });
       if (!uri) return null;
@@ -178,6 +230,7 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
   const belowBorders = base.terrain ? 'terrain-hillshade' : LAYER.glow;
 
   return (
+    <View style={StyleSheet.absoluteFill}>
     <Map
       ref={mapRef}
       style={StyleSheet.absoluteFill}
@@ -186,8 +239,16 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
       logo={false}
       compass={false}
       touchPitch={false}
+      onRegionIsChanging={(e) => {
+        // Pinched out past the world: the globe takes over, facing where the map was
+        if (!globeOpen.current && e.nativeEvent.userInteraction && e.nativeEvent.zoom < GLOBE_FROM_ZOOM) {
+          const [lon, lat] = e.nativeEvent.center;
+          openGlobe(lon, Math.max(-60, Math.min(60, lat)));
+        }
+      }}
       onRegionDidChange={(e) => {
         const z = e.nativeEvent.zoom;
+        if (globeOpen.current) return;
         setZoom(z);
         onScopeChange?.(z >= HOME_SCOPE_ZOOM ? 'home' : 'world');
         const now = levelAt(z);
@@ -211,7 +272,7 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
           : undefined
       }
     >
-      <Camera ref={camera} initialViewState={{ bounds: homeBounds, padding: HOME_PADDING }} />
+      <Camera ref={camera} minZoom={FLAT_MIN_ZOOM} initialViewState={{ bounds: homeBounds, padding: HOME_PADDING }} />
 
       <WaterLayers base={base} />
       <CountryLayers
@@ -448,5 +509,51 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
       <CountryLabels base={base} />
       {children}
     </Map>
+    {globe ? (
+      <Animated.View style={[StyleSheet.absoluteFill, globeStyle]} pointerEvents={globe.open ? 'auto' : 'none'} importantForAccessibility={globe.open ? 'auto' : 'no-hide-descendants'}>
+        <Globe
+          visits={visits}
+          theme={theme}
+          sky={colors.globeSky}
+          glow={colors.globeGlow}
+          shadowColor={colors.globeShadow}
+          facing={globe.facing}
+          friends={globeFriends}
+          accessibilityLabel={t('map.globeLabel')}
+          onInteract={() => setHint(false)}
+          onPressCountry={(iso2, name) => onPressPlace({ place_type: 'country', place_code: iso2, country_iso2: iso2, name })}
+          onLongPressCountry={(iso2, name, point) =>
+            onLongPressPlace?.({ place_type: 'country', place_code: iso2, country_iso2: iso2, name }, point)
+          }
+          onHandBack={(lon, lat) => {
+            camera.current?.jumpTo({ center: [lon, lat], zoom: FLAT_FROM_GLOBE_ZOOM });
+            closeGlobe();
+            onUserMove?.();
+          }}
+        />
+        {globe.open && hint ? (
+          <View style={[styles.hint, { bottom: bottomInset + 16 }]} pointerEvents="none">
+            <Text style={styles.hintText}>{t('map.globeHint')}</Text>
+          </View>
+        ) : null}
+      </Animated.View>
+    ) : null}
+    </View>
   );
 });
+
+const useStyles = makeStyles((t) => ({
+  hint: {
+    position: 'absolute',
+    left: t.spacing.lg,
+    right: 88,
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.sm,
+    borderRadius: 24,
+    backgroundColor: t.colors.glass,
+    ...t.depth.raised,
+  },
+  hintText: { ...t.type.footnote, color: t.colors.textPrimary },
+}));
