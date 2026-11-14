@@ -1,10 +1,9 @@
 /**
  * Semantic colour, shape and type tokens.
  *
- * Dark values come from the reference screenshots (prompt §5.1). Where a sampled
- * value fails WCAG AA as text, the token used for text is tuned and the sampled
- * value is kept in a comment. `accent` stays the sampled #3379F3 because it is a
- * fill colour (FAB, Apply, active tab); text-on-background uses `link`.
+ * The values are the look approved on 2026-11-13 (docs/ui-refresh/prompts.md, "The look"):
+ * navy text and hero cards, one blue for actions, one marigold highlight, white cards on a
+ * cool grey ground. Every text and background pair used is checked in contrast.test.ts.
  */
 
 export type ColorScheme = 'light' | 'dark';
@@ -56,6 +55,15 @@ export type ThemeColors = {
   /** A switch's track when off: 3:1 against `surface` (and `bg`), so the white thumb shows on a card */
   switchOff: string;
   shadow: string;
+  /** The one dark card a screen leads with (the next trip, "Now", a total), with `onHero` text */
+  hero: string;
+  onHero: string;
+  /** Second lines on the hero card */
+  onHeroSecondary: string;
+  /** Marigold, the one highlight (countdowns, "On now"): on the hero card or as a fill, never as text on white */
+  highlight: string;
+  /** The solid blue tint (the pill behind the selected tab, quiet blue buttons), with `onAccentSoft` text */
+  accentTint: string;
 };
 
 /** Names over other people's bubbles in a trip room, one per person; each 4.5:1 on `bubbleTheirs` (contrast.test.ts) */
@@ -65,82 +73,94 @@ export const SENDER_NAMES = {
 } as const;
 
 export const darkColors: ThemeColors = {
-  bg: '#262626',
-  surface: '#333333',
-  surfaceRaised: '#454545',
-  surfaceInset: '#1F1F1F',
-  segmentThumb: '#5E5E60',
-  border: '#4A4A4A',
-  divider: '#4A4A4A',
-  accent: '#3379F3',
-  accentSoft: 'rgba(51, 121, 243, 0.20)',
+  bg: '#0B111A',
+  surface: '#141C28',
+  surfaceRaised: '#1F2A3A',
+  surfaceInset: '#1C2634',
+  segmentThumb: '#33415A',
+  border: '#253142',
+  divider: '#253142',
+  accent: '#2F6BE6',
+  accentSoft: 'rgba(47, 107, 230, 0.18)',
   onAccent: '#FFFFFF',
-  link: '#6EA0F6',
-  onAccentSoft: '#8AB4F8', // link is 3.9:1 on accentSoft over surface
-  textPrimary: '#F2F2F2',
-  textSecondary: '#B2B2B2',
-  textTertiary: '#9C9C9C', // sampled #858585 is 3.4:1 on surface
-  success: '#4CAF50',
-  successBg: 'rgba(76, 175, 80, 0.16)',
+  link: '#8AB4F8',
+  onAccentSoft: '#8AB4F8',
+  textPrimary: '#EEF2F7',
+  textSecondary: '#A9B4C3',
+  textTertiary: '#8794A7',
+  success: '#4CC38A',
+  successBg: 'rgba(76, 195, 138, 0.16)',
   warning: '#F2B13C',
   warningBg: 'rgba(242, 177, 60, 0.16)',
   danger: '#F07A72',
   dangerBg: 'rgba(240, 122, 114, 0.16)',
   scrim: 'rgba(0, 0, 0, 0.6)',
-  glass: 'rgba(23, 27, 34, 0.9)', // 0.86 (mockups) lets link text drop to 4.3:1 over a white map
+  glass: 'rgba(15, 22, 33, 0.92)',
   glassBorder: 'rgba(255, 255, 255, 0.08)',
-  accentStrong: '#2D6AE3',
-  bubbleMine: '#2D6AE3',
-  bubbleTheirs: '#333333',
-  cardMine: '#2B3B5C',
-  cardMineText2: '#C9D6EE',
-  cardEyebrowMine: '#A9C6FA',
+  accentStrong: '#2F6BE6',
+  bubbleMine: '#2F6BE6',
+  bubbleTheirs: '#1C2634',
+  cardMine: '#17284A',
+  cardMineText2: '#B9C6DA',
+  cardEyebrowMine: '#8AB4F8',
   cardButtonMine: 'rgba(255, 255, 255, 0.12)',
-  switchOff: '#8A8A8A',
+  switchOff: '#6E7C91',
   shadow: '#000000',
+  hero: '#16233A',
+  onHero: '#FFFFFF',
+  onHeroSecondary: '#B9C6DA',
+  highlight: '#FFB547',
+  accentTint: '#17284A',
 };
 
 export const lightColors: ThemeColors = {
-  bg: '#F5F5F5',
+  bg: '#F3F5F9',
   surface: '#FFFFFF',
   surfaceRaised: '#FFFFFF',
-  surfaceInset: '#E8E8EA',
+  surfaceInset: '#EEF1F6',
   segmentThumb: '#FFFFFF',
-  border: '#E0E0E0',
-  divider: '#DADADA',
-  accent: '#2563D9',
-  accentSoft: 'rgba(37, 99, 217, 0.12)',
+  border: '#E1E6EE',
+  divider: '#E1E6EE',
+  accent: '#2459D6',
+  accentSoft: 'rgba(36, 89, 214, 0.11)',
   onAccent: '#FFFFFF',
-  link: '#245FD0',
-  onAccentSoft: '#1F55C0', // link (#245FD0) is 4.1:1 on accentSoft over surfaceInset
-  textPrimary: '#111111',
-  textSecondary: '#5C5C5C',
-  textTertiary: '#676767', // AA on surfaceInset too
-  success: '#2B742E',
-  successBg: 'rgba(43, 116, 46, 0.10)',
-  warning: '#A74D08',
-  warningBg: 'rgba(167, 77, 8, 0.10)',
-  danger: '#C62828',
-  dangerBg: 'rgba(198, 40, 40, 0.10)',
-  scrim: 'rgba(0, 0, 0, 0.45)',
-  glass: 'rgba(255, 255, 255, 0.92)',
-  glassBorder: 'rgba(0, 0, 0, 0.08)',
-  accentStrong: '#2563D9',
-  bubbleMine: '#2563D9',
+  link: '#1D4BB8',
+  onAccentSoft: '#1D4BB8',
+  textPrimary: '#0F1B2D',
+  textSecondary: '#46546A',
+  textTertiary: '#5F6C82',
+  success: '#137A48', // the look's #157F4B is 4.45:1 on surfaceInset
+  successBg: 'rgba(19, 122, 72, 0.12)',
+  warning: '#8A5300',
+  warningBg: 'rgba(178, 106, 0, 0.14)',
+  danger: '#B3261E',
+  dangerBg: 'rgba(179, 38, 30, 0.09)',
+  scrim: 'rgba(15, 27, 45, 0.45)',
+  glass: 'rgba(255, 255, 255, 0.94)',
+  glassBorder: 'rgba(15, 27, 45, 0.06)',
+  accentStrong: '#2459D6',
+  bubbleMine: '#2459D6',
   // White bubbles would melt into the light background
-  bubbleTheirs: '#E8E8EA',
-  cardMine: '#E3EBFA',
-  cardMineText2: '#5C5C5C',
-  cardEyebrowMine: '#1F55C0',
+  bubbleTheirs: '#E6EAF1',
+  cardMine: '#E7EEFC',
+  cardMineText2: '#46546A',
+  cardEyebrowMine: '#1D4BB8',
   cardButtonMine: '#FFFFFF',
-  switchOff: '#8E8E93',
-  shadow: '#000000',
+  switchOff: '#7C899C',
+  shadow: '#0F1B2D',
+  hero: '#0F1B2D',
+  onHero: '#FFFFFF',
+  onHeroSecondary: '#B9C6DA',
+  highlight: '#FFB547',
+  accentTint: '#E7EEFC',
 };
 
 export const radius = {
-  card: 24,
-  sheet: 24,
-  control: 12,
+  card: 22,
+  /** Sheets and the hero card */
+  sheet: 28,
+  hero: 28,
+  control: 16,
   chip: 999,
   pill: 999,
 } as const;
@@ -154,22 +174,45 @@ export const spacing = {
   xxl: 24,
 } as const;
 
+/**
+ * Anek Bangla Bold for titles and large numbers, in English and Bangla (D14). The file is bundled
+ * and loaded in app/_layout.tsx before the splash screen leaves. Body text stays the phone's font.
+ *
+ * The file is already bold, so a style that uses it keeps `fontWeight: 'normal'`: on Android a
+ * font loaded at run time has no bold variant, and asking for one falls back to the phone's font.
+ */
+export const fonts = { title: 'AnekBangla_700Bold' } as const;
+
 export const type = {
-  largeTitle: { fontSize: 34, fontWeight: '700' as const },
-  title: { fontSize: 22, fontWeight: '700' as const },
+  /** A tab's title ("Trips") */
+  largeTitle: { fontSize: 32, fontWeight: 'normal' as const, fontFamily: fonts.title },
+  /** A pushed screen's title, in the header */
+  screenTitle: { fontSize: 24, fontWeight: 'normal' as const, fontFamily: fonts.title },
+  /** A sheet's or a section's title */
+  title: { fontSize: 22, fontWeight: 'normal' as const, fontFamily: fonts.title },
+  /** The one large number a screen leads with */
+  hero: { fontSize: 44, fontWeight: 'normal' as const, fontFamily: fonts.title },
   headline: { fontSize: 17, fontWeight: '600' as const },
   body: { fontSize: 16, fontWeight: '400' as const },
   callout: { fontSize: 15, fontWeight: '400' as const },
   footnote: { fontSize: 13, fontWeight: '400' as const },
   caption: { fontSize: 12, fontWeight: '400' as const },
-  tabLabel: { fontSize: 14, fontWeight: '500' as const },
+  tabLabel: { fontSize: 12.5, fontWeight: '500' as const },
 };
 
 export const sizes = {
   fab: 64,
   mapButton: 64,
-  tabIcon: 28,
+  tabIcon: 24,
   minTouch: 48,
+  /** A main button's height (fully round) */
+  button: 52,
+} as const;
+
+/** Cards barely lift; things over a map and hero cards lift clearly */
+export const depth = {
+  card: { shadowColor: '#0F1B2D', shadowOpacity: 0.05, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  raised: { shadowColor: '#0F1B2D', shadowOpacity: 0.16, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
 } as const;
 
 export type Theme = {
@@ -179,7 +222,8 @@ export type Theme = {
   spacing: typeof spacing;
   type: typeof type;
   sizes: typeof sizes;
+  depth: typeof depth;
 };
 
-export const darkTheme: Theme = { scheme: 'dark', colors: darkColors, radius, spacing, type, sizes };
-export const lightTheme: Theme = { scheme: 'light', colors: lightColors, radius, spacing, type, sizes };
+export const darkTheme: Theme = { scheme: 'dark', colors: darkColors, radius, spacing, type, sizes, depth };
+export const lightTheme: Theme = { scheme: 'light', colors: lightColors, radius, spacing, type, sizes, depth };

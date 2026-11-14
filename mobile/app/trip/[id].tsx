@@ -1491,7 +1491,7 @@ const useStyles = makeStyles((t) => {
     readOnlyText: { ...t.type.callout, color: t.colors.textPrimary },
     header: { flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.md, paddingHorizontal: t.spacing.xs },
     headerText: { flex: 1, minWidth: 0, gap: 2 },
-    title: { fontSize: 24, fontWeight: '700', color: t.colors.textPrimary },
+    title: { fontFamily: t.type.title.fontFamily, fontSize: 24, fontWeight: 'normal', color: t.colors.textPrimary },
     subtitle: { ...t.type.callout, color: t.colors.textSecondary },
     budget: { alignItems: 'flex-end', gap: 6, paddingTop: 4, minHeight: 48, justifyContent: 'center' },
     todayPill: {

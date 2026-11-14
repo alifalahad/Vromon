@@ -20,14 +20,9 @@ describe('design tokens', () => {
     expect(Object.keys(lightColors).sort()).toEqual(Object.keys(darkColors).sort());
   });
 
-  it('keeps the sampled reference values for the dark appearance', () => {
-    expect(darkColors).toMatchObject({
-      bg: '#262626',
-      surface: '#333333',
-      surfaceRaised: '#454545',
-      accent: '#3379F3',
-      textSecondary: '#B2B2B2',
-    });
+  it('keeps the approved look (docs/ui-refresh/prompts.md, "The look")', () => {
+    expect(lightColors).toMatchObject({ bg: '#F3F5F9', surface: '#FFFFFF', textPrimary: '#0F1B2D', accent: '#2459D6', hero: '#0F1B2D', highlight: '#FFB547' });
+    expect(darkColors).toMatchObject({ bg: '#0B111A', surface: '#141C28', textPrimary: '#EEF2F7', accent: '#2F6BE6', hero: '#16233A', highlight: '#FFB547' });
   });
 
   for (const [name, colors] of [
@@ -43,8 +38,7 @@ describe('design tokens', () => {
     expect(contrast(lightColors.onAccent, lightColors.accent)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('dark: text on the reference accent is a documented exception (4.06:1, AA large text only)', () => {
-    // #3379F3 is sampled from the reference; white on it passes 3:1 (large text, UI) but not 4.5:1.
-    expect(contrast(darkColors.onAccent, darkColors.accent)).toBeGreaterThanOrEqual(4.0);
+  it('dark: text on accent meets AA too (the old sampled blue was an exception at 4.06:1)', () => {
+    expect(contrast(darkColors.onAccent, darkColors.accent)).toBeGreaterThanOrEqual(4.5);
   });
 });

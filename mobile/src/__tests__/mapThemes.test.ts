@@ -67,7 +67,7 @@ describe('map theme catalog', () => {
   });
 
   it('keeps the sampled reference values (prompt §7)', () => {
-    expect(THEMES.map((t) => t.name)).toEqual(['Default', 'Midnight', 'Serenity', 'Rustic']);
+    expect(THEMES.map((t) => t.name)).toEqual(['Default', 'Midnight', 'Serenity', 'Rustic', 'Classic']);
     expect(THEMES.find((t) => t.id === 'rustic')).toMatchObject({
       swatches: ['#E8DEC3', '#DFCDA5', '#A28D78', '#587F6C', '#6B505F'],
       style: { land: '#EEE9D6', water: '#D4C7A4' },
@@ -79,7 +79,7 @@ describe('map theme catalog', () => {
     expect(STYLES.find((s) => s.id === 'treasure')).toMatchObject({ pattern: 'dots' });
     expect(STYLES.find((s) => s.id === 'glow')).toMatchObject({ land: '#1E4F60', borderGlow: true });
     expect(STYLES.find((s) => s.id === 'odyssey')).toMatchObject({ terrain: true });
-    expect(STYLES[0].dark).toMatchObject({ land: '#303030', water: '#1A1A1A' });
+    expect(STYLES[0].dark).toMatchObject({ land: '#1E2A3B', water: '#0B1220' });
   });
 
   it('flags every value that was designed rather than sampled (decision D8)', () => {
@@ -87,8 +87,9 @@ describe('map theme catalog', () => {
     expect(derived.sort()).toEqual(['cobalt', 'forest', 'intrepid', 'ivory', 'sage', 'sky']);
   });
 
-  it('only Default is free (the lock UI is hidden behind a flag, decision D2)', () => {
-    for (const items of [THEMES, COLORS, STYLES]) {
+  it('only Default is free, and Classic, the Default of before the UI refresh (the lock UI is hidden behind a flag, decision D2)', () => {
+    expect(THEMES.filter((i) => i.tier === 'free').map((i) => i.id)).toEqual(['default', 'classic']);
+    for (const items of [COLORS, STYLES]) {
       expect(items.filter((i) => i.tier === 'free').map((i) => i.id)).toEqual(['default']);
     }
   });
@@ -117,13 +118,31 @@ describe('resolving a selection', () => {
     expect(mapThemeName(DEFAULT_USER_MAP_THEME)).toBe('Default');
   });
 
-  it('Default follows the appearance (04 in dark, the stripes in light)', () => {
+  it('Default follows the appearance: navy in dark, light-blue water and pale land in light (UI refresh, D13)', () => {
     const dark = resolveMapTheme(DEFAULT_USER_MAP_THEME, 'dark');
-    expect(dark.base).toMatchObject({ land: '#303030', water: '#1A1A1A' });
+    expect(dark.base).toMatchObject({ land: '#1E2A3B', water: '#0B1220' });
     expect(dark.status.visited).toBe('#F1AD48');
     const light = resolveMapTheme(DEFAULT_USER_MAP_THEME, 'light');
+    expect(light.base).toMatchObject({ land: '#EAECDE', water: '#A5D8F5' });
+    expect(light.status.visited).toBe('#F08E35');
+  });
+
+  it('Classic is the grey map that was Default, in both appearances, with the same marks', () => {
+    const dark = resolveMapTheme(selectTheme('classic'), 'dark');
+    expect(dark.base).toMatchObject({ land: '#303030', water: '#1A1A1A' });
+    expect(dark.status.visited).toBe('#F1AD48');
+    const light = resolveMapTheme(selectTheme('classic'), 'light');
     expect(light.base).toMatchObject({ land: '#D9D9D9', water: '#A6A7A9' });
     expect(light.status.visited).toBe('#F08E35');
+  });
+
+  it('a saved Default stays Default (and so gets the new colours); a saved Classic loads', () => {
+    expect(normalizeUserMapTheme({ v: 1, themeId: 'default', styleId: 'theme:default', colorsId: 'theme:default', compareId: 'default' })).toEqual(
+      selectTheme('default'),
+    );
+    expect(normalizeUserMapTheme({ v: 1, themeId: 'classic', styleId: 'theme:classic', colorsId: 'theme:classic', compareId: 'classic' })).toEqual(
+      selectTheme('classic'),
+    );
   });
 
   it('derives Want to visit (35% fill + outline) and Lived (darker) for the presets', () => {

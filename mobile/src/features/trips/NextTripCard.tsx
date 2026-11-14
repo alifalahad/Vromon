@@ -131,7 +131,7 @@ const useStyles = makeStyles((t) => ({
   card: { marginHorizontal: t.spacing.lg, borderRadius: 24, backgroundColor: SUNSET, padding: 20, gap: 6, overflow: 'hidden' },
   art: { position: 'absolute', right: -20, top: 18, opacity: 0.22 },
   when: { ...t.type.footnote, fontWeight: '600', letterSpacing: 0.6, color: ON },
-  name: { fontSize: 30, lineHeight: 36, fontWeight: '700', color: ON },
+  name: { fontFamily: t.type.title.fontFamily, fontSize: 30, lineHeight: 36, fontWeight: 'normal', color: ON },
   range: { ...t.type.callout, color: ON },
   weather: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, marginTop: 10 },
   weatherText: { ...t.type.callout, fontSize: 14, color: ON, flex: 1 },

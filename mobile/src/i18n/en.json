@@ -59,7 +59,7 @@
     "saved": "Saved on your map",
     "offline": "Offline: changes will sync when you're back online",
     "tilesUnavailable": "Regions and cities need a connection to load.",
-    "attribution": "Map data: Natural Earth (public domain). Bangladesh divisions: geoBoundaries (CC0). Bangladesh districts: Bangladesh Bureau of Statistics and OCHA ROAP, via geoBoundaries (CC BY 3.0 IGO). Cities: GeoNames, CC BY 4.0. Terrain (Odyssey style): AWS Terrain Tiles from Mapzen, with data from SRTM, GMTED2010, ETOPO1 and others. Maps by MapLibre. Itinerary streets: © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap. The Trips card illustration is original artwork. Places to search near your stops (colleges, markets, offices…): © OpenStreetMap contributors, Overture Maps Foundation (CDLA-Permissive-2.0).",
+    "attribution": "Map data: Natural Earth (public domain). Bangladesh divisions: geoBoundaries (CC0). Bangladesh districts: Bangladesh Bureau of Statistics and OCHA ROAP, via geoBoundaries (CC BY 3.0 IGO). Cities: GeoNames, CC BY 4.0. Terrain (Odyssey style): AWS Terrain Tiles from Mapzen, with data from SRTM, GMTED2010, ETOPO1 and others. Maps by MapLibre. Itinerary streets: © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap. The Trips card illustration is original artwork. Places to search near your stops (colleges, markets, offices…): © OpenStreetMap contributors, Overture Maps Foundation (CDLA-Permissive-2.0). Titles are set in Anek Bangla by Ek Type (SIL Open Font License 1.1).",
     "placeType": {
       "country": "Country",
       "region": "Region",

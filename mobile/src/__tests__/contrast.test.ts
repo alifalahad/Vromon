@@ -85,6 +85,29 @@ describe.each([
     expect(contrast(colors.onAccent, colors.accentStrong)).toBeGreaterThanOrEqual(AA);
   });
 
+  it('the hero card: its text, its second lines and the marigold highlight (UI refresh, "The look")', () => {
+    expect(contrast(colors.onHero, colors.hero)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.onHeroSecondary, colors.hero)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.highlight, colors.hero)).toBeGreaterThanOrEqual(AA);
+  });
+
+  it('blue text on the solid blue tint (the selected tab, quiet blue buttons)', () => {
+    expect(contrast(colors.onAccentSoft, colors.accentTint)).toBeGreaterThanOrEqual(AA);
+    // an unselected tab's label and icon on the bar
+    expect(contrast(colors.textSecondary, colors.surface)).toBeGreaterThanOrEqual(AA);
+  });
+
+  it("a switch's track when off shows on a card and on the ground (3:1)", () => {
+    expect(contrast(colors.switchOff, colors.surface)).toBeGreaterThanOrEqual(3);
+    expect(contrast(colors.switchOff, colors.bg)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("the snackbar: its text and its action on the other appearance's text colour", () => {
+    const other = colors === darkColors ? lightColors : darkColors;
+    expect(contrast(colors.bg, colors.textPrimary)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(other.link, colors.textPrimary)).toBeGreaterThanOrEqual(AA);
+  });
+
   it('white on the sunset cards (next trip, Today\'s "Now")', () => {
     expect(contrast(ON_SUNSET, SUNSET_CARD)).toBeGreaterThanOrEqual(AA);
   });
@@ -122,7 +145,6 @@ describe.each([
   });
 
   it('text on the accent colour (buttons, FAB, badges)', () => {
-    // Dark: the sampled #3379F3 is kept (decision §20): 4.06:1, AA for large text and UI parts
-    expect(contrast(colors.onAccent, colors.accent)).toBeGreaterThanOrEqual(_name === 'dark' ? 3 : AA);
+    expect(contrast(colors.onAccent, colors.accent)).toBeGreaterThanOrEqual(AA);
   });
 });

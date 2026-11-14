@@ -12,10 +12,12 @@
 
 import '../src/i18n';
 
+import { AnekBangla_700Bold } from '@expo-google-fonts/anek-bangla/700Bold';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { useQueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavigationThemeProvider, type Theme as NavigationTheme } from 'expo-router';
+import { useFonts } from 'expo-font';
 import * as Network from 'expo-network';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -41,6 +43,7 @@ import { initMonitoring, wrapRoot } from '../src/services/monitoring';
 import { persistOptions, queryClient, queryPersister } from '../src/services/queryClient';
 import { Button } from '../src/ui/Button';
 import { makeStyles, ThemeProvider, useTheme, type Theme } from '../src/ui/theme';
+import { fonts } from '../src/ui/theme/tokens';
 import '../src/ui/icons'; // icons are skipped by screen readers (step 10)
 
 SplashScreen.preventAutoHideAsync();
@@ -101,7 +104,9 @@ function useGate() {
   // Live location in a trip room (friends-chat step 8): a point a minute while it runs and Vromon is open
   useLiveShareUpdates(client);
 
-  const ready = status !== 'loading' && (!signedIn || !me.isPending);
+  // The title font is in the app's bundle (no network). If it can't be read, titles fall back to the phone's font.
+  const [fontsLoaded, fontError] = useFonts({ [fonts.title]: AnekBangla_700Bold });
+  const ready = status !== 'loading' && (!signedIn || !me.isPending) && (fontsLoaded || !!fontError);
   useEffect(() => {
     if (ready) SplashScreen.hide();
   }, [ready]);
@@ -153,7 +158,7 @@ function ThemedStack() {
           screenOptions={{
             headerStyle: { backgroundColor: theme.colors.bg },
             headerTintColor: theme.colors.textPrimary,
-            headerTitleStyle: { fontWeight: '700', color: theme.colors.textPrimary },
+            headerTitleStyle: { ...theme.type.screenTitle, color: theme.colors.textPrimary },
             headerShadowVisible: false,
             contentStyle: { backgroundColor: theme.colors.bg },
             animation: 'slide_from_right',

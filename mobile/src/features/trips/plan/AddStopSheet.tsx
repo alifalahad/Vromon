@@ -388,7 +388,7 @@ const useStyles = makeStyles((t) => ({
     gap: t.spacing.md,
     padding: t.spacing.md,
     borderRadius: 16,
-    backgroundColor: t.scheme === 'dark' ? t.colors.bg : '#F3F3F5',
+    backgroundColor: t.colors.bg,
   },
   pinRow: { marginTop: t.spacing.sm },
   icon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.surface },

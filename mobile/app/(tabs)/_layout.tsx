@@ -1,14 +1,14 @@
 /**
  * Vromon Mobile — Bottom tabs: Map · Explore · Trips · Friends (01-bottom-nav.jpg, without
- * Passport). Settings opens from the profile button on the Map tab. Material icons, accent when active, selection haptic and a
- * small icon bounce on tab change. Friends shows a badge for incoming requests and unread chats.
+ * Passport). Settings opens from the profile button on the Map tab. Material icons; the selected tab's icon sits on a
+ * blue-tint pill (docs/ui-refresh, frame 1), with a selection haptic and a small icon bounce on tab change. Friends shows a badge for incoming requests and unread chats.
  */
 
 import { MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router/js-tabs';
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, type ColorValue } from 'react-native';
+import { StyleSheet, Text, View, type ColorValue } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -21,7 +21,7 @@ import { useReduceMotion } from '../../src/ui/useReduceMotion';
 
 type IconName = React.ComponentProps<typeof MaterialIcons>['name'];
 
-function TabIcon({ name, color, focused, size }: { name: IconName; color: ColorValue; focused: boolean; size: number }) {
+function TabIcon({ name, color, focused, size, pill }: { name: IconName; color: ColorValue; focused: boolean; size: number; pill: string }) {
   const reduceMotion = useReduceMotion();
   const scale = useSharedValue(1);
   useEffect(() => {
@@ -31,9 +31,11 @@ function TabIcon({ name, color, focused, size }: { name: IconName; color: ColorV
   }, [focused, reduceMotion, scale]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
-    <Animated.View style={style}>
-      <MaterialIcons name={name} size={size} color={color} />
-    </Animated.View>
+    <View style={[tabStyles.pill, focused && { backgroundColor: pill }]}>
+      <Animated.View style={style}>
+        <MaterialIcons name={name} size={size} color={color} />
+      </Animated.View>
+    </View>
   );
 }
 
@@ -64,21 +66,22 @@ export default function TabLayout() {
       screenListeners={{ tabPress: () => haptics.selection() }}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.accent,
+        tabBarActiveTintColor: theme.colors.onAccentSoft,
         tabBarInactiveTintColor: theme.colors.textSecondary,
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
-          borderTopWidth: 0,
+          borderTopWidth: 1,
+          borderTopColor: theme.colors.border,
           elevation: 0,
           height: 76 + insets.bottom,
-          paddingTop: 10,
+          paddingTop: 8,
           paddingBottom: insets.bottom + 8,
         },
         tabBarLabelStyle: { ...theme.type.tabLabel, marginTop: 2 },
         // Four labels share the bar: they grow with the system font size up to 1.25×
         // (beyond that "Friends" would be cut off); the icons carry the meaning too
-        tabBarLabel: ({ color, children }) => (
-          <Text style={[theme.type.tabLabel, tabStyles.label, { color }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>
+        tabBarLabel: ({ color, children, focused }) => (
+          <Text style={[theme.type.tabLabel, tabStyles.label, focused && tabStyles.labelOn, { color }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>
             {children}
           </Text>
         ),
@@ -99,7 +102,7 @@ export default function TabLayout() {
               ? { tabBarBadge: badge, tabBarBadgeStyle: { backgroundColor: theme.colors.accentStrong, color: theme.colors.onAccent } }
               : {}),
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon name={tab.icon} color={color} focused={focused} size={theme.sizes.tabIcon} />
+              <TabIcon name={tab.icon} color={color} focused={focused} size={theme.sizes.tabIcon} pill={theme.colors.accentTint} />
             ),
           }}
         />
@@ -108,4 +111,8 @@ export default function TabLayout() {
   );
 }
 
-const tabStyles = StyleSheet.create({ label: { marginTop: 2 } });
+const tabStyles = StyleSheet.create({
+  label: { marginTop: 4 },
+  labelOn: { fontWeight: '700' },
+  pill: { width: 56, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+});

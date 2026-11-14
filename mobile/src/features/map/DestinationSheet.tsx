@@ -90,7 +90,7 @@ const useStyles = makeStyles((t) => ({
   content: { paddingHorizontal: t.spacing.xl, paddingTop: t.spacing.sm, gap: t.spacing.md },
   titles: { gap: 2 },
   eyebrow: { fontSize: 11, fontWeight: '700', letterSpacing: 1.3, textTransform: 'uppercase', color: t.colors.link },
-  title: { ...t.type.title, fontSize: 26, fontWeight: '800', color: t.colors.textPrimary },
+  title: { ...t.type.title, fontSize: 26, color: t.colors.textPrimary },
   subtitle: { ...t.type.callout, color: t.colors.textSecondary },
   line: { ...t.type.body, color: t.colors.textPrimary },
   note: { ...t.type.footnote, color: t.colors.textSecondary },

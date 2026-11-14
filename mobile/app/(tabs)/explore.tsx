@@ -361,7 +361,7 @@ const useStyles = makeStyles((t) => ({
   heroShade: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.38)' },
   heroText: { position: 'absolute', left: 20, right: 20, bottom: 20, gap: 4 },
   heroFlag: { fontSize: 34 },
-  heroTitle: { color: '#FFFFFF', fontSize: 32, fontWeight: '800' },
+  heroTitle: { fontFamily: t.type.title.fontFamily, color: '#FFFFFF', fontSize: 32, fontWeight: 'normal' },
   heroLine: { color: '#FFFFFF', fontSize: 14, fontWeight: '500' },
   heroButton: {
     marginTop: 10,

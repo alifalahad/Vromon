@@ -37,7 +37,7 @@ export function TripLayers({
   onPressDestination: (id: number) => void;
 }) {
   const trail = dark ? '#F7C8A4' : '#B5501A';
-  const blue = dark ? '#8AB4F8' : '#2563D9';
+  const blue = dark ? '#8AB4F8' : '#2459D6';
   return (
     <>
       <GeoJSONSource id="trip-trails" data={show.trails ? data.trails : EMPTY}>

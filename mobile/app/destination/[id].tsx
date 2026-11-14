@@ -179,7 +179,7 @@ const useStyles = makeStyles((t) => ({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32, backgroundColor: t.colors.bg },
   list: { padding: 16, gap: 12, paddingBottom: 32 },
   headerBlock: { gap: 8, marginBottom: 4 },
-  title: { color: t.colors.textPrimary, fontSize: 24, fontWeight: '800' },
+  title: { fontFamily: t.type.title.fontFamily, color: t.colors.textPrimary, fontSize: 24, fontWeight: 'normal' },
   muted: { color: t.colors.textSecondary, fontSize: 13 },
   desc: { color: t.colors.textSecondary, fontSize: 13, lineHeight: 19 },
   planBtn: { backgroundColor: t.colors.accent, paddingVertical: 14, borderRadius: 999, alignItems: 'center', marginTop: 8 },

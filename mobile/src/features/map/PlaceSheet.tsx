@@ -313,7 +313,7 @@ const useStyles = makeStyles((t) => ({
   header: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md },
   flag: { fontSize: 40 },
   titles: { flex: 1, gap: 2 },
-  title: { ...t.type.title, fontSize: 26, fontWeight: '800', color: t.colors.textPrimary },
+  title: { ...t.type.title, fontSize: 26, color: t.colors.textPrimary },
   subtitle: { ...t.type.callout, color: t.colors.textSecondary },
   close: { width: 44, height: 44, borderRadius: 22, backgroundColor: t.colors.surfaceRaised, alignItems: 'center', justifyContent: 'center' },
   segment: { flexDirection: 'row', backgroundColor: t.colors.surfaceInset, borderRadius: 16, padding: 4, gap: 4 },

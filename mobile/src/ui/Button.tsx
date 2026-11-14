@@ -44,9 +44,7 @@ export function Button({
       ? colors.onAccent
       : variant === 'danger' || variant === 'smallDanger'
         ? colors.danger
-        : variant === 'small'
-          ? colors.onAccentSoft
-          : colors.link;
+        : colors.onAccentSoft;
   return (
     <PressableScale
       haptic={haptic ?? (variant === 'primary' ? 'medium' : 'light')}
@@ -75,8 +73,9 @@ export function Button({
 
 const useStyles = makeStyles((t) => ({
   base: { flexDirection: 'row', gap: t.spacing.sm, alignItems: 'center', justifyContent: 'center', borderRadius: t.radius.pill },
-  primary: { backgroundColor: t.colors.accent, minHeight: 52, paddingHorizontal: t.spacing.xl },
-  secondary: { backgroundColor: t.colors.surface, minHeight: t.sizes.minTouch, paddingHorizontal: t.spacing.lg },
+  primary: { backgroundColor: t.colors.accent, minHeight: t.sizes.button, paddingHorizontal: t.spacing.xl },
+  // The blue tint shows on a white card and on the grey ground alike
+  secondary: { backgroundColor: t.colors.accentTint, minHeight: t.sizes.minTouch, paddingHorizontal: t.spacing.lg },
   danger: { backgroundColor: t.colors.dangerBg, minHeight: t.sizes.minTouch, paddingHorizontal: t.spacing.lg },
   small: { backgroundColor: t.colors.accentSoft, minHeight: 36, minWidth: 48, paddingHorizontal: t.spacing.md },
   smallDanger: { backgroundColor: t.colors.dangerBg, minHeight: 36, minWidth: 48, paddingHorizontal: t.spacing.md },

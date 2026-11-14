@@ -186,7 +186,7 @@ const useStyles = makeStyles((t) => ({
   // On glass: the map under it can be light or dark
   top: { ...glass(t), position: 'absolute', left: 12, right: 12, paddingHorizontal: t.spacing.xl, paddingVertical: t.spacing.md, borderRadius: 28, gap: 4 },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  year: { fontSize: 72, lineHeight: 78, fontWeight: '800', letterSpacing: -2.5, color: t.colors.textPrimary, flexShrink: 1 },
+  year: { fontFamily: t.type.title.fontFamily, fontSize: 72, lineHeight: 78, fontWeight: 'normal', letterSpacing: -2.5, color: t.colors.textPrimary, flexShrink: 1 },
   // "Undated" is a word, not four digits
   yearWord: { fontSize: 48, lineHeight: 56, letterSpacing: -1, marginTop: 10 },
   close: { width: 44, height: 44, borderRadius: 22, backgroundColor: t.colors.glassBorder, alignItems: 'center', justifyContent: 'center', marginTop: 8 },

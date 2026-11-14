@@ -29,7 +29,7 @@ export function TodayLayers({
   base: ResolvedBase;
   dark: boolean;
 }) {
-  const blue = dark ? '#8AB4F8' : '#2563D9';
+  const blue = dark ? '#8AB4F8' : '#2459D6';
   const grey = dark ? '#8C93A0' : '#6B7280';
   const me: GeoJSON.FeatureCollection = {
     type: 'FeatureCollection',

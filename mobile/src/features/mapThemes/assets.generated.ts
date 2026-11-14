@@ -26,4 +26,4 @@ export const WATER_PATTERNS: Record<string, number> = {
 };
 
 /** Colours these assets were drawn with (checked against the catalog in tests). */
-export const ASSET_FINGERPRINT = '5cf2dc9f';
+export const ASSET_FINGERPRINT = 'f463d91e';

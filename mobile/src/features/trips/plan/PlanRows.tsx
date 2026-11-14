@@ -392,7 +392,7 @@ const useStyles = makeStyles((t) => ({
     padding: t.spacing.md,
     borderRadius: 18,
     borderWidth: 2,
-    backgroundColor: t.scheme === 'dark' ? t.colors.surface : '#F3F3F5',
+    backgroundColor: t.scheme === 'dark' ? t.colors.surface : t.colors.bg,
   },
   badge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
   badgeText: { fontSize: 14, fontWeight: '800' },

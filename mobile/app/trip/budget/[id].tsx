@@ -396,7 +396,7 @@ const useStyles = makeStyles((t) => ({
   sub: { ...t.type.footnote, color: t.colors.textSecondary },
   card: { gap: t.spacing.md, padding: t.spacing.lg, borderRadius: 20, backgroundColor: t.colors.surface },
   totalRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: t.spacing.sm },
-  total: { fontSize: 34, fontWeight: '800', letterSpacing: -0.5, color: t.colors.textPrimary },
+  total: { fontFamily: t.type.title.fontFamily, fontSize: 34, fontWeight: 'normal', letterSpacing: -0.5, color: t.colors.textPrimary },
   of: { ...t.type.callout, color: t.colors.textSecondary },
   bar: { height: 14, borderRadius: 7, overflow: 'hidden', flexDirection: 'row', gap: 2, backgroundColor: t.colors.surfaceInset },
   statusRow: { flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.sm },

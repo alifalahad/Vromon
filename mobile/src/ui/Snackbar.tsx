@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PressableScale } from './PressableScale';
 import { makeStyles } from './theme';
+import { darkColors, lightColors } from './theme/tokens';
 import { useReduceMotion } from './useReduceMotion';
 
 export function Snackbar({
@@ -72,5 +73,5 @@ const useStyles = makeStyles((t) => ({
   },
   text: { ...t.type.callout, flex: 1, color: t.colors.bg, paddingVertical: t.spacing.md },
   action: { minHeight: 48, minWidth: 48, paddingHorizontal: t.spacing.md, justifyContent: 'center', alignItems: 'center' },
-  actionText: { ...t.type.callout, fontWeight: '700', color: t.scheme === 'dark' ? '#245FD0' : '#6EA0F6' },
+  actionText: { ...t.type.callout, fontWeight: '700', color: t.scheme === 'dark' ? lightColors.link : darkColors.link }, // the bar is the other appearance's colour
 }));

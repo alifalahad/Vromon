@@ -426,7 +426,7 @@ const useStyles = makeStyles((t) => ({
   summary: { gap: t.spacing.md, padding: t.spacing.lg, borderRadius: 24, backgroundColor: t.colors.surface },
   summaryTop: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.lg },
   summarySky: { ...t.type.title, color: t.colors.textPrimary },
-  summaryTemp: { fontSize: 30, fontWeight: '700', color: t.colors.textPrimary },
+  summaryTemp: { fontFamily: t.type.title.fontFamily, fontSize: 30, fontWeight: 'normal', color: t.colors.textPrimary },
   summaryLine: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm },
   summaryText: { ...t.type.callout, color: t.colors.textSecondary },
   message: { ...t.type.callout, color: t.colors.success, fontWeight: '600' },

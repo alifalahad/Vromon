@@ -326,7 +326,7 @@ const useStyles = makeStyles((t) => ({
     elevation: 3,
   },
   title: { ...t.type.largeTitle, color: t.colors.textPrimary },
-  subtitle: { ...t.type.title, fontWeight: '500', color: t.colors.textSecondary, marginTop: 2 },
+  subtitle: { fontSize: t.type.title.fontSize, fontWeight: '500', color: t.colors.textSecondary, marginTop: 2 },
   meta: { ...t.type.footnote, color: t.colors.textSecondary, marginTop: 8 },
   plan: {
     marginTop: 16,

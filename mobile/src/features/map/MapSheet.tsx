@@ -94,7 +94,8 @@ export function MapSheet({
             </PressableScale>
           </View>
           <View style={styles.themes} accessibilityRole="radiogroup">
-            {THEMES.map((th) => {
+            {/* The first four; every theme (Classic too) is under "All themes" */}
+            {THEMES.slice(0, 4).map((th) => {
               const on = th.id === themeId;
               const land = scheme === 'dark' && th.style.dark ? th.style.dark.land : th.style.land;
               return (
@@ -132,7 +133,7 @@ const useStyles = makeStyles((t) => ({
   background: { backgroundColor: t.colors.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26 },
   handle: { backgroundColor: t.colors.textTertiary, width: 40 },
   content: { paddingHorizontal: t.spacing.xl, paddingTop: t.spacing.sm, gap: t.spacing.xl },
-  title: { ...t.type.title, fontSize: 24, fontWeight: '800', color: t.colors.textPrimary },
+  title: { ...t.type.title, fontSize: 24, color: t.colors.textPrimary },
   section: { gap: t.spacing.md },
   headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 32 },
   heading: { ...t.type.footnote, fontWeight: '600', color: t.colors.textSecondary },

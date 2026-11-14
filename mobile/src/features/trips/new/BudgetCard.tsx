@@ -196,7 +196,7 @@ const useStyles = makeStyles((t) => ({
   },
   currencySymbol: { ...t.type.headline, color: t.colors.textPrimary },
   currencyCode: { ...t.type.footnote, fontWeight: '700', color: t.colors.textSecondary },
-  amount: { flex: 1, fontSize: 26, fontWeight: '700', color: t.colors.textPrimary, paddingVertical: 8 },
+  amount: { fontFamily: t.type.title.fontFamily, flex: 1, fontSize: 26, fontWeight: 'normal', color: t.colors.textPrimary, paddingVertical: 8 },
   segment: { flexDirection: 'row', backgroundColor: t.colors.surfaceInset, borderRadius: t.radius.control, padding: 3 },
   segmentPart: { flex: 1, minHeight: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   segmentOn: { backgroundColor: t.colors.segmentThumb },

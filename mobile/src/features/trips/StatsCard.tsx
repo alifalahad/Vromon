@@ -62,7 +62,7 @@ const useStyles = makeStyles((t) => ({
   card: { marginHorizontal: t.spacing.lg, borderRadius: 20, backgroundColor: t.colors.surface, paddingTop: t.spacing.lg, paddingHorizontal: t.spacing.sm, paddingBottom: t.spacing.xs, gap: 6 },
   row: { flexDirection: 'row', gap: 4 },
   stat: { flex: 1, alignItems: 'center', gap: 2 },
-  value: { fontSize: 24, lineHeight: 30, fontWeight: '800', color: t.colors.textPrimary },
+  value: { fontFamily: t.type.title.fontFamily, fontSize: 24, lineHeight: 30, fontWeight: 'normal', color: t.colors.textPrimary },
   label: { ...t.type.footnote, color: t.colors.textSecondary },
   allStats: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, minHeight: 48 },
   allStatsText: { ...t.type.callout, fontWeight: '600', color: t.colors.link },

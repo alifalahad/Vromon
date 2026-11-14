@@ -68,15 +68,15 @@ export const THEMES: readonly MapThemePreset[] = [
     id: 'default',
     name: 'Default',
     tier: 'free',
-    swatches: ['#D9D9D9', '#A6A7A9', '#F08E35', '#91C4BF', '#BDA5BD'],
-    // Light appearance uses the stripe values; dark is what 04 renders
+    swatches: ['#EAECDE', '#A5D8F5', '#F08E35', '#91C4BF', '#BDA5BD'],
+    // Light-blue water and pale land since the UI refresh (D13); dark is the navy of its frame 20
     style: {
-      land: '#D9D9D9',
-      water: '#A6A7A9',
-      border: '#9E9E9E',
-      label: '#262626',
-      labelHalo: '#F2F2F2',
-      dark: { land: '#303030', water: '#1A1A1A', border: '#4A4A4A', label: '#E6E6E6', labelHalo: '#1A1A1A' },
+      land: '#EAECDE',
+      water: '#A5D8F5',
+      border: '#A3A797',
+      label: '#2F3A40',
+      labelHalo: '#F7F8F0',
+      dark: { land: '#1E2A3B', water: '#0B1220', border: '#32425A', label: '#C8D3E3', labelHalo: '#0B1220' },
     },
     visited: '#F08E35',
     visitedDark: '#F1AD48',
@@ -110,6 +110,25 @@ export const THEMES: readonly MapThemePreset[] = [
     visited: '#A28D7A',
     compare: { friend: '#587F6C', inCommon: '#6B505F', inCommonOpacity: 0.6 },
   },
+  {
+    // The grey map that was Default until the UI refresh (D13), kept for those who like it. Last
+    // in the list: the Map sheet shows the first four.
+    id: 'classic',
+    name: 'Classic',
+    tier: 'free',
+    swatches: ['#D9D9D9', '#A6A7A9', '#F08E35', '#91C4BF', '#BDA5BD'],
+    style: {
+      land: '#D9D9D9',
+      water: '#A6A7A9',
+      border: '#9E9E9E',
+      label: '#262626',
+      labelHalo: '#F2F2F2',
+      dark: { land: '#303030', water: '#1A1A1A', border: '#4A4A4A', label: '#E6E6E6', labelHalo: '#1A1A1A' },
+    },
+    visited: '#F08E35',
+    visitedDark: '#F1AD48',
+    compare: { friend: '#91C4BF', inCommon: '#BDA5BD', inCommonOpacity: 0.6 },
+  },
 ];
 
 // ── Colors: status palettes (14–17), stripes Visited · Want to visit · Lived ──
@@ -137,13 +156,13 @@ export const STYLES: readonly MapStyle[] = [
     id: 'default',
     name: 'Default',
     tier: 'free',
-    // Light: the background map of 14–23 (water is an estimate). Dark: 02.
+    // Light: the background map of 14–23 (water is an estimate). Dark: the Default theme's navy.
     land: '#EAECDE',
     water: '#A5D8F5',
     border: '#A3A797',
     label: '#2F3A40',
     labelHalo: '#F7F8F0',
-    dark: { land: '#303030', water: '#1A1A1A', border: '#5A5A5A', label: '#E0E0E0', labelHalo: '#1A1A1A' },
+    dark: { land: '#1E2A3B', water: '#0B1220', border: '#32425A', label: '#C8D3E3', labelHalo: '#0B1220' },
   },
   { id: 'carbon', name: 'Carbon', tier: 'premium', land: '#242424', water: '#D6F6F3', border: '#9A9A9A', label: '#F0F0F0', labelHalo: '#141414' },
   { id: 'pencil', name: 'Pencil', tier: 'premium', land: '#E1E1E1', water: '#B3B3B3', border: '#8C8C8C', label: '#2B2B2B', labelHalo: '#F2F2F2', pattern: 'hatch' },

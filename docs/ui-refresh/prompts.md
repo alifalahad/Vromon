@@ -10,7 +10,7 @@
 | Step | Your point | What | Status | Report |
 |---|---|---|---|---|
 | 0 | all | Look at today's screens, try the globe, make mockups, answer the decisions (no app code) | ✅ done 2026-11-13 (look approved; D1–D14 answered); Explore and Settings frames (D15, D16) and the trip plan, Conditions and Budget frames (D17–D23) added 2026-11-14 | [step-0-report.md](reports/step-0-report.md) |
-| 0b | (whole app) | The look's foundations: colours, the title font, the tab bar, the Default map colours | not started | |
+| 0b | (whole app) | The look's foundations: colours, the title font, the tab bar, the Default map colours | ✅ done 2026-11-14 | [step-0b-report.md](reports/step-0b-report.md) |
 | 1 | 1 | Map: a globe when zoomed far out | not started | |
 | 2 | 2 | Map: the top-left button and a travel dashboard in place of "Your story" | not started | |
 | 3 | 3 | Map: the Map sheet's switches and themes, and a new Map Theme screen | not started | |
@@ -39,7 +39,7 @@ Steps 1–9 have the same numbers as your nine points.
 1. Run **one step per session**. Copy the step's **Prompt** block and paste it into the coding agent (or say "start step N of the UI refresh").
 2. The agent reads "Rules for every step" below, the step's section, the mockups and the previous report. It builds the step, checks it on the phone, writes `docs/ui-refresh/reports/step-N-report.md`, updates the Status table above, and **stops**.
 3. You check the step on your phone ("You check" in each step), then approve it or ask for fixes.
-4. The agent never commits or pushes. Each report ends with the git commands for you.
+4. The agent commits each finished step itself (no co-author line) and never pushes. Pushing is yours.
 
 **Order.** Step 0 is done. Run step 0b next: it puts the approved colours and the title font into the app's theme, so the whole app changes together and every later step builds on the same base. Steps 1–9 don't depend on each other, so after 0b you can run them in any order. Step 10 comes after step 9 (it uses the fixed header that step 9 builds). Steps 11, 12 and 13 are independent. The trip's own steps run in this order: 7 and 8 first, then 14, then 15 and 16 in either order. Step 17 needs step 7. Step 18 is independent. Step 19 needs step 18 (and uses step 15's Today and step 16's finished trip: where one isn't built yet, step 19 leaves that row out and says so). Step 20 is last. Step 1 (the globe) has the most unknowns and adds a library with native code; steps 4 and 6 are the smallest; steps 14, 17 and 19 are the largest.
 
@@ -199,7 +199,7 @@ The system behind the frames (step 0b puts it into `mobile/src/ui/theme/tokens.t
     - `mobile/`: `npx tsc --noEmit`, `npx eslint . --max-warnings 0`, `npx jest`. Baseline 2026-11-13: 657 passed.
     - `backend/` (when touched): `venv/bin/python -m pytest -q`. Baseline: 825 passed.
     - Run them once before changing anything and note the numbers.
-13. **Do not commit, push or open a PR.** End the report with the git commands for the owner.
+13. **Commit the step when it's done** (its files only, on the current branch, a plain message with no `Co-Authored-By` line). **Never push** or open a PR (owner, 2026-11-14).
 14. **End the step** with `docs/ui-refresh/reports/step-N-report.md`: what changed and why, the files, how each part was checked (tests, phone screenshots described in words), what's left open. Update the Status table. Then stop.
 
 ### Testing safely
@@ -303,7 +303,7 @@ D12–D14, frames 1, 15, 20 and 21, and reports/step-0-report.md.
    light, dark, Bangla, 1.6×. Release build of the dev app. Maestro 03-theme-rustic and
    10-map-home still pass.
 
-Write reports/step-0b-report.md, update the Status table, give the git commands, stop.
+Write reports/step-0b-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -368,7 +368,7 @@ the globe: it draws from the shapes bundled in the app.
 5. Phone: turn in every direction, hand over 10 times each way, tap and press-and-hold countries,
    two themes, dark, Bangla, largest text. Release build of the dev app as well (rules).
 
-Write reports/step-1-report.md, update the Status table, give the git commands, stop.
+Write reports/step-1-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -417,7 +417,7 @@ their answers, the mockup, and the previous report.
 6. Jest for the lists (counts match, statuses, Bangla names and digits, empty states) and the
    navigation. Phone, read-only on the owner's account: every tile, a country page, "Show on map".
 
-Write reports/step-2-report.md, update the Status table, give the git commands, stop.
+Write reports/step-2-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -465,7 +465,7 @@ answer, the mockup, and the previous report.
    a theme, then a colour set, then a style, Apply, reopen. Dark, Bangla, largest text. Release build:
    open and close the sheet 10 times over the map.
 
-Write reports/step-3-report.md, update the Status table, give the git commands, stop.
+Write reports/step-3-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -504,7 +504,7 @@ its answer, the mockup, and the previous report.
    typing. Existing tests that use the travellers IDs keep passing.
 5. Phone as test account A: both changes, in Bangla and at the largest text.
 
-Write reports/step-4-report.md, update the Status table, give the git commands, stop.
+Write reports/step-4-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -559,7 +559,7 @@ mockup, and the previous report. This step touches the backend.
 7. Phone as test account A. "Use my current location" reads the phone's real position: ask the
    owner before testing it, and use it only for a test trip on account A.
 
-Write reports/step-5-report.md, update the Status table, give the git commands, stop.
+Write reports/step-5-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -606,7 +606,7 @@ mockup, and the previous report.
    button's text, saving. Phone as test account A: add a busy time on day 2 from New trip and from
    an existing trip's must-dos, build, and see nothing planned then.
 
-Write reports/step-6-report.md, update the Status table, give the git commands, stop.
+Write reports/step-6-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -655,7 +655,7 @@ answer, the mockup, and the previous report.
    from a chat card and from the map. Release build: open the trip 10 times and check the row and
    the plan sheet are drawn every time.
 
-Write reports/step-7-report.md, update the Status table, give the git commands, stop.
+Write reports/step-7-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -707,7 +707,7 @@ mockup, and the previous report.
    allows (make one on account A). Reorder within a day; move to the next day; move from day 1 to day 10 and to
    the last day, timing each; cancel a drag. Bangla and the largest text.
 
-Write reports/step-8-report.md, update the Status table, give the git commands, stop.
+Write reports/step-8-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -771,7 +771,7 @@ tab), and the previous report.
 9. Phone as test account A (it has finished, current and coming trips): scroll, every tap on the
    card and the numbers, a draft trip, dark, Bangla, largest text.
 
-Write reports/step-9-report.md, update the Status table, give the git commands, stop.
+Write reports/step-9-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -810,7 +810,7 @@ answer, frames 1, 15, 18 and 19, and reports/step-9-report.md (the fixed header)
 5. Jest: the button with and without a photo; each tab shows it. Phone: switch through the four
    tabs and watch the picture stay put; tap it on each. Bangla and the largest text.
 
-Write reports/step-10-report.md, update the Status table, give the git commands, stop.
+Write reports/step-10-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -854,7 +854,7 @@ data platform and the backend.
 7. Pytest for the rule and the endpoints; jest for the rows. Phone as test account A: the hotel
    lists of Barishal, Khulna, Cox's Bazar and Kuakata.
 
-Write reports/step-11-report.md, update the Status table, give the git commands, stop.
+Write reports/step-11-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -928,7 +928,7 @@ a frame needs something the API doesn't give yet.
    change; another home country (set it in Settings, then set it back); offline with saved data;
    dark, Bangla, 1.6×.
 
-Write reports/step-12-report.md, update the Status table, give the git commands, stop.
+Write reports/step-12-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -989,7 +989,7 @@ D16, frames 26 and 27, and the previous report. The app only.
    username; change the home country and set it back; dark, Bangla, 1.6×. Sign out only on the
    test account, never on the owner's.
 
-Write reports/step-13-report.md, update the Status table, give the git commands, stop.
+Write reports/step-13-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -1079,7 +1079,7 @@ backend change (7).
    the sheet at both heights; a friend's trip (read-only); dark, Bangla, 1.6×. Release build:
    open the trip 10 times.
 
-Write reports/step-14-report.md, update the Status table, give the git commands, stop.
+Write reports/step-14-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -1141,7 +1141,7 @@ only.
    real time allows, and cover the rest in Jest with a set clock; say in the report which is
    which. Running late with Undo; reminders on; dark, Bangla, 1.6×.
 
-Write reports/step-15-report.md, update the Status table, give the git commands, stop.
+Write reports/step-15-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -1211,7 +1211,7 @@ and the backend.
    and see the map; "Plan it again" with new dates; mark a trip not taken, check "Your trips
    so far", undo. Dark, Bangla, 1.6×.
 
-Write reports/step-16-report.md, update the Status table, give the git commands, stop.
+Write reports/step-16-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -1302,7 +1302,7 @@ App (app/trip/conditions/[id].tsx and src/features/trips/conditions/):
     finished; refresh; no connection (stop the backend or drop the adb reverse for 8001:
     don't switch the phone to aeroplane mode); dark, Bangla, 1.6×.
 
-Write reports/step-17-report.md, update the Status table, give the git commands, stop.
+Write reports/step-17-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -1371,7 +1371,7 @@ App (app/trip/budget/[id].tsx), per frame 37:
 12. Phone as test account A: a trip under its budget, one close to it, one over (change the
     budget to get there); apply and undo each way to save the trips offer; dark, Bangla, 1.6×.
 
-Write reports/step-18-report.md, update the Status table, give the git commands, stop.
+Write reports/step-18-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -1456,7 +1456,7 @@ App:
     suggestion and by typing; edit; delete; a part going over its plan; nothing noted; dark,
     Bangla, 1.6×.
 
-Write reports/step-19-report.md, update the Status table, give the git commands, stop.
+Write reports/step-19-report.md, update the Status table, commit, stop.
 ```
 
 ### Done when
@@ -1494,8 +1494,8 @@ every earlier report's "left open" list, D6 with its answer, and the mockups.
 6. The friends' APK: ask the owner first; back up the current one (scripts/share/apk/), rebuild,
    check it on the phone.
 
-Write reports/step-20-report.md with what's still open, update the Status table, give the git
-commands, stop.
+Write reports/step-20-report.md with what's still open, update the Status table, commit,
+stop.
 ```
 
 ### Done when

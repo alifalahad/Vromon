@@ -59,7 +59,7 @@
     "saved": "আপনার মানচিত্রে সংরক্ষিত",
     "offline": "অফলাইন: অনলাইনে ফিরলে পরিবর্তনগুলো সিঙ্ক হবে",
     "tilesUnavailable": "অঞ্চল ও শহর দেখাতে ইন্টারনেট সংযোগ লাগবে।",
-    "attribution": "মানচিত্রের তথ্য: Natural Earth (পাবলিক ডোমেইন)। বাংলাদেশের বিভাগ: geoBoundaries (CC0)। বাংলাদেশের জেলা: বাংলাদেশ পরিসংখ্যান ব্যুরো ও OCHA ROAP, geoBoundaries-এর মাধ্যমে (CC BY 3.0 IGO)। শহর: GeoNames, CC BY 4.0। ভূখণ্ড (Odyssey স্টাইল): Mapzen-এর AWS Terrain Tiles, SRTM, GMTED2010, ETOPO1 ও অন্যান্য উৎসের তথ্যসহ। MapLibre দিয়ে তৈরি। ভ্রমণপথের রাস্তা: © OpenStreetMap contributors (ODbL), টাইল OpenFreeMap। আপনার গন্তব্যের কাছে খোঁজার জায়গা (কলেজ, বাজার, অফিস…): © OpenStreetMap contributors, Overture Maps Foundation (CDLA-Permissive-2.0)।",
+    "attribution": "মানচিত্রের তথ্য: Natural Earth (পাবলিক ডোমেইন)। বাংলাদেশের বিভাগ: geoBoundaries (CC0)। বাংলাদেশের জেলা: বাংলাদেশ পরিসংখ্যান ব্যুরো ও OCHA ROAP, geoBoundaries-এর মাধ্যমে (CC BY 3.0 IGO)। শহর: GeoNames, CC BY 4.0। ভূখণ্ড (Odyssey স্টাইল): Mapzen-এর AWS Terrain Tiles, SRTM, GMTED2010, ETOPO1 ও অন্যান্য উৎসের তথ্যসহ। MapLibre দিয়ে তৈরি। ভ্রমণপথের রাস্তা: © OpenStreetMap contributors (ODbL), টাইল OpenFreeMap। আপনার গন্তব্যের কাছে খোঁজার জায়গা (কলেজ, বাজার, অফিস…): © OpenStreetMap contributors, Overture Maps Foundation (CDLA-Permissive-2.0)। শিরোনামের ফন্ট: Ek Type-এর Anek Bangla (SIL Open Font License 1.1)।",
     "placeType": {
       "country": "দেশ",
       "region": "অঞ্চল",

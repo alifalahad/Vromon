@@ -169,7 +169,7 @@ const useStyles = makeStyles((t) => ({
     gap: t.spacing.md,
     padding: t.spacing.md,
     borderRadius: 16,
-    backgroundColor: t.scheme === 'dark' ? t.colors.bg : '#F3F3F5',
+    backgroundColor: t.colors.bg,
   },
   icon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.accentSoft },
   rowText: { flex: 1, gap: 2 },
