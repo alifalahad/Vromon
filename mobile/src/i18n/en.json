@@ -124,6 +124,15 @@
     },
     "layers": {
       "heading": "On the map",
+      "show": "Show on the map",
+      "trailsShort": "Trip trails",
+      "trailsTip": "Routes you took",
+      "plannableShort": "Places to plan",
+      "plannableTip": "Tap one to start",
+      "friendsShort": "Friends",
+      "friendsTip": "Where they've been",
+      "on": "On",
+      "off": "Off",
       "trails": "Trip trails",
       "trailsBody": "Routes of trips you've taken",
       "plannable": "Places Vromon can plan",
@@ -182,7 +191,22 @@
     "searchAll": "Search countries, divisions and cities"
   },
   "mapTheme": {
-    "title": "Map Theme",
+    "title": "Map theme",
+    "reset": "Reset",
+    "resetA11y": "Back to the Default theme",
+    "themes": "Themes",
+    "makeOwn": "Make your own",
+    "colours": "Colours",
+    "coloursHint": "Visited · Want · Lived",
+    "style": "Map style",
+    "styleHint": "Land and water",
+    "themesOwn": "Theme's own",
+    "withFriend": "With a friend",
+    "legend": {
+      "visited": "Visited",
+      "lived": "Lived",
+      "want": "Want"
+    },
     "map": "Map",
     "friends": "Friends",
     "catalog": {

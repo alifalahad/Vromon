@@ -8,10 +8,14 @@ import '../i18n';
 import type { Visit } from '../types';
 
 const mockBack = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ back: mockBack }),
+  // Render the header's Reset button so it can be pressed
+  Stack: { Screen: ({ options }: { options?: { headerRight?: () => React.ReactNode } }) => (options?.headerRight ? options.headerRight() : null) },
+}));
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
 jest.mock('../ui/haptics', () => ({ haptic: jest.fn(), haptics: { success: jest.fn(), selection: jest.fn() } }));
-jest.mock('../features/account/useMe', () => ({ useMe: () => ({ data: { id: 'u1' } }) }));
+jest.mock('../features/account/useMe', () => ({ useMe: () => ({ data: { id: 'u1', home_country_iso2: 'BD' } }) }));
 let mockVisits: Visit[] = [];
 jest.mock('../features/map/visits', () => ({ useVisits: () => ({ data: mockVisits }) }));
 // The preview is a native MapLibre view: render what it was asked to draw instead
@@ -38,15 +42,20 @@ describe('Map Theme screen', () => {
     haptics.success.mockClear();
   });
 
-  it('lists the four themes with the applied one selected', async () => {
+  it('one page: every theme, the colour sets and the styles, the applied theme selected', async () => {
     await render(<MapThemeScreen />);
-    for (const id of ['default', 'midnight', 'serenity', 'rustic']) expect(card('themes', id)).toBeTruthy();
+    for (const id of ['default', 'midnight', 'serenity', 'rustic', 'classic']) expect(card('themes', id)).toBeTruthy();
     expect(card('themes', 'default').props.accessibilityState).toMatchObject({ selected: true });
-    // No visits yet: the preview is a labelled sample
+    expect(card('colors', 'own').props.accessibilityState).toMatchObject({ selected: true });
+    expect(card('colors', 'wonder')).toBeTruthy();
+    expect(card('styles', 'own').props.accessibilityState).toMatchObject({ selected: true });
+    expect(card('styles', 'pencil')).toBeTruthy();
+    expect(screen.queryByText(/lock/i)).toBeNull(); // locks hidden (decision D2)
+    // No marks yet: the preview is a labelled sample
     expect(screen.getByText('Sample places')).toBeTruthy();
   });
 
-  it('previews a card at once, with a selection haptic, without applying it', async () => {
+  it('previews a theme at once, with a selection haptic, without applying it', async () => {
     await render(<MapThemeScreen />);
     await fireEvent.press(card('themes', 'midnight'));
     expect(haptic).toHaveBeenCalledWith('selection');
@@ -64,37 +73,50 @@ describe('Map Theme screen', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
-  it('a palette after a theme becomes a Custom selection', async () => {
+  it('a colour set after a theme becomes a Custom selection; its own colours again make it the theme', async () => {
     usePreferences.setState({ mapTheme: selectTheme('rustic') });
     await render(<MapThemeScreen />);
-    await fireEvent.press(screen.getByTestId('map-theme-catalog-colors'));
     await fireEvent.press(card('colors', 'wonder'));
     expect(preview()).toContain('land=#EEE9D6 visited=#3C87AE'); // Rustic's map, Wonder's colours
+    expect(card('themes', 'rustic').props.accessibilityState).toMatchObject({ selected: false });
+    await fireEvent.press(card('colors', 'own'));
+    expect(card('themes', 'rustic').props.accessibilityState).toMatchObject({ selected: true });
+    await fireEvent.press(card('colors', 'wonder'));
     await fireEvent.press(screen.getByTestId('map-theme-apply'));
     expect(usePreferences.getState().mapTheme).toEqual({ v: 1, styleId: 'theme:rustic', colorsId: 'wonder', compareId: 'rustic' });
   });
 
-  it('Friends shows the comparison legend', async () => {
+  it('a style keeps the colours and changes the land and water', async () => {
     await render(<MapThemeScreen />);
-    await fireEvent.press(screen.getByTestId('map-theme-mode-friends'));
+    await fireEvent.press(card('styles', 'sahara'));
+    expect(preview()).toContain('land=#FAF6DD');
+  });
+
+  it('Reset goes back to Default; leaving without Apply changes nothing', async () => {
+    usePreferences.setState({ mapTheme: selectTheme('rustic') });
+    await render(<MapThemeScreen />);
+    await fireEvent.press(screen.getByTestId('map-theme-reset'));
+    expect(card('themes', 'default').props.accessibilityState).toMatchObject({ selected: true });
+    expect(usePreferences.getState().mapTheme).toEqual(selectTheme('rustic'));
+  });
+
+  it('With a friend shows the comparison legend', async () => {
+    await render(<MapThemeScreen />);
+    await fireEvent.press(screen.getByTestId('map-theme-friend'));
     const legend = screen.getByTestId('map-theme-legend');
     for (const label of ['In common', 'You', 'Friend']) expect(within(legend).getByText(label)).toBeTruthy();
     expect(preview()).toMatch(/^friends/);
     expect(screen.getByText('Sample comparison')).toBeTruthy();
   });
 
-  it('shows the user’s own countries instead of the sample', async () => {
+  it('shows your own map (countries and divisions) instead of the sample', async () => {
     mockVisits = [
       { place_type: 'country', place_code: 'BD', status: 'visited', first_visited_on: null, last_visited_on: null, note: null, updated_at: '' },
+      { place_type: 'region', place_code: 'BD-H', status: 'lived', first_visited_on: null, last_visited_on: null, note: null, updated_at: '' },
     ];
     await render(<MapThemeScreen />);
     expect(screen.queryByText('Sample places')).toBeNull();
-  });
-
-  it('shows thumbnails for the styles', async () => {
-    await render(<MapThemeScreen />);
-    await fireEvent.press(screen.getByTestId('map-theme-catalog-styles'));
-    expect(card('styles', 'pencil')).toBeTruthy();
-    expect(screen.queryByText(/lock/i)).toBeNull(); // locks hidden (decision D2)
+    const legend = screen.getByTestId('map-theme-legend');
+    for (const label of ['Visited', 'Lived', 'Want']) expect(within(legend).getByText(label)).toBeTruthy();
   });
 });

@@ -1,6 +1,7 @@
 import { ASSET_FINGERPRINT, STYLE_THUMBNAILS, WATER_PATTERNS } from '../features/mapThemes/assets.generated';
 import { COLORS, STYLES, THEMES, type BaseMapColors, type MapStyle } from '../features/mapThemes/catalog';
 import { contrast, darken, HEX, mix } from '../features/mapThemes/color';
+import { homeMarks, rowThumbSize, THUMB } from '../features/mapThemes/MapThumb';
 import { EUROPE, previewBounds } from '../features/mapThemes/preview';
 import {
   DEFAULT_USER_MAP_THEME,
@@ -239,5 +240,34 @@ describe('preview framing', () => {
     expect(e).toBeLessThanOrEqual(180);
     expect(s).toBeGreaterThanOrEqual(-70);
     expect(n).toBeLessThanOrEqual(80);
+  });
+});
+
+describe('theme pictures (MapThumb)', () => {
+  const visit = (place_type: string, place_code: string, status: string) => ({ place_type, place_code, status }) as never;
+
+  it('show your own marks at home, by division', () => {
+    const marks = homeMarks([visit('region', 'BD-C', 'lived'), visit('region', 'BD-G', 'visited'), visit('region', 'IN-WB', 'visited'), visit('country', 'IN', 'visited')], 'BD');
+    expect(marks).toEqual({ 'BD-C': 'lived', 'BD-G': 'visited' });
+  });
+
+  it('colour every division when only the country is marked', () => {
+    const marks = homeMarks([visit('country', 'BD', 'visited')], 'BD');
+    expect(Object.keys(marks)).toHaveLength(9); // BD and its 8 divisions
+    expect(new Set(Object.values(marks))).toEqual(new Set(['visited']));
+  });
+
+  it("show frame 6's sample when nothing at home is marked", () => {
+    expect(homeMarks([], 'BD')).toEqual({ 'BD-D': 'visited', 'BD-E': 'visited', 'BD-H': 'lived' });
+    expect(homeMarks([], 'NP')).toEqual({ NP: 'visited' });
+  });
+
+  it('keep about three and a half in view in a line you swipe, never below the frames’ size', () => {
+    const narrow = rowThumbSize(340); // a 360 dp phone, the line starting 20 in
+    expect(narrow.width).toBe(89);
+    expect((340 + 12) / (narrow.width + 12)).toBeCloseTo(3.5, 1);
+    expect(narrow.height).toBe(Math.round((89 * THUMB.height) / THUMB.width));
+    expect(rowThumbSize(200).width).toBe(THUMB.width);
+    expect(rowThumbSize(2000).width).toBe(120);
   });
 });

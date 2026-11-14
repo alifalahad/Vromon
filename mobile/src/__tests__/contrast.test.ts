@@ -95,6 +95,8 @@ describe.each([
     expect(contrast(colors.onAccentSoft, colors.accentTint)).toBeGreaterThanOrEqual(AA);
     // an unselected tab's label and icon on the bar
     expect(contrast(colors.textSecondary, colors.surface)).toBeGreaterThanOrEqual(AA);
+    // a layer tile that's on, and a chosen colour set (Map sheet and Map theme, UI refresh step 3)
+    expect(contrast(colors.textPrimary, colors.accentTint)).toBeGreaterThanOrEqual(AA);
   });
 
   it("a switch's track when off shows on a card and on the ground (3:1)", () => {

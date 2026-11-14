@@ -16,6 +16,8 @@ export type ThemeColors = {
   segmentThumb: string;
   border: string;
   divider: string;
+  /** The 1px line around a picture (theme thumbnails), so a pale one keeps its edge on any ground */
+  hairline: string;
   accent: string;
   /** Fill for selected chips/options behind accent-coloured content */
   accentSoft: string;
@@ -84,6 +86,7 @@ export const darkColors: ThemeColors = {
   segmentThumb: '#33415A',
   border: '#253142',
   divider: '#253142',
+  hairline: '#2E3B4F',
   accent: '#2F6BE6',
   accentSoft: 'rgba(47, 107, 230, 0.18)',
   onAccent: '#FFFFFF',
@@ -128,6 +131,7 @@ export const lightColors: ThemeColors = {
   segmentThumb: '#FFFFFF',
   border: '#E1E6EE',
   divider: '#E1E6EE',
+  hairline: '#D5DCE7',
   accent: '#2459D6',
   accentSoft: 'rgba(36, 89, 214, 0.11)',
   onAccent: '#FFFFFF',

@@ -13,7 +13,7 @@
 | 0b | (whole app) | The look's foundations: colours, the title font, the tab bar, the Default map colours | ✅ done 2026-11-14 | [step-0b-report.md](reports/step-0b-report.md) |
 | 1 | 1 | Map: a globe when zoomed far out | ✅ done 2026-11-14 (friends' APK not rebuilt yet: asked) | [step-1-report.md](reports/step-1-report.md) |
 | 2 | 2 | Map: the top-left button and a travel dashboard in place of "Your story" | ✅ done 2026-11-14 | [step-2-report.md](reports/step-2-report.md) |
-| 3 | 3 | Map: the Map sheet's switches and themes, and a new Map Theme screen | not started | |
+| 3 | 3 | Map: the Map sheet's switches and themes, and a new Map Theme screen | ✅ done 2026-11-15 (redrawn after the owner's look: edges, icons, the map pictures; themes in one line you swipe) | [step-3-report.md](reports/step-3-report.md) |
 | 4 | 4 | New trip: weekday only under the dates; type the number of travellers | not started | |
 | 5 | 5 | New trip: getting there (optional, precise location, ways to get there) | not started | |
 | 6 | 6 | Must-dos: type the busy time's From and To | not started | |

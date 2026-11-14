@@ -15,19 +15,8 @@ name: 03 Apply the Rustic theme
     id: map-sheet-all-themes
 - assertVisible:
     id: map-theme-screen
-- tapOn:
-    id: map-theme-catalog-themes
-# Swipe the card row itself (scrollUntilVisible swipes mid-screen, which pans the preview map)
-- repeat:
-    times: 3
-    while:
-      notVisible:
-        id: map-theme-card-themes-rustic
-    commands:
-      - swipe:
-          start: 85%, 75%
-          end: 20%, 75%
-          duration: 600
+# Every theme is in one line under the preview (docs/ui-refresh step 3), no tabs; Rustic is the
+# fourth, in view on a phone without swiping
 - tapOn:
     id: map-theme-card-themes-rustic
 - assertVisible: "Apply: Rustic"

@@ -124,6 +124,15 @@
     },
     "layers": {
       "heading": "মানচিত্রে",
+      "show": "মানচিত্রে দেখান",
+      "trailsShort": "ভ্রমণের পথ",
+      "trailsTip": "যে পথে গিয়েছেন",
+      "plannableShort": "পরিকল্পনার জায়গা",
+      "plannableTip": "শুরু করতে ট্যাপ করুন",
+      "friendsShort": "বন্ধুরা",
+      "friendsTip": "তারা যেখানে গিয়েছেন",
+      "on": "চালু",
+      "off": "বন্ধ",
       "trails": "ভ্রমণের পথ",
       "trailsBody": "আপনার শেষ করা ভ্রমণের পথ",
       "plannable": "Vromon যেসব জায়গার পরিকল্পনা করতে পারে",
@@ -183,6 +192,21 @@
   },
   "mapTheme": {
     "title": "মানচিত্র থিম",
+    "reset": "রিসেট",
+    "resetA11y": "ডিফল্ট থিমে ফিরুন",
+    "themes": "থিম",
+    "makeOwn": "নিজের মতো বানান",
+    "colours": "রং",
+    "coloursHint": "গিয়েছি · যেতে চাই · থেকেছি",
+    "style": "মানচিত্রের ধরন",
+    "styleHint": "স্থল ও পানি",
+    "themesOwn": "থিমের নিজের",
+    "withFriend": "বন্ধুর সাথে",
+    "legend": {
+      "visited": "গিয়েছি",
+      "lived": "থেকেছি",
+      "want": "যেতে চাই"
+    },
     "map": "মানচিত্র",
     "friends": "বন্ধুরা",
     "catalog": {
