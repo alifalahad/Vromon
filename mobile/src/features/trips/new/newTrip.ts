@@ -6,7 +6,7 @@
  * step 1 has a default, so a plan can be built from step 1 alone.
  */
 
-import type { BusyTime, JourneyMode, MealPlan, MustSee, MustSeeWhen, TripCreate } from '../../../types';
+import type { BusyTime, JourneyMode, JourneyOptionsIn, MealPlan, MustSee, MustSeeWhen, TripCreate } from '../../../types';
 import { isDefault } from '../meals/meals';
 import { durationDays, localToday, parseDay } from '../dates';
 import type { Currency } from './currency';
@@ -57,9 +57,13 @@ export type NewTrip = {
   arrive: string | null;
   /** Last day: when you leave (null = the usual end) */
   leave: string | null;
-  /** Where the trip starts: a city, or the phone's location */
-  origin: { city_geonameid: number; label: string } | { here: true; lat: number; lon: number; label: string } | null;
-  /** How you like to travel there (any of them; tried first); none: Vromon suggests by budget */
+  /** Where the trip starts (optional): a city, or a point: the phone's location (`accuracy` in metres)
+   * or a place set on the map (`onMap`). `label` names it ("Near Shahid Hadis Park, Khulna"). */
+  origin:
+    | { city_geonameid: number; label: string }
+    | { here: true; lat: number; lon: number; label: string; accuracy?: number | null; onMap?: boolean }
+    | null;
+  /** The way there picked (one; tried first); none: Vromon chooses by the budget */
   modes: JourneyMode[];
   interests: string[];
   /** Stops a day (the pace slider); the pace's name comes from it */
@@ -213,8 +217,7 @@ export function toPayload(t: NewTrip): TripCreate {
       busy: t.busy,
       excluded_places: t.skip,
     },
-    origin: t.origin && 'city_geonameid' in t.origin ? { city_geonameid: t.origin.city_geonameid } : null,
-    origin_point: t.origin && 'here' in t.origin ? { lat: t.origin.lat, lon: t.origin.lon, label: t.origin.label } : null,
+    ...startOf(t),
     transport_mode: null,
     transport_modes: t.modes,
     transport_by_budget: t.modes.length === 0,
@@ -222,6 +225,31 @@ export function toPayload(t: NewTrip): TripCreate {
     ...(staysFromPicks(t.stayPicks) ? { stays: staysFromPicks(t.stayPicks) } : {}),
     // Meals, when they're not all at the best places to eat
     ...(!isDefault(t.meals) ? { meals: t.meals } : {}),
+  };
+}
+
+/** Where the trip starts, as the server takes it: a city, or a point with its name. */
+function startOf(t: Pick<NewTrip, 'origin'>): Pick<TripCreate, 'origin' | 'origin_point'> {
+  return {
+    origin: t.origin && 'city_geonameid' in t.origin ? { city_geonameid: t.origin.city_geonameid } : null,
+    origin_point: t.origin && 'here' in t.origin ? { lat: t.origin.lat, lon: t.origin.lon, label: t.origin.label } : null,
+  };
+}
+
+/**
+ * The ways there to ask about before the trip exists (UI refresh step 5): the same start, destination,
+ * travellers and budget the trip will be built with, always "by budget", so the list shows Vromon's own
+ * pick and the traveller's choice is marked on top of it. Null until there's a start and a destination.
+ */
+export function journeyAnswers(t: Pick<NewTrip, 'origin' | 'destination' | 'travellers' | 'budget'>): JourneyOptionsIn | null {
+  if (!t.origin || !t.destination) return null;
+  return {
+    destination: t.destination,
+    ...(startOf(t) as Pick<JourneyOptionsIn, 'origin' | 'origin_point'>),
+    num_travelers: t.travellers,
+    total_budget: t.budget,
+    transport_modes: [],
+    transport_by_budget: true,
   };
 }
 

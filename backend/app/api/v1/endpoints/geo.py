@@ -3,6 +3,7 @@ Vromon API v1 — geography reference data (public, cacheable).
 
 GET /geo/countries · GET /geo/regions?country= · GET /geo/cities?q=&country=
 GET /geo/places?regions=&cities=   (names and points by code, for the travel dashboard)
+GET /geo/where?lat=&lon=&lang=     (a point named for people; signed in, never cached: it's where someone is)
 GET /geo/tiles/{regions|cities}.pmtiles   (development; production serves tiles from a CDN)
 """
 
@@ -16,9 +17,11 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user
 from app.db import get_db
 from app.models.models import City, Country, Region
 from app.schemas.geo import CityOut, CountryOut, PlacesLookupOut, RegionOut
+from app.services.place_name import name_point
 
 router = APIRouter(prefix="/geo", tags=["geo"])
 
@@ -82,6 +85,14 @@ def places(
     found_regions = db.scalars(select(Region).where(Region.code.in_(region_codes)).order_by(Region.name)).all() if region_codes else []
     found_cities = db.scalars(select(City).where(City.geonameid.in_(city_ids)).order_by(City.name)).all() if city_ids else []
     return {"regions": found_regions, "cities": found_cities}
+
+
+@router.get("/where")
+def where(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=180),
+          lang: str = Query("en", pattern="^(en|bn)$"), db: Session = Depends(get_db), _user=Depends(get_current_user)):
+    """Where a point is, in words ("Near Shahid Hadis Park, Khulna"), for "Use my current location"
+    (docs/ui-refresh step 5). From Vromon's own data only; nothing is stored."""
+    return name_point(db, lat, lon, lang)
 
 
 @router.get("/tiles/{name}")

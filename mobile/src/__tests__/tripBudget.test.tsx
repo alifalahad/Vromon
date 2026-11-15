@@ -138,7 +138,7 @@ describe('Trip budget screen', () => {
     });
     await renderWithQuery(<BudgetScreen />);
     expect(await screen.findByTestId('budget-status')).toHaveTextContent(/৳2,000 over your budget/);
-    expect(screen.getByTestId('budget-part-getting_there')).toHaveTextContent('Getting thereAdd where you start from to see thisNot known');
+    expect(screen.getByTestId('budget-part-getting_there')).toHaveTextContent("Getting thereNot counted: you didn't say where you start fromNot known");
   });
 
   it('applies a way to save and undoes it', async () => {

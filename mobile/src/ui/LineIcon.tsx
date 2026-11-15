@@ -7,12 +7,25 @@
  */
 
 import React from 'react';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
-export type LineIconName = 'trail' | 'pin' | 'friends' | 'check' | 'close' | 'chevronRight' | 'minus' | 'plus';
+export type LineIconName =
+  | 'trail'
+  | 'pin'
+  | 'friends'
+  | 'check'
+  | 'close'
+  | 'chevronRight'
+  | 'minus'
+  | 'plus'
+  | 'crosshair'
+  | 'bus'
+  | 'train'
+  | 'plane'
+  | 'car';
 
-/** Each icon's shapes and the stroke width its frame uses */
-const ICONS: Record<LineIconName, { width: number; draw: React.ReactNode }> = {
+/** Each icon's shapes and the stroke width its frame uses; `color` for the few filled parts */
+const ICONS: Record<LineIconName, { width: number; draw: React.ReactNode | ((color: string) => React.ReactNode) }> = {
   // Two stops and the winding way between them (frame 6, Trip trails)
   trail: {
     width: 1.9,
@@ -49,6 +62,46 @@ const ICONS: Record<LineIconName, { width: number; draw: React.ReactNode }> = {
   chevronRight: { width: 2.2, draw: <Path d="M9 6l6 6-6 6" /> },
   minus: { width: 2.2, draw: <Path d="M6 12h12" /> },
   plus: { width: 2.2, draw: <Path d="M12 6v12M6 12h12" /> },
+  // Getting there (frame NewTripGettingThere): where you start, and the ways there
+  crosshair: {
+    width: 2,
+    draw: (color) => (
+      <>
+        <Circle cx={12} cy={12} r={6.5} />
+        <Circle cx={12} cy={12} r={2} fill={color} />
+        <Path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" />
+      </>
+    ),
+  },
+  bus: {
+    width: 2,
+    draw: (
+      <>
+        <Rect x={5} y={4} width={14} height={14} rx={3} />
+        <Path d="M5 11h14M8 18v2M16 18v2M8.5 14.5h.01M15.5 14.5h.01" />
+      </>
+    ),
+  },
+  train: {
+    width: 2,
+    draw: (
+      <>
+        <Rect x={6} y={3} width={12} height={14} rx={3} />
+        <Path d="M6 11h12M9 20l-2 2M15 20l2 2M9.5 14h.01M14.5 14h.01" />
+      </>
+    ),
+  },
+  plane: {
+    width: 0,
+    draw: (color) => (
+      <Path
+        fill={color}
+        stroke="none"
+        d="M12 3c.8 0 1.5.9 1.5 2.5V9l7 4v2l-7-2v4.5l2 1.5V21L12 20l-3.5 1v-2l2-1.5V13l-7 2v-2l7-4V5.5C10.5 3.9 11.2 3 12 3Z"
+      />
+    ),
+  },
+  car: { width: 2, draw: <Path d="M4 16h16v-3.5l-2-5A2 2 0 0 0 16.1 6H7.9A2 2 0 0 0 6 7.5l-2 5V16ZM5.5 16v2.5M18.5 16v2.5M4.5 12h15" /> },
 };
 
 export function LineIcon({ name, size = 24, color, strokeWidth }: { name: LineIconName; size?: number; color: string; strokeWidth?: number }) {
@@ -66,7 +119,7 @@ export function LineIcon({ name, size = 24, color, strokeWidth }: { name: LineIc
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      {icon.draw}
+      {typeof icon.draw === 'function' ? icon.draw(color) : icon.draw}
     </Svg>
   );
 }

@@ -117,3 +117,66 @@ def test_a_trip_from_your_location_with_your_ways(client, network):
     j = client.put(f"/api/v1/trips/{tid}/journey/preferences", json={"transport_modes": [], "transport_by_budget": True}).json()
     assert j["preferences"]["transport_by_budget"] and j["options"][0]["reason"]
     assert client.put(f"/api/v1/trips/{tid}/journey/preferences", json={"transport_modes": ["rocket"]}).status_code == 422
+
+
+# --- Before the trip exists (docs/ui-refresh step 5: New trip's "Ways to get there") ----------------
+
+def _answers(**kw):
+    return {"destination": "Cox's Bazar", "num_travelers": 2, "total_budget": 30000,
+            "origin_point": {"lat": 23.80, "lon": 90.40, "label": "Near Testpur Station"}, **kw}
+
+
+def test_ways_there_before_the_trip_exists_save_nothing_and_match_the_trip(client, network):
+    from app.models.models import Trip, TripPreference
+    with _ApiTestSession() as db:
+        counts = (db.query(Trip).count(), db.query(TripPreference).count())
+    r = client.post("/api/v1/trips/journey-options", json=_answers())
+    assert r.status_code == 200, r.text
+    ways = r.json()
+    assert ways["from"] == "Near Testpur Station" and ways["options"][0]["recommended"]
+    assert ways["options"][0]["reason_code"] in ("fastest_in_budget", "cheapest", "cheapest_over_budget")
+    assert all(o["reason_code"] is None for o in ways["options"][1:])
+    with _ApiTestSession() as db:
+        assert (db.query(Trip).count(), db.query(TripPreference).count()) == counts   # nothing written
+
+    # The trip built from the same answers shows the same ways
+    trip = {**_answers(), "start_date": "2026-11-01", "end_date": "2026-11-02", "preference": {"interests": ["Beach"]},
+            "transport_modes": [], "transport_by_budget": True}
+    tid = client.post("/api/v1/trips", json=trip).json()["id"]
+    saved = client.get(f"/api/v1/trips/{tid}/journey").json()
+    key = lambda o: (o["mode"], o["minutes"], o["cost_per_person"], o["recommended"], o["reason_code"])  # noqa: E731
+    assert [key(o) for o in saved["options"]] == [key(o) for o in ways["options"]]
+
+    # A way picked comes first, as the traveller's choice
+    picked = client.post("/api/v1/trips/journey-options", json=_answers(transport_modes=["bus"], transport_by_budget=False)).json()
+    assert picked["options"][0]["mode"] == "bus" and picked["options"][0]["reason_code"] == "choice"
+    assert picked["preferences"] == {"transport_modes": ["bus"], "transport_by_budget": False}
+
+
+def test_ways_there_need_a_start_a_known_destination_and_a_signed_in_user(client, network):
+    no_start = {k: v for k, v in _answers().items() if k != "origin_point"}
+    assert client.post("/api/v1/trips/journey-options", json=no_start).status_code == 422
+    assert client.post("/api/v1/trips/journey-options", json=_answers(destination="Nowhere-at-all")).status_code == 404
+    assert client.post("/api/v1/trips/journey-options", json=_answers(transport_modes=["rocket"])).status_code == 422
+    from app.core.auth import get_current_user
+    from app.main import app
+    saved = app.dependency_overrides.pop(get_current_user)
+    try:
+        assert client.post("/api/v1/trips/journey-options", json=_answers()).status_code == 401
+        assert client.get("/api/v1/geo/where", params={"lat": 23.82, "lon": 90.41}).status_code == 401
+    finally:
+        app.dependency_overrides[get_current_user] = saved
+
+
+def test_a_point_is_named_from_vromons_own_places(client, network):
+    from app.services.place_name import name_point
+    # Next to the network's station: named after it, in either language; far from anything known: no name
+    with _ApiTestSession() as db:
+        near = name_point(db, 23.8205, 90.4105)
+        assert near["near"] == "Testpur Station" and near["label"] == "Near Testpur Station"
+        assert name_point(db, 23.8205, 90.4105, "bn")["label"] == "Testpur Station-এর কাছে"
+        assert name_point(db, -60.0, -150.0)["label"] is None
+    # The endpoint (signed in): the same shape; nonsense refused
+    r = client.get("/api/v1/geo/where", params={"lat": 23.8205, "lon": 90.4105})
+    assert r.status_code == 200 and set(r.json()) == {"label", "near", "area", "district"}
+    assert client.get("/api/v1/geo/where", params={"lat": 123, "lon": 0}).status_code == 422

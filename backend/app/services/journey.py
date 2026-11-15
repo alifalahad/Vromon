@@ -77,6 +77,9 @@ class Option:
     note: Optional[str] = None
     recommended: bool = False
     reason: Optional[str] = None
+    # Why it's recommended, for the app to say in the traveller's language: choice / fastest_in_budget /
+    # cheapest / cheapest_over_budget
+    reason_code: Optional[str] = None
     preferred: bool = False
     alternatives: list[dict] = field(default_factory=list)   # other trains the same day
 
@@ -90,7 +93,8 @@ class Option:
         return {"mode": self.mode, "minutes": round(self.minutes() / 5) * 5, "km": round(sum(l.km for l in self.legs)),
                 "cost_per_person": round(self.cost_per_person(travellers)),
                 "all_official": all(l.fare_kind == "official" for l in self.legs if l.fare is not None),
-                "recommended": self.recommended, "preferred": self.preferred, "reason": self.reason, "note": self.note,
+                "recommended": self.recommended, "preferred": self.preferred, "reason": self.reason,
+                "reason_code": self.reason_code, "note": self.note,
                 "legs": [l.out() for l in self.legs], "alternatives": self.alternatives}
 
 
@@ -283,15 +287,18 @@ def plan(db: Session, start: Point, dest: Point, *, preferred: list[str], by_bud
     if chosen and not by_budget:
         best = min(chosen, key=lambda o: o.minutes())
         best.reason = "Your choice, and the fastest of the ways you picked"
+        best.reason_code = "choice"
     else:
         cap = (budget_per_person or 0) * TRANSPORT_SHARE / 2      # one way
         fits = [o for o in options if cap and o.cost_per_person(travellers) <= cap]
         if fits:
             best = min(fits, key=lambda o: o.minutes())
             best.reason = "The fastest way that fits your budget"
+            best.reason_code = "fastest_in_budget"
         else:
             best = min(options, key=lambda o: o.cost_per_person(travellers))
             best.reason = "The cheapest way" + (" (nothing faster fits your budget)" if cap else "")
+            best.reason_code = "cheapest_over_budget" if cap else "cheapest"
     best.recommended = True
     order = sorted(options, key=lambda o: (not o.recommended, not o.preferred, o.minutes()))
     return {"from": start.label, "to": dest.label, "options": [o.out(travellers) for o in order], "missing": missing,

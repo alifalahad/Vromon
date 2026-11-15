@@ -13,7 +13,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import * as Location from 'expo-location';
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, ScrollView, Text, View } from 'react-native';
 import Animated, { FadeInLeft, FadeInRight } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,7 +20,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMe } from '../../src/features/account/useMe';
 import { useVisits } from '../../src/features/map/visits';
 import { usePreferences } from '../../src/features/preferences/store';
-import { CitySearch } from '../../src/features/trips/CitySearch';
 import { formatRange, localToday } from '../../src/features/trips/dates';
 import { DestinationSearch } from '../../src/features/trips/new/DestinationSearch';
 import { canLocate, LocatorMap } from '../../src/features/trips/new/LocatorMap';
@@ -59,12 +57,13 @@ import {
 } from '../../src/features/trips/new/newTrip';
 import { DateRangeFields } from '../../src/features/trips/new/DateRangeFields';
 import { TravellersField } from '../../src/features/trips/new/TravellersField';
+import { GettingThereSection } from '../../src/features/trips/new/GettingThereSection';
 import { useMustDoText } from '../../src/features/trips/new/useMustDoText';
 import { buildPlan } from '../../src/features/trips/plan/build';
 import { usePlanFormat } from '../../src/features/trips/plan/usePlanFormat';
 import { refreshTrips } from '../../src/features/trips/queries';
 import { destinationsApi, fxApi, placesApi, roomsApi, tripsApi } from '../../src/services/api';
-import type { Hotel, ItineraryDay, JourneyMode, MustSee, Trip, Unplaced } from '../../src/types';
+import type { Hotel, ItineraryDay, MustSee, Trip, Unplaced } from '../../src/types';
 import { Button } from '../../src/ui/Button';
 import { haptics } from '../../src/ui/haptics';
 import { PressableScale } from '../../src/ui/PressableScale';
@@ -74,13 +73,6 @@ import { TimeSheet } from '../../src/ui/TimeSheet';
 import { useReduceMotion } from '../../src/ui/useReduceMotion';
 
 // How you like to travel there: pick any (Vromon tries them first), or none for a suggestion by budget
-const MODES: { mode: JourneyMode; icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }[] = [
-  { mode: 'plane', icon: 'airplane' },
-  { mode: 'train', icon: 'train' },
-  { mode: 'bus', icon: 'bus' },
-  { mode: 'car', icon: 'car' },
-  { mode: 'launch', icon: 'ferry' },
-];
 
 type TimeField = 'arrive' | 'leave' | 'dayStart' | 'dayEnd';
 type Build = { phase: BuildPhase; tripId: number | null; unplaced: Unplaced[]; applying: number | null; resolved: string[]; error: string | null };
@@ -157,26 +149,6 @@ export default function NewTripScreen() {
   const money = (taka: number) => {
     const v = fromTaka(taka, trip.currency, fx.data?.rates);
     return v === null ? f.money(taka) : formatMoney(roundShown(v, trip.currency), trip.currency, i18n.language);
-  };
-  // Getting there from where you are: the phone's location once (asked for, never kept in the background)
-  const [locating, setLocating] = useState(false);
-  const [locateError, setLocateError] = useState<string | null>(null);
-  const locateMe = async () => {
-    setLocating(true);
-    setLocateError(null);
-    try {
-      const perm = await Location.requestForegroundPermissionsAsync();
-      if (!perm.granted) {
-        setLocateError(t('newTrip.locationDenied'));
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      set({ origin: { here: true, lat: pos.coords.latitude, lon: pos.coords.longitude, label: t('newTrip.yourLocation') } });
-    } catch {
-      setLocateError(t('newTrip.locationFailed'));
-    } finally {
-      setLocating(false);
-    }
   };
   const problem = whereWhenError(trip);
 
@@ -461,90 +433,7 @@ export default function NewTripScreen() {
                 />
               </View>
 
-              <Text style={styles.h2} accessibilityRole="header">
-                {t('newTrip.gettingThere')}
-              </Text>
-              <View style={styles.group}>
-                {trip.origin ? (
-                  <View style={styles.originRow}>
-                    <MaterialCommunityIcons name={'here' in trip.origin ? 'crosshairs-gps' : 'map-marker-outline'} size={24} color={colors.textSecondary} />
-                    <Text style={[styles.rowLabel, styles.flex]}>{t('newTrip.from', { place: trip.origin.label })}</Text>
-                    <PressableScale
-                      pressEffect="opacity"
-                      haptic="selection"
-                      onPress={() => set({ origin: null })}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      testID="origin-clear"
-                    >
-                      <Text style={styles.link}>{t('newTrip.change')}</Text>
-                    </PressableScale>
-                  </View>
-                ) : (
-                  <View style={styles.originSearch}>
-                    <PressableScale
-                      haptic="selection"
-                      onPress={locateMe}
-                      disabled={locating}
-                      style={styles.hereButton}
-                      accessibilityRole="button"
-                      testID="origin-here"
-                    >
-                      {locating ? (
-                        <ActivityIndicator color={colors.link} />
-                      ) : (
-                        <MaterialCommunityIcons name="crosshairs-gps" size={20} color={colors.link} />
-                      )}
-                      <Text style={styles.hereText}>{t('newTrip.fromHere')}</Text>
-                    </PressableScale>
-                    {locateError ? <Text style={styles.locateError}>{locateError}</Text> : null}
-                    <CitySearch
-                      label={t('newTrip.fromWhere')}
-                      reveal={reveal}
-                      testID="origin-search"
-                      onPick={(city, country) => set({ origin: { city_geonameid: city.geonameid, label: `${city.name}, ${country}` } })}
-                    />
-                  </View>
-                )}
-                <View style={styles.divider} />
-                <Text style={styles.modesTitle}>{t('newTrip.howTravel')}</Text>
-                <Text style={styles.modesHint}>{t('newTrip.howTravelHint')}</Text>
-                <View style={styles.modes}>
-                  {MODES.map(({ mode, icon }) => {
-                    const on = trip.modes.includes(mode);
-                    return (
-                      <PressableScale
-                        key={mode}
-                        haptic="selection"
-                        onPress={() => set({ modes: on ? trip.modes.filter((m) => m !== mode) : [...trip.modes, mode] })}
-                        style={[styles.mode, on && styles.modeOn]}
-                        accessibilityRole="checkbox"
-                        accessibilityState={{ checked: on }}
-                        accessibilityLabel={t(`newTrip.travelModes.${mode}`)}
-                        testID={`mode-${mode}`}
-                      >
-                        <MaterialCommunityIcons name={icon} size={20} color={on ? colors.onAccent : colors.textSecondary} />
-                        <Text style={[styles.modeText, on && styles.onAccent]} numberOfLines={1}>
-                          {t(`newTrip.travelModes.${mode}`)}
-                        </Text>
-                      </PressableScale>
-                    );
-                  })}
-                  <PressableScale
-                    haptic="selection"
-                    onPress={() => set({ modes: [] })}
-                    style={[styles.mode, styles.modeWide, trip.modes.length === 0 && styles.modeOn]}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: trip.modes.length === 0 }}
-                    testID="mode-budget"
-                  >
-                    <MaterialCommunityIcons name="cash-multiple" size={20} color={trip.modes.length === 0 ? colors.onAccent : colors.textSecondary} />
-                    <Text style={[styles.modeText, trip.modes.length === 0 && styles.onAccent]} numberOfLines={1}>
-                      {t('newTrip.byBudget')}
-                    </Text>
-                  </PressableScale>
-                </View>
-              </View>
+              <GettingThereSection trip={trip} set={set} reveal={reveal} />
             </>
           )}
 
@@ -914,7 +803,6 @@ const useStyles = makeStyles((t) => ({
   error: { ...t.type.callout, color: t.colors.danger },
   loadError: { gap: t.spacing.sm, alignItems: 'flex-start' },
   link: { ...t.type.callout, fontWeight: '600', color: t.colors.link },
-  onAccent: { color: t.colors.onAccent },
   // "Where to?": a search field, or the chosen destination as a card
   destSearch: {
     flexDirection: 'row',
@@ -969,36 +857,6 @@ const useStyles = makeStyles((t) => ({
     justifyContent: 'center',
   },
   timeChipText: { ...t.type.callout, fontWeight: '700', color: t.colors.onAccentSoft },
-  originRow: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, paddingHorizontal: t.spacing.lg, minHeight: 60 },
-  originSearch: { padding: t.spacing.md, paddingBottom: 0 },
-  modes: { flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, padding: t.spacing.md, paddingTop: t.spacing.sm },
-  modesTitle: { ...t.type.headline, color: t.colors.textPrimary, paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md },
-  modesHint: { ...t.type.footnote, color: t.colors.textSecondary, paddingHorizontal: t.spacing.lg, marginTop: 2 },
-  modeWide: { flexBasis: '100%' },
-  hereButton: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: t.spacing.md,
-    borderRadius: 24,
-    backgroundColor: t.colors.accentSoft,
-    marginBottom: t.spacing.sm,
-  },
-  hereText: { ...t.type.callout, fontWeight: '700', color: t.colors.link },
-  locateError: { ...t.type.footnote, color: t.colors.danger, marginBottom: t.spacing.sm },
-  mode: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: t.radius.control,
-    backgroundColor: t.colors.surfaceInset,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-    paddingVertical: 6,
-  },
-  modeOn: { backgroundColor: t.colors.accent },
-  modeText: { ...t.type.caption, fontWeight: '600', color: t.colors.textSecondary },
   paceCard: { backgroundColor: t.colors.surface, borderRadius: 20, padding: t.spacing.lg, gap: t.spacing.sm },
   paceBig: { ...t.type.headline, fontSize: 20, color: t.colors.textPrimary },
   paceLine: { flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.sm },

@@ -122,7 +122,9 @@ function OptionCard({ option }: { option: JourneyOption }) {
           </View>
         ) : null}
       </View>
-      {option.recommended && option.reason ? <Text style={styles.reason}>{option.reason}</Text> : null}
+      {option.recommended && option.reason ? (
+        <Text style={styles.reason}>{option.reason_code ? t(`newTrip.ways.reason.${option.reason_code}`) : option.reason}</Text>
+      ) : null}
       <View style={styles.legs}>
         {option.legs.map((l, i) => (
           <LegRow key={i} leg={l} last={i === option.legs.length - 1} />

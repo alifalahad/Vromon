@@ -31,12 +31,11 @@ name: 05 Plan a trip with must-sees, fix one that can't fit, see the plan
     id: where-hit-1
 - assertVisible:
     id: destination-chosen
+# Getting there is optional (docs/ui-refresh step 5): one quiet card, left as it is
 - scrollUntilVisible:
     element:
-      id: mode-bus
+      id: getting-there-add
     direction: DOWN
-- tapOn:
-    id: mode-bus
 - tapOn:
     id: new-next
 

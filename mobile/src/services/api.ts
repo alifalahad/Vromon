@@ -37,6 +37,7 @@ import type {
   Hotel,
   Itinerary,
   JourneyMode,
+  JourneyOptionsIn,
   LatePlan,
   LateResult,
   LateUndo,
@@ -77,6 +78,7 @@ import type {
   TripConditions,
   TripCreate,
   TripJourney,
+  PlaceName,
   TripRoom,
   TripStats,
   TripStopInput,
@@ -257,6 +259,8 @@ export const tripsApi = {
   // Roads (trip planner step 5): how to get to the next stop, and the day's road lines
   leg: (tripId: number, itemId: number) => api.get<LegOptions>(`/trips/${tripId}/items/${itemId}/leg`).then((r) => r.data),
   journey: (tripId: number) => api.get<TripJourney>(`/trips/${tripId}/journey`).then((r) => r.data),
+  /** The ways there before the trip exists (New trip, UI refresh step 5): read-only, nothing is saved */
+  journeyOptions: (answers: JourneyOptionsIn) => api.post<TripJourney>('/trips/journey-options', answers).then((r) => r.data),
   setJourneyPreferences: (tripId: number, prefs: { transport_modes: JourneyMode[]; transport_by_budget: boolean; origin_point?: { lat: number; lon: number; label?: string } | null }) =>
     api.put<TripJourney>(`/trips/${tripId}/journey/preferences`, prefs).then((r) => r.data),
   dayRoute: (tripId: number, dayId: number) => api.get<DayRoute>(`/trips/${tripId}/days/${dayId}/route`).then((r) => r.data),
@@ -485,6 +489,8 @@ export const geoApi = {
         params: { regions: regions.join(',') || undefined, cities: cities.join(',') || undefined },
       })
       .then((r) => r.data),
+  /** Where a point is, in words (UI refresh step 5): named from Vromon's own data on the server */
+  where: (lat: number, lon: number, lang: string) => api.get<PlaceName>('/geo/where', { params: { lat, lon, lang } }).then((r) => r.data),
 };
 
 // Bump when scripts/geo/build.sh rebuilds the tiles: MapLibre caches them (the server

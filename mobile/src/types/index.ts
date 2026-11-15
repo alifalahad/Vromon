@@ -1544,9 +1544,30 @@ export interface JourneyOption {
   recommended: boolean;
   preferred: boolean;
   reason: string | null;
+  /** Why it's recommended, for the app to say in the traveller's language */
+  reason_code: 'choice' | 'fastest_in_budget' | 'cheapest' | 'cheapest_over_budget' | null;
   note: string | null;
   legs: JourneyLeg[];
   alternatives: { train: string; depart: string; arrive: string; minutes: number; off_day: string | null }[];
+}
+
+/** A new trip's answers so far, for its ways there before it exists (POST /trips/journey-options) */
+export interface JourneyOptionsIn {
+  destination: string;
+  origin: { city_geonameid: number } | null;
+  origin_point: { lat: number; lon: number; label: string } | null;
+  num_travelers: number;
+  total_budget: number;
+  transport_modes: JourneyMode[];
+  transport_by_budget: boolean;
+}
+
+/** A point named for people (GET /geo/where): "Near Shahid Hadis Park, Khulna"; null when nothing names it */
+export interface PlaceName {
+  label: string | null;
+  near: string | null;
+  area: string | null;
+  district: string | null;
 }
 
 export interface TripJourney {

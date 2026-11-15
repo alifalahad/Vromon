@@ -33,6 +33,7 @@ from app.schemas.schemas import (
     FeedbackCreate, FeedbackOut, AdaptRequest,
     GenerateResponse, ItineraryResponse,
     MarkVisitedIn, MarkVisitedOut, TripStopIn, TripStopsIn, MustSeeIn, BusyIn, TIME_PATTERN, JourneyPreferences,
+    JourneyMode, OriginPoint,
     StaysUpdate,
     MealPlanIn,
     DayMealsUpdate,
@@ -1661,11 +1662,16 @@ def _validate_trip_settings(
         raise HTTPException(status_code=422, detail=errors)
 
 
+def _destination_point(db: Session, name: str) -> journey.Point | None:
+    dest = db.query(Destination).filter(Destination.name == name).first()
+    return None if dest is None else journey.Point(dest.latitude, dest.longitude, dest.name)
+
+
 def _journey_points(db: Session, trip: Trip):
     """(start, destination) as journey points, or None without a start."""
     from app.models.models import City
     pref = trip.preference
-    dest = db.query(Destination).filter(Destination.name == trip.destination).first()
+    dest = _destination_point(db, trip.destination)
     if dest is None:
         return None
     stops = list(trip.stops)
@@ -1676,7 +1682,7 @@ def _journey_points(db: Session, trip: Trip):
         start = journey.Point(city.lat, city.lon, city.name)
     else:
         return None
-    return start, journey.Point(dest.latitude, dest.longitude, dest.name)
+    return start, dest
 
 
 def _journey(db: Session, trip: Trip) -> dict | None:
@@ -1717,6 +1723,43 @@ def _getting_there(db: Session, trip: Trip) -> dict | None:
                 "source": "road" if on_road else ("timetable" if best["mode"] == "train" else "estimate")}
     # The chosen way isn't possible from the catalog (no airport or station near): the simple estimate for it
     return _getting_there_simple(db, trip)
+
+
+class JourneyOptionsIn(BaseModel):
+    """A new trip's answers so far: where from, where to, how many and the budget (docs/ui-refresh step 5)."""
+    destination: str = Field(min_length=1, max_length=200)
+    origin: Optional[TripStopIn] = None
+    origin_point: Optional[OriginPoint] = None
+    num_travelers: int = Field(default=1, ge=1, le=50)
+    total_budget: Optional[float] = Field(default=None, ge=0)
+    transport_modes: List[JourneyMode] = Field(default_factory=list, max_length=5)
+    transport_by_budget: bool = True
+
+
+@router.post("/journey-options")
+def journey_options(payload: JourneyOptionsIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Ways to get there before the trip exists (docs/ui-refresh step 5, New trip's "Ways to get there"):
+    the same plan the trip built from these answers will show (`_journey`), read-only: nothing is saved."""
+    from app.models.models import City
+    dest = _destination_point(db, payload.destination)
+    if dest is None:
+        raise HTTPException(status_code=404, detail="Vromon can't plan the way to this destination")
+    if payload.origin_point is not None:
+        p = payload.origin_point
+        start = journey.Point(p.lat, p.lon, p.label or "Your location")
+    elif payload.origin is not None and payload.origin.city_geonameid is not None:
+        city = db.get(City, payload.origin.city_geonameid)
+        if city is None:
+            raise HTTPException(status_code=404, detail="Unknown starting city")
+        start = journey.Point(city.lat, city.lon, city.name)
+    else:
+        raise HTTPException(status_code=422, detail="Say where you start from")
+    modes = list(dict.fromkeys(payload.transport_modes))
+    plan = journey.plan(db, start, dest, preferred=modes, by_budget=payload.transport_by_budget and not modes,
+                        budget_per_person=(payload.total_budget or 0) / payload.num_travelers,
+                        travellers=payload.num_travelers)
+    plan["preferences"] = {"transport_modes": modes, "transport_by_budget": payload.transport_by_budget or not modes}
+    return plan
 
 
 @router.get("/{trip_id}/journey")

@@ -1126,7 +1126,14 @@ export default function TripScreen() {
                   />
                 )}
 
-                {dayIndex === 0 && itinerary.data?.getting_there ? <GettingThere trip={itinerary.data.getting_there} tripId={tripId} /> : null}
+                {dayIndex === 0 && itinerary.data?.getting_there ? (
+                  <GettingThere trip={itinerary.data.getting_there} tripId={tripId} />
+                ) : dayIndex === 0 && itinerary.data ? (
+                  // No start given (or no way found): said plainly, so the plan's times and costs aren't misread
+                  <Text style={styles.dayStats} testID="getting-there-not-counted">
+                    {t('plan.gettingThereNotCounted')}
+                  </Text>
+                ) : null}
 
                 {mine &&
                   unplaced.map((u) => (
