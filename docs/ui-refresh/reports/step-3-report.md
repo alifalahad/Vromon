@@ -83,6 +83,14 @@ Afterwards the phone was set back as it was: English, normal text size, Appearan
 - **The pictures colour only your home country's marks.** Other countries stay plain land, as in the frames.
 - **The friends' APK** is still not rebuilt (from step 1).
 
+## 5. After the step: a black box when opening Map Theme
+
+You found it in the friends' app (2026-11-15): tapping "All themes" showed a black box over the map for about a second. The box was the preview map. It used MapLibre's default Android view (a GLSurfaceView), a separate layer that ignores the screen's slide-in, so it showed black at its final place before the screen arrived. It is now a TextureView (`androidView="texture"`), as the app's other maps on screens that slide in already were.
+
+- **Checked:** screen recordings of the same tap on the phone. With the old setting, 33 of 149 frames showed the black box. With the fix, none.
+- **The other maps on screens that slide in:** Replay and the friend comparison. Neither shows the box: their map areas show the screen's own background until the map draws.
+- **The friends' APK** was rebuilt with the fix.
+
 ## Files
 
 - New: `mobile/src/features/mapThemes/MapThumb.tsx`, `mobile/src/ui/LineIcon.tsx`
