@@ -13,6 +13,7 @@ import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture
 import Animated, { FadeIn, LinearTransition, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 
 import type { ItineraryItem, TravelMode, Violation } from '../../../types';
+import { LineIcon } from '../../../ui/LineIcon';
 import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
 import { isPrivatePlace, isUnchecked, kindLabel } from '../../places/kinds';
@@ -71,9 +72,11 @@ export function StopCard({
   onPress,
   onRemove,
   onLayoutRow,
+  onCardWidth,
   drag,
+  grip,
   dragging,
-  translateY,
+  dimmed,
   previewStart,
   move,
   glide = true,
@@ -88,11 +91,16 @@ export function StopCard({
   onPress: () => void;
   onRemove: () => void;
   onLayoutRow?: (y: number, height: number) => void;
+  /** The card's width (the copy that follows the finger while dragging is as wide) */
+  onCardWidth?: (width: number) => void;
   /** Press and hold to drag (your own trip, not pinned) */
   drag?: GestureType;
-  /** This card is being dragged */
+  /** The grip at the card's side (docs/ui-refresh step 8): it can be moved, or it keeps its time */
+  grip?: 'move' | 'locked';
+  /** This card is being dragged: its copy follows the finger and an outline keeps its place */
   dragging?: boolean;
-  translateY?: SharedValue<number>;
+  /** Another stop is being dragged */
+  dimmed?: boolean;
   /** The time it would start at while another stop is dragged */
   previewStart?: string;
   /** Glide to a new place when the order changes (not the card just dropped: it's already there) */
@@ -114,7 +122,6 @@ export function StopCard({
   const hard = problems.some((v) => v.severity === 'hard');
   const tag = kind === 'visit' ? forYou(item.recommendation_reasons) : null;
   const ring = dragging || selected ? theme.colors.accent : hard ? theme.colors.danger : problems.length ? theme.colors.warning : 'transparent';
-  const lifted = useAnimatedStyle(() => (dragging && translateY ? { transform: [{ translateY: translateY.value }, { scale: 1.03 }] } : { transform: [] }));
   const actions = [
     ...(removable ? [{ name: 'activate', label: t('plan.detailsAction') }, { name: 'remove', label: t('plan.removeAction') }] : []),
     ...(move?.earlier ? [{ name: 'earlier', label: t('plan.moveEarlier') }] : []),
@@ -184,13 +191,22 @@ export function StopCard({
           </View>
         ))}
       </View>
+      {grip ? (
+        <View style={styles.grip} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID={`stop-grip-${item.id}`}>
+          {grip === 'move' ? (
+            <LineIcon name="grip" size={20} color={theme.colors.textTertiary} />
+          ) : (
+            <MaterialCommunityIcons name="lock-outline" size={18} color={theme.colors.textTertiary} />
+          )}
+        </View>
+      ) : null}
     </PressableScale>
   );
 
   return (
     <Animated.View
       layout={glide ? GLIDE : undefined}
-      style={[styles.row, dragging && styles.rowLifted]}
+      style={[styles.row, dimmed && styles.dimmed]}
       onLayout={(e) => onLayoutRow?.(e.nativeEvent.layout.y, e.nativeEvent.layout.height)}
     >
       <View style={[styles.timeCol, dragging && styles.hidden]}>
@@ -207,14 +223,16 @@ export function StopCard({
           {f.shortDuration(item.duration_minutes)}
         </Text>
       </View>
-      <View style={styles.cardWrap}>
+      <View style={styles.cardWrap} onLayout={(e) => onCardWidth?.(e.nativeEvent.layout.width)}>
         {drag ? (
           <GestureDetector gesture={drag}>
-            <Animated.View style={[lifted, dragging && styles.liftedShadow]}>{body()}</Animated.View>
+            <Animated.View style={dragging && styles.hidden}>{body()}</Animated.View>
           </GestureDetector>
         ) : (
           body()
         )}
+        {/* Its place while its copy is dragged (frames 13 and 14) */}
+        {dragging ? <View pointerEvents="none" style={styles.outline} testID="drag-outline" /> : null}
       </View>
     </Animated.View>
   );
@@ -267,6 +285,7 @@ export function LegRow({
   note,
   crossing,
   onPress,
+  dimmed,
 }: {
   minutes: number;
   km: number;
@@ -279,6 +298,8 @@ export function LegRow({
   fare?: number | null;
   /** Choose how to go (your own trip) */
   onPress?: () => void;
+  /** A stop is being dragged */
+  dimmed?: boolean;
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
@@ -304,7 +325,7 @@ export function LegRow({
     </View>
   );
   return (
-    <Animated.View layout={GLIDE} entering={APPEAR} style={styles.legRow}>
+    <Animated.View layout={GLIDE} entering={APPEAR} style={[styles.legRow, dimmed && styles.dimmed]}>
       <View style={styles.timeCol} />
       {onPress ? (
         <PressableScale
@@ -328,13 +349,13 @@ export function LegRow({
   );
 }
 
-export function FreeRow({ start, minutes, onAdd }: { start: string; minutes: number; onAdd?: () => void }) {
+export function FreeRow({ start, minutes, onAdd, dimmed }: { start: string; minutes: number; onAdd?: () => void; dimmed?: boolean }) {
   const styles = useStyles();
   const { t } = useTranslation();
   const { colors } = useTheme();
   const f = usePlanFormat();
   return (
-    <Animated.View layout={GLIDE} entering={APPEAR} style={styles.row}>
+    <Animated.View layout={GLIDE} entering={APPEAR} style={[styles.row, dimmed && styles.dimmed]}>
       <View style={styles.timeCol}>
         <Text
           style={[styles.time, styles.freeTime]}
@@ -364,18 +385,124 @@ export function FreeRow({ start, minutes, onAdd }: { start: string; minutes: num
   );
 }
 
+/**
+ * The stop being dragged, lifted over everything and following the finger (docs/ui-refresh step 8,
+ * frames 13 and 14): a clear shadow, a blue ring and its grip. With reduced motion it isn't scaled.
+ */
+export function DragGhost({
+  item,
+  n,
+  kind,
+  x,
+  y,
+  width,
+  still,
+}: {
+  item: ItineraryItem;
+  n: number;
+  kind: StopKind;
+  x: SharedValue<number>;
+  y: SharedValue<number>;
+  width: SharedValue<number>;
+  /** Reduced motion: no scaling */
+  still: boolean;
+}) {
+  const styles = useStyles();
+  const theme = useTheme();
+  const colors = planColors(theme);
+  const { t } = useTranslation();
+  const f = usePlanFormat();
+  const place = useAnimatedStyle(() => ({ left: x.get(), top: y.get(), width: width.get(), transform: [{ scale: still ? 1 : 1.03 }] }));
+  return (
+    <Animated.View pointerEvents="none" style={[styles.ghost, place]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID="drag-ghost">
+      <View style={[styles.ghostBadge, { backgroundColor: kind === 'meal' ? colors.meal : colors.visit }]}>
+        <Text style={[styles.badgeText, { color: kind === 'meal' ? colors.onMeal : colors.onVisit }]} maxFontSizeMultiplier={1.3}>
+          {f.n(n)}
+        </Text>
+      </View>
+      <View style={styles.texts}>
+        <Text style={styles.ghostTitle} numberOfLines={2}>
+          {cardTitle(item, t)}
+        </Text>
+        <Text style={styles.ghostSub} numberOfLines={1}>
+          {stopSubtitle(item, t, f)}
+        </Text>
+      </View>
+      <View style={styles.ghostGrip}>
+        <LineIcon name="grip" size={20} color={theme.colors.accent} />
+      </View>
+    </Animated.View>
+  );
+}
+
+/** Where the dragged stop would land, with the time it would start at */
+export function LandingLine({ time }: { time?: string }) {
+  const styles = useStyles();
+  const f = usePlanFormat();
+  return (
+    <View style={styles.landing} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID="drop-line">
+      <View style={styles.landingTimeCol}>
+        {time ? (
+          <Text style={styles.landingTime} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit testID="drop-line-time">
+            {f.time(time)}
+          </Text>
+        ) : null}
+      </View>
+      <View style={styles.landingLine}>
+        <View style={styles.landingBar} />
+        <View style={styles.landingDot} />
+      </View>
+    </View>
+  );
+}
+
 const useStyles = makeStyles((t) => ({
   row: { flexDirection: 'row', gap: t.spacing.sm + 2, marginVertical: 3 },
-  rowLifted: { zIndex: 10, elevation: 10 },
+  // The rest of the day while a stop is dragged (frames 13 and 14)
+  dimmed: { opacity: 0.42 },
   hidden: { opacity: 0 },
-  liftedShadow: {
+  outline: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     borderRadius: 18,
-    shadowColor: t.colors.shadow,
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 12,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: t.colors.textTertiary,
   },
+  grip: { width: 24, alignSelf: 'center', alignItems: 'center', marginRight: -4 },
+  ghost: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.md,
+    minHeight: 68,
+    paddingLeft: t.spacing.md,
+    paddingRight: 6,
+    paddingVertical: t.spacing.sm,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: t.colors.accent,
+    backgroundColor: t.colors.surface,
+    shadowColor: t.colors.shadow,
+    shadowOpacity: 0.3,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 20 },
+    elevation: 20,
+    zIndex: 40,
+  },
+  ghostBadge: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  ghostTitle: { fontSize: 15.5, fontWeight: '700', color: t.colors.textPrimary },
+  ghostSub: { fontSize: 13, color: t.colors.textSecondary },
+  ghostGrip: { width: 36, height: 44, alignItems: 'center', justifyContent: 'center' },
+  landing: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm + 2, minHeight: 24, marginVertical: 2 },
+  landingTimeCol: { width: 52, alignItems: 'flex-end' },
+  landingTime: { fontSize: 14, fontWeight: '700', color: t.colors.link },
+  landingLine: { flex: 1, height: 14, justifyContent: 'center' },
+  landingBar: { height: 4, borderRadius: 2, backgroundColor: t.colors.accent },
+  landingDot: { position: 'absolute', left: 0, top: 0, width: 14, height: 14, borderRadius: 7, borderWidth: 3, borderColor: t.colors.accent, backgroundColor: t.colors.surface },
   pinnedRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   pinnedText: { fontSize: 12, color: t.colors.textSecondary },
   eatNearby: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 36, marginTop: 2 },

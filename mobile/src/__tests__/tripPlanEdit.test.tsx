@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import React from 'react';
 
 import TripScreen from '../../app/trip/[id]';
+import { usePreferences } from '../features/preferences/store';
 import { moveInList, previewMove, retime } from '../features/trips/plan/timeline';
 import '../i18n';
 import { tripsApi } from '../services/api';
@@ -224,11 +225,38 @@ describe('rearranging on the trip screen', () => {
       expect(api.updateItem).toHaveBeenLastCalledWith(5, 2, { duration_minutes: 180 });
 
       await act(async () => fireEvent.press(screen.getByTestId('stop-move-day')));
+      // Every day with its date; its own day can't be picked
+      expect(screen.getByTestId('move-day-here')).toHaveTextContent(/^Day 1/);
+      expect(screen.getByTestId('move-to-day-2')).toHaveTextContent('Day 2Tue 20');
       await act(async () => fireEvent.press(screen.getByTestId('move-to-day-2')));
       expect(api.moveItem).toHaveBeenCalledWith(5, 2, 12);
+      // "Moved … to Day 2", and Undo puts it back where it was on day 1 (second of four)
+      expect(await screen.findByTestId('trip-snackbar')).toHaveTextContent(/^Moved Laboni Beach to Day 2/);
+      await act(async () => fireEvent.press(screen.getByTestId('trip-snackbar-action')));
+      expect(api.moveItem).toHaveBeenLastCalledWith(5, 2, 11, 1);
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('says once how to move a stop, shows which stops can move, and remembers the tip was seen', async () => {
+    usePreferences.setState({ dragHintSeen: false });
+    setUp();
+    api.getItinerary.mockResolvedValue({ ...ITIN, days: [{ ...DAY, items: DAY.items.map((i) => (i.id === 4 ? { ...i, pinned: true } : i)) }, DAY2] });
+    const first = await renderWithQuery(<TripScreen />);
+    expect(await screen.findByTestId('drag-hint')).toHaveTextContent(/^Press and hold a stop to move it/);
+    expect(screen.getByTestId('drag-hint')).toHaveTextContent(/drop it on a day at the top/);
+    expect(usePreferences.getState().dragHintSeen).toBe(true);
+    // A grip on the stops that can move; the pinned one says why it can't
+    expect(screen.getByTestId('stop-grip-2', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByTestId('stop-4')).toHaveTextContent(/Keeps its time/);
+    await act(async () => fireEvent.press(screen.getByTestId('drag-hint-close')));
+    expect(screen.queryByTestId('drag-hint')).toBeNull();
+    await act(async () => first.unmount());
+
+    await renderWithQuery(<TripScreen />);
+    await screen.findByTestId('stop-2');
+    expect(screen.queryByTestId('drag-hint')).toBeNull();
   });
 
   it('adds a suggested place at the end of the day, near the last visit', async () => {

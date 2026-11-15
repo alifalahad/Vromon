@@ -27,7 +27,10 @@ export type LineIconName =
   | 'fullMap'
   | 'more'
   | 'cube'
-  | 'fitDay';
+  | 'fitDay'
+  | 'grip'
+  | 'arrowUp'
+  | 'chevronLeft';
 
 /** Each icon's shapes and the stroke width its frame uses; `color` for the few filled parts */
 const ICONS: Record<LineIconName, { width: number; draw: React.ReactNode | ((color: string) => React.ReactNode) }> = {
@@ -130,6 +133,24 @@ const ICONS: Record<LineIconName, { width: number; draw: React.ReactNode | ((col
       </>
     ),
   },
+  // Six dots: a stop that can be moved (frames 13 and 14)
+  grip: {
+    width: 0,
+    draw: (color) => (
+      <>
+        {[6, 12, 18].map((cy) => (
+          <React.Fragment key={cy}>
+            <Circle cx={9} cy={cy} r={1.7} fill={color} stroke="none" />
+            <Circle cx={15} cy={cy} r={1.7} fill={color} stroke="none" />
+          </React.Fragment>
+        ))}
+      </>
+    ),
+  },
+  // "Release to move to …" (frames 13 and 14)
+  arrowUp: { width: 2.2, draw: <Path d="M12 19V5m-6 6 6-6 6 6" /> },
+  // The strip's left edge when it can scroll back (frame 14)
+  chevronLeft: { width: 2.6, draw: <Path d="m15 6-6 6 6 6" /> },
 };
 
 export function LineIcon({ name, size = 24, color, strokeWidth }: { name: LineIconName; size?: number; color: string; strokeWidth?: number }) {

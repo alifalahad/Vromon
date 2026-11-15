@@ -34,6 +34,8 @@ export type Preferences = {
   mapLayers: Record<MapLayer, boolean>;
   /** The one-time "press and hold to mark" hint was shown */
   markHintSeen: boolean;
+  /** The plan's one-time "press and hold a stop to move it" hint was shown (docs/ui-refresh step 8) */
+  dragHintSeen: boolean;
   /** Destinations chosen in the trip wizard's "Where to?" search, newest first (this device only) */
   recentDestinations: string[];
   /** Map theme selection (synced to the account) */
@@ -66,6 +68,7 @@ type PreferencesState = Preferences & {
   setAskMarkCountry: (v: boolean) => void;
   setMapLayer: (layer: MapLayer, on: boolean) => void;
   setMarkHintSeen: () => void;
+  setDragHintSeen: () => void;
   addRecentDestination: (name: string) => void;
   clearRecentDestinations: () => void;
   setMapTheme: (v: UserMapTheme) => void;
@@ -86,6 +89,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   askMarkCountry: true,
   mapLayers: { trails: true, plannable: true, friends: false },
   markHintSeen: false,
+  dragHintSeen: false,
   recentDestinations: [],
   mapTheme: DEFAULT_USER_MAP_THEME,
   notifyFriendRequests: true,
@@ -110,6 +114,7 @@ export const usePreferences = create<PreferencesState>()(
       setAskMarkCountry: (askMarkCountry) => set({ askMarkCountry }),
       setMapLayer: (layer, on) => set((s) => ({ mapLayers: { ...s.mapLayers, [layer]: on } })),
       setMarkHintSeen: () => set({ markHintSeen: true }),
+      setDragHintSeen: () => set({ dragHintSeen: true }),
       addRecentDestination: (name) => set((s) => ({ recentDestinations: [name, ...s.recentDestinations.filter((n) => n !== name)].slice(0, MAX_RECENT) })),
       clearRecentDestinations: () => set({ recentDestinations: [] }),
       setMapTheme: (mapTheme) => set({ mapTheme }),
@@ -131,6 +136,7 @@ export const usePreferences = create<PreferencesState>()(
         askMarkCountry,
         mapLayers,
         markHintSeen,
+        dragHintSeen,
         recentDestinations,
         mapTheme,
         notifyFriendRequests,
@@ -150,6 +156,7 @@ export const usePreferences = create<PreferencesState>()(
         askMarkCountry,
         mapLayers,
         markHintSeen,
+        dragHintSeen,
         recentDestinations,
         mapTheme,
         notifyFriendRequests,

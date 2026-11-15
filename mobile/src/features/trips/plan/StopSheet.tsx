@@ -8,7 +8,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, type BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, Text, View } from 'react-native';
+import { Linking, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ItineraryItem, Violation } from '../../../types';
@@ -19,10 +19,13 @@ import { useSheetPresentation } from '../../../ui/useSheetPresentation';
 import { isPrivatePlace, isUnchecked, kindLabel } from '../../places/kinds';
 import { NotCheckedBadge } from '../../places/NotCheckedBadge';
 import { priceText } from './PlanRows';
-import { fromMinutes, stopCoord, stopTitle, toMinutes } from './timeline';
+import { dayParts, fromMinutes, stopCoord, stopTitle, toMinutes } from './timeline';
 import { usePlanFormat } from './usePlanFormat';
 
 const SNAP_POINTS = ['62%', '92%'];
+const DAY_GAP = 8;
+
+type PickDay = { id: number; day_number: number; day_date?: string };
 
 export function StopSheet({
   item,
@@ -32,7 +35,8 @@ export function StopSheet({
   onExplain,
   onSwap,
   onRemove,
-  otherDays = [],
+  days = [],
+  currentDayId,
   onSetDuration,
   onSetPinned,
   onMoveDay,
@@ -45,8 +49,9 @@ export function StopSheet({
   onExplain: (item: ItineraryItem) => void;
   onSwap: (item: ItineraryItem) => void;
   onRemove: (item: ItineraryItem) => void;
-  /** The trip's other days, for "Move to another day" */
-  otherDays?: { id: number; day_number: number; day_date?: string }[];
+  /** The trip's days and the one this stop is on, for "Move to another day" */
+  days?: PickDay[];
+  currentDayId?: number;
   onSetDuration?: (item: ItineraryItem, minutes: number) => void;
   onSetPinned?: (item: ItineraryItem, pinned: boolean) => void;
   onMoveDay?: (item: ItineraryItem, dayId: number) => void;
@@ -178,7 +183,8 @@ export function StopSheet({
             <StopEditor
               key={item.id}
               item={item}
-              otherDays={otherDays}
+              days={days}
+              currentDayId={currentDayId}
               onSetDuration={(m) => onSetDuration?.(item, m)}
               onSetPinned={(p) => onSetPinned?.(item, p)}
               onMoveDay={(dayId) => closeThen(() => onMoveDay?.(item, dayId))}
@@ -213,13 +219,15 @@ export function StopSheet({
 /** How long you stay, "keep this time", and moving to another day. A new stop gets a fresh editor (key). */
 function StopEditor({
   item,
-  otherDays,
+  days,
+  currentDayId,
   onSetDuration,
   onSetPinned,
   onMoveDay,
 }: {
   item: ItineraryItem;
-  otherDays: { id: number; day_number: number; day_date?: string }[];
+  days: PickDay[];
+  currentDayId?: number;
   onSetDuration: (minutes: number) => void;
   onSetPinned: (pinned: boolean) => void;
   onMoveDay: (dayId: number) => void;
@@ -302,7 +310,7 @@ function StopEditor({
           <View style={[styles.knob, pinned && styles.knobOn]} />
         </View>
       </PressableScale>
-      {otherDays.length > 0 && (
+      {days.length > 1 && (
         <>
           <View style={styles.divider} />
           <PressableScale pressEffect="opacity" onPress={() => setChoosingDay((v) => !v)} style={styles.editorRow} accessibilityState={{ expanded: choosingDay }} testID="stop-move-day">
@@ -310,17 +318,57 @@ function StopEditor({
             <Text style={[styles.editorTitle, styles.editorText]}>{t('plan.moveToDay')}</Text>
             <MaterialCommunityIcons name={choosingDay ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textSecondary} />
           </PressableScale>
-          {choosingDay && (
-            <View style={styles.dayChips}>
-              {otherDays.map((d) => (
-                <PressableScale key={d.id} onPress={() => onMoveDay(d.id)} style={styles.dayChip} testID={`move-to-day-${d.day_number}`}>
-                  <Text style={styles.dayChipText}>{t('plan.day', { n: f.n(d.day_number) })}</Text>
-                </PressableScale>
-              ))}
-            </View>
-          )}
+          {choosingDay && <DayPicker days={days} currentId={currentDayId} onPick={onMoveDay} />}
         </>
       )}
+    </View>
+  );
+}
+
+/**
+ * Every day of the trip with its date, in a grid that holds 30 days without scrolling sideways
+ * (docs/ui-refresh step 8). The stop's own day is shown, but can't be picked.
+ */
+function DayPicker({ days, currentId, onPick }: { days: PickDay[]; currentId?: number; onPick: (dayId: number) => void }) {
+  const styles = useStyles();
+  const { t, i18n } = useTranslation();
+  const f = usePlanFormat();
+  const { width, fontScale } = useWindowDimensions();
+  // What's left of the screen inside the sheet's and the editor's padding
+  const inner = width - 2 * (styles.body.paddingHorizontal as number) - 2 * (styles.editor.paddingHorizontal as number);
+  const least = 62 * Math.min(Math.max(fontScale, 1), 1.3);
+  const columns = Math.max(2, Math.min(6, Math.floor((inner + DAY_GAP) / (least + DAY_GAP))));
+  const cell = Math.floor((inner - (columns - 1) * DAY_GAP) / columns);
+  return (
+    <View style={styles.dayGrid} testID="move-day-picker">
+      {days.map((d) => {
+        const here = d.id === currentId;
+        const p = d.day_date ? dayParts(d.day_date, i18n.language) : null;
+        const date = here ? t(cell >= 90 ? 'plan.dropHere' : 'plan.dropHereShort') : p ? `${p.weekday} ${p.day}` : '';
+        const label = t('plan.day', { n: f.n(d.day_number) });
+        return (
+          <PressableScale
+            key={d.id}
+            haptic="selection"
+            disabled={here}
+            onPress={() => onPick(d.id)}
+            style={[styles.dayCell, { width: cell }, here && styles.dayCellHere]}
+            accessibilityRole="button"
+            accessibilityLabel={[label, date].filter(Boolean).join(', ')}
+            accessibilityState={{ disabled: here }}
+            testID={here ? 'move-day-here' : `move-to-day-${d.day_number}`}
+          >
+            <Text style={[styles.dayCellTitle, here && styles.dayCellTextHere]} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit>
+              {label}
+            </Text>
+            {date ? (
+              <Text style={[styles.dayCellDate, here && styles.dayCellTextHere]} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit>
+                {date}
+              </Text>
+            ) : null}
+          </PressableScale>
+        );
+      })}
     </View>
   );
 }
@@ -399,9 +447,22 @@ const useStyles = makeStyles((t) => ({
   track: { width: 48, height: 28, borderRadius: 14, padding: 3, backgroundColor: t.colors.segmentThumb },
   knob: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#FFFFFF' },
   knobOn: { transform: [{ translateX: 20 }] },
-  dayChips: { flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, paddingBottom: t.spacing.md },
-  dayChip: { minHeight: 44, paddingHorizontal: t.spacing.lg, borderRadius: 999, justifyContent: 'center', backgroundColor: t.colors.accentSoft },
-  dayChipText: { fontSize: 15, fontWeight: '600', color: t.colors.onAccentSoft },
+  dayGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: DAY_GAP, paddingBottom: t.spacing.md },
+  dayCell: {
+    minHeight: 52,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+    backgroundColor: t.colors.accentTint,
+  },
+  // The stop's own day: an outline, not a target
+  dayCellHere: { backgroundColor: 'transparent', borderWidth: 1, borderColor: t.colors.border },
+  dayCellTitle: { fontSize: 15, fontWeight: '700', color: t.colors.link },
+  dayCellDate: { fontSize: 12, color: t.colors.link },
+  dayCellTextHere: { color: t.colors.textSecondary },
   action: {
     flexGrow: 1,
     flexDirection: 'row',

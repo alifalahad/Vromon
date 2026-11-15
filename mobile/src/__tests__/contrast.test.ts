@@ -99,6 +99,13 @@ describe.each([
     expect(contrast(colors.textPrimary, colors.accentTint)).toBeGreaterThanOrEqual(AA);
   });
 
+  it('moving a stop to another day: the chips, the chosen one and the current day (UI refresh step 8)', () => {
+    expect(contrast(colors.link, colors.accentTint)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.onAccent, colors.accentStrong)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.textSecondary, colors.bg)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.link, colors.surface)).toBeGreaterThanOrEqual(AA);
+  });
+
   it("a switch's track when off shows on a card and on the ground (3:1)", () => {
     expect(contrast(colors.switchOff, colors.surface)).toBeGreaterThanOrEqual(3);
     expect(contrast(colors.switchOff, colors.bg)).toBeGreaterThanOrEqual(3);

@@ -27,11 +27,13 @@ import { AddStopSheet, type AddChoice, type AddTarget } from '../../src/features
 import { useMe } from '../../src/features/account/useMe';
 import { useConversations } from '../../src/features/chat/queries';
 import { tripCard } from '../../src/features/chat/share';
+import { usePreferences } from '../../src/features/preferences/store';
 import { addDays, localToday } from '../../src/features/trips/dates';
 import { DayMap, type MapBase, type MapPin } from '../../src/features/trips/plan/DayMap';
 import { DayRibbon } from '../../src/features/trips/plan/DayRibbon';
 import { MapOptions, TripTopBar, weatherLook } from '../../src/features/trips/plan/TripTopBar';
-import { FreeRow, LegRow, StopCard } from '../../src/features/trips/plan/PlanRows';
+import { DragGhost, FreeRow, LandingLine, LegRow, StopCard } from '../../src/features/trips/plan/PlanRows';
+import { DropStrip } from '../../src/features/trips/plan/DropStrip';
 import { ConditionChips } from '../../src/features/trips/conditions/ConditionChips';
 import { isSerious, useConditionText } from '../../src/features/trips/conditions/useConditionText';
 import { GettingThere } from '../../src/features/trips/plan/GettingThere';
@@ -90,9 +92,11 @@ import type {
 import { ActionSheet, type SheetAction } from '../../src/ui/ActionSheet';
 import { Button } from '../../src/ui/Button';
 import { haptics } from '../../src/ui/haptics';
+import { LineIcon } from '../../src/ui/LineIcon';
 import { PressableScale } from '../../src/ui/PressableScale';
 import { Snackbar } from '../../src/ui/Snackbar';
 import { makeStyles, useTheme } from '../../src/ui/theme';
+import { useReduceMotion } from '../../src/ui/useReduceMotion';
 import { useDevPerf } from '../../src/utils/devPerf';
 import { confirm, notify } from '../../src/utils/dialogs';
 import { issuesForItem } from '../../src/utils/itinerary';
@@ -172,6 +176,11 @@ export default function TripScreen() {
   const [snack, setSnack] = useState<{ message: string; undo?: () => void } | null>(null);
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null);
   const [dropped, setDropped] = useState<number | null>(null);
+  // "Press and hold a stop to move it": once, the first time a plan of yours opens (docs/ui-refresh step 8)
+  const [hintFirst] = useState(() => !usePreferences.getState().dragHintSeen);
+  const [hintClosed, setHintClosed] = useState(false);
+  const setDragHintSeen = usePreferences((s) => s.setDragHintSeen);
+  const reduceMotion = useReduceMotion();
   const [pickingStays, setPickingStays] = useState(false);
   // Meals (trip upgrades step 3): the whole trip's or this day's; places to eat for a meal
   const [mealsFor, setMealsFor] = useState<'trip' | 'day' | null>(null);
@@ -665,6 +674,7 @@ export default function TripScreen() {
     screenHeight: height,
     sheetHeights: [sheetLow, sheetHigh],
     bottomInset: insets.bottom,
+    onLift: () => setHintClosed(true),
     onReorder: (itemId, to) => {
       // The dropped card is already where it lands: only the others glide
       setDropped(itemId);
@@ -679,6 +689,12 @@ export default function TripScreen() {
   const { gestureFor, attachScroll, attachRows } = drag;
   const gestures = useMemo(() => Object.fromEntries(stopIds.map((sid) => [sid, gestureFor(sid)])), [stopIds, gestureFor]);
   const dragging = drag.drag;
+  const draggedRow = dragging ? rows.find((r): r is Extract<typeof r, { kind: 'stop' }> => r.kind === 'stop' && r.item.id === dragging.itemId) : undefined;
+  const showHint = hintFirst && !hintClosed && mine && !busy && rows.some((r) => r.kind === 'stop' && !r.item.pinned) && (stopIds.length > 1 || days.length > 1);
+  // Seen once it shows: it stays for this visit, until closed or a stop is lifted
+  useEffect(() => {
+    if (showHint) setDragHintSeen();
+  }, [showHint, setDragHintSeen]);
   const previewStarts = useMemo(() => {
     if (!dragging || !day || dragging.to === dragging.from) return null;
     return Object.fromEntries(previewMove(day, dragging.itemId, dragging.to, dayRulesOf(trip.data, day.day_number)).map((i) => [i.id, i.start_time]));
@@ -729,7 +745,9 @@ export default function TripScreen() {
   function renderRows(d: ItineraryDay) {
     const stops = orderedStops(d, removal.hidden);
     const out: React.ReactNode[] = [];
-    const line = (key: string) => <View key={key} style={styles.dropLine} testID="drop-line" />;
+    // Where it would land, with the time it would get there
+    const line = (key: string) => <LandingLine key={key} time={dragging ? previewStarts?.[dragging.itemId] : undefined} />;
+    const dim = !!dragging;
     let seen = 0;
     for (const r of rows) {
       if (r.kind === 'leg') {
@@ -741,6 +759,7 @@ export default function TripScreen() {
             mode={r.mode}
             fare={r.fare}
             crossing={r.crossing}
+            dimmed={dim}
             note={
               dayConditions?.legs[String(r.itemId)]
                 ? t('conditions.slowLeg', {
@@ -762,6 +781,7 @@ export default function TripScreen() {
             key={r.key}
             start={r.start}
             minutes={r.minutes}
+            dimmed={dim}
             onAdd={mine && !busy && before >= 0 ? () => setAddTarget({ dayId: d.id, position: before + 1, nearItemId: stops[before].id }) : undefined}
           />,
         );
@@ -790,9 +810,11 @@ export default function TripScreen() {
             rowY.current[item.id] = y;
             drag.setRow(item.id, y, h);
           }}
+          onCardWidth={drag.setCardWidth}
           drag={mine && !busy && !item.pinned ? gestures[item.id] : undefined}
+          grip={mine && !busy ? (item.pinned ? 'locked' : 'move') : undefined}
           dragging={isDragged}
-          translateY={drag.translateY}
+          dimmed={dim && !isDragged}
           previewStart={previewStarts?.[item.id]}
           glide={dropped !== item.id && !isDragged}
           move={
@@ -1171,14 +1193,38 @@ export default function TripScreen() {
                   </View>
                 )}
 
+                {showHint ? (
+                  <View style={styles.hint} testID="drag-hint">
+                    <LineIcon name="grip" size={22} color={theme.colors.link} />
+                    <View style={styles.hintText}>
+                      <Text style={styles.hintTitle}>{t('plan.dragHintTitle')}</Text>
+                      {days.length > 1 ? <Text style={styles.hintSub}>{t('plan.dragHintDays')}</Text> : null}
+                    </View>
+                    <PressableScale
+                      pressEffect="opacity"
+                      onPress={() => setHintClosed(true)}
+                      style={styles.hintClose}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('plan.dragHintClose')}
+                      testID="drag-hint-close"
+                    >
+                      <LineIcon name="close" size={20} color={theme.colors.textSecondary} />
+                    </PressableScale>
+                  </View>
+                ) : null}
+
                 <View ref={attachRows} collapsable={false} onLayout={(e) => (rowsTop.current = e.nativeEvent.layout.y)} style={styles.rows} testID="plan-rows">
                   {stopCount === 0 && <Text style={styles.muted}>{t('plan.emptyDay')}</Text>}
                   {/* Breakfast where you stay comes before leaving, dinner there after getting back */}
-                  <StayMealRow item={stayMealsOf(day).breakfast} />
-                  {stopCount > 0 && <BaseRow way="from" base={day.start_base} leg={day.start_leg} />}
+                  <View style={dragging ? styles.dimmed : undefined}>
+                    <StayMealRow item={stayMealsOf(day).breakfast} />
+                    {stopCount > 0 && <BaseRow way="from" base={day.start_base} leg={day.start_leg} />}
+                  </View>
                   {renderRows(day)}
-                  {stopCount > 0 && <BaseRow way="back" base={day.end_base} leg={day.return_leg} />}
-                  <StayMealRow item={stayMealsOf(day).dinner} />
+                  <View style={dragging ? styles.dimmed : undefined}>
+                    {stopCount > 0 && <BaseRow way="back" base={day.end_base} leg={day.return_leg} />}
+                    <StayMealRow item={stayMealsOf(day).dinner} />
+                  </View>
                 </View>
                 {mine && stopCount > 0 && (
                   <Button
@@ -1240,18 +1286,11 @@ export default function TripScreen() {
       </BottomSheet>
       )}
 
-      {dragging && days.length > 1 && (
-        <View pointerEvents="none" style={[styles.dropBar, { top: insets.top + 8 }]} testID="drop-days">
-          <Text style={styles.dropBarText}>{t('plan.dropOnDay')}</Text>
-          <View style={styles.dropChips}>
-            {days
-              .filter((x) => x.id !== day?.id)
-              .map((x) => (
-                <DropChip key={x.id} label={t('plan.day', { n: f.n(x.day_number) })} onRect={(r) => drag.setChip(x.id, r)} />
-              ))}
-          </View>
-        </View>
-      )}
+      {/* The stop being dragged, over everything but the strip of days */}
+      {draggedRow ? (
+        <DragGhost item={draggedRow.item} n={draggedRow.n} kind={draggedRow.stopKind} x={drag.ghost.x} y={drag.ghost.y} width={drag.ghost.width} still={reduceMotion} />
+      ) : null}
+      {dragging && day && days.length > 1 && <DropStrip top={insets.top + 8} days={days} currentId={day.id} attach={drag.attachStrip} />}
 
       <StopSheet
         item={sheetItem}
@@ -1261,7 +1300,8 @@ export default function TripScreen() {
         onExplain={setWhy}
         onSwap={setReplacing}
         onRemove={removeStop}
-        otherDays={days.filter((x) => x.id !== day?.id)}
+        days={days}
+        currentDayId={day?.id}
         onSetDuration={setDuration}
         onSetPinned={setPinned}
         onMoveDay={(item, dayId) => {
@@ -1385,27 +1425,6 @@ function DayTabs({ days, index, locale, onPick }: { days: ItineraryDay[]; index:
   );
 }
 
-/** A day chip in the drop bar; reports where it is on screen so a drop can be matched to it */
-function DropChip({ label, onRect }: { label: string; onRect: (r: { x: number; y: number; width: number; height: number } | null) => void }) {
-  const styles = useStyles();
-  const ref = useRef<View>(null);
-  const report = useRef(onRect);
-  useEffect(() => {
-    report.current = onRect;
-  });
-  useEffect(() => () => report.current(null), []);
-  return (
-    <View
-      ref={ref}
-      collapsable={false}
-      style={styles.dropChip}
-      onLayout={() => ref.current?.measureInWindow((x, y, width, height) => report.current({ x, y, width, height }))}
-    >
-      <Text style={styles.dropChipText}>{label}</Text>
-    </View>
-  );
-}
-
 const useStyles = makeStyles((t) => {
   const sheetBg = t.scheme === 'dark' ? t.colors.bg : t.colors.surface;
   return {
@@ -1507,37 +1526,19 @@ const useStyles = makeStyles((t) => {
     chip: { minHeight: 44, paddingHorizontal: t.spacing.lg, borderRadius: 999, justifyContent: 'center', backgroundColor: t.colors.surfaceInset },
     chipText: { ...t.type.callout, color: t.colors.textPrimary },
     disabled: { opacity: 0.5 },
-    dropLine: { height: 4, borderRadius: 2, marginLeft: 62, marginVertical: 2, backgroundColor: t.colors.accent },
-    dropBar: {
-      position: 'absolute',
-      left: t.spacing.md,
-      right: t.spacing.md,
-      padding: t.spacing.md,
-      gap: t.spacing.sm,
-      borderRadius: 20,
-      backgroundColor: t.colors.surface,
-      shadowColor: t.colors.shadow,
-      shadowOpacity: 0.3,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 24,
-      zIndex: 50,
-    },
-    dropBarText: { ...t.type.footnote, color: t.colors.textSecondary, textAlign: 'center' },
-    dropChips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: t.spacing.sm },
-    dropChip: {
-      minHeight: 52,
-      minWidth: 96,
-      paddingHorizontal: t.spacing.lg,
-      borderRadius: 14,
+    dimmed: { opacity: 0.42 },
+    hint: {
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 2,
-      borderStyle: 'dashed',
-      borderColor: t.colors.accent,
-      backgroundColor: t.colors.accentSoft,
+      gap: t.spacing.md,
+      paddingLeft: t.spacing.md + 2,
+      borderRadius: 18,
+      backgroundColor: t.colors.accentTint,
     },
-    dropChipText: { fontSize: 15, fontWeight: '700', color: t.colors.link },
+    hintText: { flex: 1, paddingVertical: t.spacing.md, gap: 2 },
+    hintTitle: { ...t.type.callout, fontWeight: '700', color: t.colors.textPrimary },
+    hintSub: { ...t.type.footnote, color: t.colors.textSecondary },
+    hintClose: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   };
 });
 
