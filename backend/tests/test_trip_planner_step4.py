@@ -145,6 +145,18 @@ class TestPlanning:
         assert not any(i["title"].startswith("Dinner") for i in day2["items"])  # 19:00-20:00 is the wedding
         assert gen["valid"] is True, gen["validation"]
 
+    def test_a_busy_time_at_any_minute_is_kept_free_exactly(self, client, algorithm):
+        # Typed times (docs/ui-refresh step 6): not on the half hour, and nothing rounds them
+        trip = new_trip(client, busy=[{"day": 2, "start": "16:10", "end": "17:25", "label": None}], generate=algorithm)
+        gen = trip["generated"]
+        day2 = gen["itinerary"][1]
+        for i in day2["items"]:
+            assert t2m(i["end_time"]) <= 16 * 60 + 10 or t2m(i["start_time"]) >= 17 * 60 + 25, (i["title"], i["start_time"], i["end_time"])
+        assert any(t2m(i["start_time"]) >= 17 * 60 + 25 for i in day2["items"]), "the evening after it is still planned"
+        busy = client.get(f"/api/v1/trips/{trip['id']}").json()["constraints"]["busy"]
+        assert busy == [{"day": 2, "start": "16:10", "end": "17:25", "label": None}]
+        assert gen["valid"] is True, gen["validation"]
+
     def test_a_must_see_at_sunset_on_day_one_is_there_at_sunset(self, client, algorithm):
         inani = place_id("Inani Beach")
         trip = new_trip(client, must_sees=[{"place_id": inani, "day": 1, "when": "sunset"}], generate=algorithm)

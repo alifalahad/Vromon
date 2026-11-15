@@ -35,6 +35,7 @@ export function MustDosEditor({
   startDate,
   days,
   showCrowds = true,
+  dayWindow,
 }: {
   value: MustDos;
   onChange: (next: MustDos) => void;
@@ -42,6 +43,8 @@ export function MustDosEditor({
   startDate: string;
   days: number;
   showCrowds?: boolean;
+  /** Each day's planned hours, so a busy time outside them is said to be */
+  dayWindow?: (day: number) => { start: string; end: string } | null;
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
@@ -56,6 +59,8 @@ export function MustDosEditor({
     setPicker(mode);
   };
   const [busyOpen, setBusyOpen] = useState(false);
+  // The busy time being changed (its index), or null for a new one
+  const [busyEdit, setBusyEdit] = useState<number | null>(null);
   const [exactFor, setExactFor] = useState<number | null>(null);
 
   const byId = (id: number) => places.find((p) => p.id === id);
@@ -104,17 +109,37 @@ export function MustDosEditor({
             <View style={styles.busyIcon}>
               <MaterialCommunityIcons name="calendar-clock" size={22} color={colors.textSecondary} />
             </View>
-            <View style={styles.flex}>
+            {/* Tap to change it: the sheet opens on its day and times */}
+            <PressableScale
+              pressEffect="opacity"
+              haptic="selection"
+              onPress={() => {
+                setBusyEdit(i);
+                setBusyOpen(true);
+              }}
+              style={styles.flex}
+              accessibilityRole="button"
+              accessibilityLabel={`${b.label || t('newTrip.busy')}, ${text.busyWhen(b, startDate)}`}
+              accessibilityHint={t('newTrip.busyEditHint')}
+              testID={`busy-edit-${i}`}
+            >
               <Text style={styles.cardTitle}>{b.label || t('newTrip.busy')}</Text>
               <Text style={styles.cardSub}>{text.busyWhen(b, startDate)}</Text>
-            </View>
+            </PressableScale>
             <RemoveButton
               label={t('newTrip.remove', { name: b.label || t('newTrip.busy') })}
               onPress={() => set({ busy: value.busy.filter((_, j) => j !== i) })}
             />
           </Animated.View>
         ))}
-        <AddRow label={t('newTrip.addBusy')} onPress={() => setBusyOpen(true)} testID="add-busy" />
+        <AddRow
+          label={t('newTrip.addBusy')}
+          onPress={() => {
+            setBusyEdit(null);
+            setBusyOpen(true);
+          }}
+          testID="add-busy"
+        />
       </Animated.View>
 
       <Animated.View layout={glide} style={styles.section}>
@@ -195,8 +220,10 @@ export function MustDosEditor({
         visible={busyOpen}
         startDate={startDate}
         days={days}
+        initial={busyEdit !== null ? (value.busy[busyEdit] ?? null) : null}
+        dayWindow={dayWindow}
         onClose={() => setBusyOpen(false)}
-        onSave={(b) => set({ busy: [...value.busy, b] })}
+        onSave={(b) => set({ busy: busyEdit !== null ? value.busy.map((x, j) => (j === busyEdit ? b : x)) : [...value.busy, b] })}
       />
       <TimeSheet
         visible={exactFor !== null}

@@ -132,7 +132,18 @@ function Editor({ trip, add, addName }: { trip: Trip; add: number | null; addNam
             {already ? t('mustDos.alreadyAdded', { place: addName }) : t('mustDos.added', { place: addName })}
           </Text>
         ) : null}
-        <MustDosEditor value={value} onChange={setValue} places={places.data ?? []} startDate={trip.start_date} days={days} showCrowds={false} />
+        <MustDosEditor
+          value={value}
+          onChange={setValue}
+          places={places.data ?? []}
+          startDate={trip.start_date}
+          days={days}
+          showCrowds={false}
+          dayWindow={(d) => ({
+            start: d === 1 && arrive ? arrive : (pref?.preferred_start_time ?? '09:00'),
+            end: d === days && leave ? leave : (pref?.preferred_end_time ?? '20:00'),
+          })}
+        />
         {error && (
           <Text style={styles.error} accessibilityLiveRegion="polite">
             {t('mustDos.saveFailed')}: {error}

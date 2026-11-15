@@ -557,6 +557,10 @@ export default function NewTripScreen() {
                 places={places.data ?? []}
                 startDate={trip.start}
                 days={days}
+                dayWindow={(d) => ({
+                  start: d === 1 && trip.arrive ? trip.arrive : trip.dayStart,
+                  end: d === days && trip.leave ? trip.leave : trip.dayEnd,
+                })}
               />
             </>
           )}

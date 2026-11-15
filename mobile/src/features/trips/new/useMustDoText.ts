@@ -100,6 +100,8 @@ export function useMustDoText() {
     const d = parseDay(startDate);
     d.setDate(d.getDate() + b.day - 1);
     const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    // "All day" is the whole day (BusySheet's ALL_DAY), not 00:00–23:59
+    if (b.start === '00:00' && b.end === '23:59') return `${shortDate(iso)} · ${t('newTrip.busyAllDay')}`;
     return `${shortDate(iso)} · ${f.time(b.start)}–${f.time(b.end)}`;
   };
 

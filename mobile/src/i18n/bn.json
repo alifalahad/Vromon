@@ -786,6 +786,12 @@
     "showPlan": "পরিকল্পনা দেখুন",
     "gettingAll": "সব উপায় ধাপে ধাপে দেখুন"
   },
+  "timeField": {
+    "hh": "ঘঘ",
+    "mm": "মিমি",
+    "hour": "ঘণ্টা",
+    "minute": "মিনিট"
+  },
   "newTrip": {
     "title": "নতুন ভ্রমণ",
     "stepOf": "{{total}}-এর {{n}}",
@@ -980,12 +986,21 @@
     "searchPlaces": "জায়গা খুঁজুন",
     "noPlaces": "কোনো জায়গা মেলেনি।",
     "busyTitle": "যে সময়ে আপনি ব্যস্ত",
+    "busySub": "তখন কিছুই পরিকল্পনা করা হবে না।",
+    "busyAllDay": "সারাদিন",
+    "busySaveAllDay": "{{day}} পুরোটা ফাঁকা রাখুন",
+    "busyEditHint": "বদলাতে খুলুন",
+    "busyProblem": {
+      "invalid": "এমন কোনো সময় নেই",
+      "endsBefore": "শুরুর আগেই শেষ হচ্ছে",
+      "outside": "এটা আপনার দিনের ({{from}}–{{to}}) বাইরে: তখন এমনিতেই কিছু পরিকল্পনা হয় না"
+    },
     "busyDay": "দিন",
     "busyFrom": "থেকে",
     "busyTo": "পর্যন্ত",
-    "busyLabel": "কী আছে? (ঐচ্ছিক)",
+    "busyLabel": "কী আছে?",
     "busyLabelHint": "যেমন, বিয়ের অনুষ্ঠান",
-    "busySave": "{{day}} {{from}}–{{to}} ফাঁকা রাখুন",
+    "busySave": "{{day}}, {{from}} থেকে {{to}} ফাঁকা রাখুন",
     "mustSees_one": "{{n}}টি অবশ্যই-দেখা",
     "mustSees_other": "{{n}}টি অবশ্যই-দেখা",
     "busyCount_one": "{{n}}টি ব্যস্ত সময়",

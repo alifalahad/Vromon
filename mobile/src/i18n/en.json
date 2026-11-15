@@ -786,6 +786,12 @@
     "showPlan": "Show the plan",
     "gettingAll": "See every way there, leg by leg"
   },
+  "timeField": {
+    "hh": "hh",
+    "mm": "mm",
+    "hour": "hour",
+    "minute": "minute"
+  },
   "newTrip": {
     "title": "New trip",
     "stepOf": "{{n}} of {{total}}",
@@ -980,12 +986,21 @@
     "searchPlaces": "Search places",
     "noPlaces": "No places match.",
     "busyTitle": "A time you're busy",
+    "busySub": "Nothing is planned then.",
+    "busyAllDay": "All day",
+    "busySaveAllDay": "Keep {{day}} free",
+    "busyEditHint": "Opens it to change",
+    "busyProblem": {
+      "invalid": "That time doesn't exist",
+      "endsBefore": "It ends before it starts",
+      "outside": "That's outside your day ({{from}}–{{to}}): nothing is planned then anyway"
+    },
     "busyDay": "Day",
     "busyFrom": "From",
     "busyTo": "To",
-    "busyLabel": "What is it? (optional)",
+    "busyLabel": "What is it?",
     "busyLabelHint": "For example, a wedding",
-    "busySave": "Keep {{day}} {{from}}–{{to}} free",
+    "busySave": "Keep {{day}}, {{from}} to {{to}} free",
     "mustSees_one": "{{n}} must-see",
     "mustSees_other": "{{n}} must-sees",
     "busyCount_one": "{{n}} busy time",
