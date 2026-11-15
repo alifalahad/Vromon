@@ -195,7 +195,7 @@ describe('planning a new trip', () => {
     expect(screen.getByText("Choose where you're going.")).toBeTruthy();
     await choose(1);
     await press(screen.getByTestId('travellers-more'));
-    expect(screen.getByTestId('travellers-value')).toHaveTextContent('3');
+    expect(screen.getByTestId('travellers-value')).toHaveDisplayValue('3');
     await press(screen.getByTestId('new-next'));
 
     // Step 2: style (interests in a sheet, the pace on a slider); the budget follows the level,

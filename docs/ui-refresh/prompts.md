@@ -14,7 +14,7 @@
 | 1 | 1 | Map: a globe when zoomed far out | ✅ done 2026-11-14 (friends' APK rebuilt 2026-11-15 with steps 0b–3) | [step-1-report.md](reports/step-1-report.md) |
 | 2 | 2 | Map: the top-left button and a travel dashboard in place of "Your story" | ✅ done 2026-11-14 | [step-2-report.md](reports/step-2-report.md) |
 | 3 | 3 | Map: the Map sheet's switches and themes, and a new Map Theme screen | ✅ done 2026-11-15 (redrawn after the owner's look: edges, icons, the map pictures; themes in one line you swipe) | [step-3-report.md](reports/step-3-report.md) |
-| 4 | 4 | New trip: weekday only under the dates; type the number of travellers | not started | |
+| 4 | 4 | New trip: weekday only under the dates; type the number of travellers | ✅ done 2026-11-15 | [step-4-report.md](reports/step-4-report.md) |
 | 5 | 5 | New trip: getting there (optional, precise location, ways to get there) | not started | |
 | 6 | 6 | Must-dos: type the busy time's From and To | not started | |
 | 7 | 7 | Trip screen: the row of buttons over the map | not started | |

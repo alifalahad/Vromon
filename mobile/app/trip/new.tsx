@@ -47,7 +47,6 @@ import {
   hotelLevel,
   LEAVE_TIMES,
   MAX_STOPS,
-  MAX_TRAVELLERS,
   MIN_STOPS,
   minutesPerStop,
   paceOf,
@@ -59,6 +58,7 @@ import {
   type NewTrip,
 } from '../../src/features/trips/new/newTrip';
 import { DateRangeFields } from '../../src/features/trips/new/DateRangeFields';
+import { TravellersField } from '../../src/features/trips/new/TravellersField';
 import { useMustDoText } from '../../src/features/trips/new/useMustDoText';
 import { buildPlan } from '../../src/features/trips/plan/build';
 import { usePlanFormat } from '../../src/features/trips/plan/usePlanFormat';
@@ -435,18 +435,7 @@ export default function NewTripScreen() {
               <DateRangeFields start={trip.start} end={trip.end} onChange={(r) => set(r)} reveal={reveal} />
               {showError && problem === 'tooLong' && <Text style={styles.error}>{t('newTrip.errTooLong')}</Text>}
 
-              <View style={styles.rowCard}>
-                <MaterialCommunityIcons name="account-multiple-outline" size={24} color={colors.textSecondary} />
-                <Text style={[styles.rowLabel, styles.flex]}>{t('newTrip.travellers')}</Text>
-                <Stepper
-                  value={trip.travellers}
-                  onLess={() => set({ travellers: Math.max(1, trip.travellers - 1) })}
-                  onMore={() => set({ travellers: Math.min(MAX_TRAVELLERS, trip.travellers + 1) })}
-                  lessLabel={t('newTrip.fewer')}
-                  moreLabel={t('newTrip.more')}
-                  testID="travellers"
-                />
-              </View>
+              <TravellersField value={trip.travellers} onChange={(n) => set({ travellers: n })} reveal={reveal} />
 
               <View style={styles.h2Row}>
                 <Text style={styles.h2} accessibilityRole="header">
@@ -834,55 +823,6 @@ function hotelLine(hotels: Hotel[] | undefined, level: string, t: TFunction, f: 
   return t(`newTrip.hotel.${level}`, { range });
 }
 
-function Stepper({
-  value,
-  onLess,
-  onMore,
-  lessLabel,
-  moreLabel,
-  testID,
-}: {
-  value: number | null;
-  onLess: () => void;
-  onMore: () => void;
-  lessLabel: string;
-  moreLabel: string;
-  testID: string;
-}) {
-  const styles = useStyles();
-  const { colors } = useTheme();
-  const f = usePlanFormat();
-  return (
-    <View style={styles.stepper}>
-      <PressableScale
-        haptic="selection"
-        onPress={onLess}
-        style={styles.stepperButton}
-        accessibilityRole="button"
-        accessibilityLabel={lessLabel}
-        testID={`${testID}-less`}
-      >
-        <MaterialCommunityIcons name="minus" size={22} color={colors.textPrimary} />
-      </PressableScale>
-      {value !== null && (
-        <Text style={styles.stepperValue} accessibilityLiveRegion="polite" testID={`${testID}-value`}>
-          {f.n(value)}
-        </Text>
-      )}
-      <PressableScale
-        haptic="selection"
-        onPress={onMore}
-        style={styles.stepperButton}
-        accessibilityRole="button"
-        accessibilityLabel={moreLabel}
-        testID={`${testID}-more`}
-      >
-        <MaterialCommunityIcons name="plus" size={22} color={colors.textPrimary} />
-      </PressableScale>
-    </View>
-  );
-}
-
 function TimeRow({
   icon,
   label,
@@ -1015,15 +955,6 @@ const useStyles = makeStyles((t) => ({
   destName: { ...t.type.headline, color: t.colors.textPrimary },
   unchecked: { ...t.type.caption, fontWeight: '600', color: t.colors.warning },
   sourcesNote: { ...t.type.footnote, color: t.colors.textTertiary },
-  rowCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing.md,
-    backgroundColor: t.colors.surface,
-    borderRadius: 20,
-    paddingHorizontal: t.spacing.lg,
-    minHeight: 64,
-  },
   rowLabel: { ...t.type.body, color: t.colors.textPrimary },
   group: { backgroundColor: t.colors.surface, borderRadius: 20, overflow: 'hidden' },
   divider: { height: 1, backgroundColor: t.colors.divider, marginLeft: 54 },
@@ -1081,9 +1012,6 @@ const useStyles = makeStyles((t) => ({
     borderRadius: 20,
     padding: t.spacing.lg,
   },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm },
-  stepperButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: t.colors.surfaceInset, alignItems: 'center', justifyContent: 'center' },
-  stepperValue: { ...t.type.headline, minWidth: 28, textAlign: 'center', color: t.colors.textPrimary },
   footer: { paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.sm, backgroundColor: t.colors.bg },
   footerAway: { display: 'none' },
   buildNow: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: t.spacing.lg },

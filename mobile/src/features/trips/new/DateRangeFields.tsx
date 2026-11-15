@@ -20,7 +20,6 @@ import { makeStyles, useTheme } from '../../../ui/theme';
 import { useReduceMotion } from '../../../ui/useReduceMotion';
 import type { RevealIn } from '../CitySearch';
 import { addDays, durationDays, localToday, parseDay } from '../dates';
-import { localDigits } from '../plan/usePlanFormat';
 import { RangeCalendar } from './RangeCalendar';
 
 type Which = 'start' | 'end';
@@ -240,7 +239,8 @@ function DateField({
   };
 
   const whole = isoOf(parts);
-  const weekday = whole && whole !== 'invalid' ? parseDay(whole).toLocaleDateString(i18n.language, { weekday: 'long', day: 'numeric', month: 'short' }) : ' ';
+  // The weekday alone ("Friday", "শুক্রবার"): the day and month are in the field above it (UI refresh step 4)
+  const weekday = whole && whole !== 'invalid' ? parseDay(whole).toLocaleDateString(i18n.language, { weekday: 'long' }) : ' ';
   const part = (key: keyof Parts, ref: React.RefObject<TextInput | null>, placeholder: string, a11y: string) => (
     <TextInput
       ref={ref}
@@ -271,14 +271,15 @@ function DateField({
         {part('y', yRef, t('newTrip.datePart.yyyy'), t('newTrip.datePart.year'))}
       </View>
       <Text style={styles.weekday} numberOfLines={1} testID={`date-${which}-weekday`}>
-        {localDigits(weekday, i18n.language)}
+        {weekday}
       </Text>
     </View>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  wrap: { gap: t.spacing.sm },
+  // Room under the weekdays, so they don't touch the card below
+  wrap: { gap: t.spacing.sm, marginBottom: t.spacing.xs },
   fields: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm },
   arrow: { marginTop: 4 },
   field: { flex: 1, gap: 4 },
@@ -298,7 +299,7 @@ const useStyles = makeStyles((t) => ({
   part: { ...t.type.body, fontWeight: '600', color: t.colors.textPrimary, minWidth: 30, textAlign: 'center', paddingVertical: 8, paddingHorizontal: 2 },
   partYear: { minWidth: 50 },
   slash: { ...t.type.body, color: t.colors.textTertiary },
-  weekday: { ...t.type.caption, color: t.colors.textSecondary, paddingHorizontal: 4 },
+  weekday: { ...t.type.callout, fontSize: 14.5, fontWeight: '500', color: t.colors.textSecondary, paddingTop: 2, paddingHorizontal: 4 },
   problem: { ...t.type.callout, color: t.colors.danger },
   closeCal: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: t.spacing.lg },
   closeCalText: { ...t.type.callout, fontWeight: '600', color: t.colors.link },

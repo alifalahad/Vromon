@@ -827,6 +827,12 @@
     "pickFirst": "Tap the first day of the trip",
     "pickLast": "Now tap the last day",
     "travellers": "Travellers",
+    "travellersField": "Travellers, from {{min}} to {{max}}",
+    "travellersNote": {
+      "tooFew": "At least {{n}} traveller: set to {{n}}",
+      "tooMany": "At most {{n}} travellers: set to {{n}}",
+      "kept": "Nothing typed: still {{n}}"
+    },
     "fewer": "Fewer travellers",
     "more": "More travellers",
     "firstLast": "First and last day",

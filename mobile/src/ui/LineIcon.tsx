@@ -1,14 +1,15 @@
 /**
- * Line icons drawn as SVG strokes, exactly as the mockups draw them (docs/ui-refresh, frames 6 and 7):
- * a 24 grid, round ends and corners, one stroke width per icon. The icon font's glyphs are filled
- * shapes of another weight, so where a frame draws its own icon the app uses these. Hidden from
- * screen readers, like every icon (icons.ts): the button around one says what it does.
+ * Line icons drawn as SVG strokes, exactly as the mockups draw them (docs/ui-refresh: frames 6 and 7,
+ * and − and + from the new trip's frame): a 24 grid, round ends and corners, one stroke width per
+ * icon. The icon font's glyphs are filled shapes of another weight, so where a frame draws its own
+ * icon the app uses these. Hidden from screen readers, like every icon (icons.ts): the button
+ * around one says what it does.
  */
 
 import React from 'react';
 import Svg, { Circle, Path } from 'react-native-svg';
 
-export type LineIconName = 'trail' | 'pin' | 'friends' | 'check' | 'close' | 'chevronRight';
+export type LineIconName = 'trail' | 'pin' | 'friends' | 'check' | 'close' | 'chevronRight' | 'minus' | 'plus';
 
 /** Each icon's shapes and the stroke width its frame uses */
 const ICONS: Record<LineIconName, { width: number; draw: React.ReactNode }> = {
@@ -46,6 +47,8 @@ const ICONS: Record<LineIconName, { width: number; draw: React.ReactNode }> = {
   check: { width: 3, draw: <Path d="M5 12.5l4.5 4.5L19 7.5" /> },
   close: { width: 2.2, draw: <Path d="M6 6l12 12M18 6L6 18" /> },
   chevronRight: { width: 2.2, draw: <Path d="M9 6l6 6-6 6" /> },
+  minus: { width: 2.2, draw: <Path d="M6 12h12" /> },
+  plus: { width: 2.2, draw: <Path d="M12 6v12M6 12h12" /> },
 };
 
 export function LineIcon({ name, size = 24, color, strokeWidth }: { name: LineIconName; size?: number; color: string; strokeWidth?: number }) {
