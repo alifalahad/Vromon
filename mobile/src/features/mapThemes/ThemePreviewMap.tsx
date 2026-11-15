@@ -3,6 +3,10 @@
  * theme with the same layers as the travel map, either the user's statuses
  * (Map: countries, and the home country's divisions when they're in the app) or a
  * comparison with a friend. Picking a theme, colours or a style repaints it.
+ *
+ * A TextureView on Android (androidView="texture"), drawn with the rest of the screen. The default
+ * GLSurfaceView is a separate layer that ignores the screen's slide-in: opening Map Theme showed
+ * it as a black box over the map until the screen arrived (the owner's bug, 2026-11-15).
  */
 
 import { Camera, GeoJSONSource, Layer, Map, type LngLatBounds } from '@maplibre/maplibre-react-native';
@@ -31,6 +35,7 @@ export function ThemePreviewMap({ theme, content, bounds }: { theme: ResolvedMap
     <Map
       style={StyleSheet.absoluteFill}
       mapStyle={MAP_STYLE}
+      androidView="texture"
       attribution={false}
       logo={false}
       compass={false}
