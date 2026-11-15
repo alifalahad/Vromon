@@ -783,6 +783,15 @@
     },
     "map3d": "3D view",
     "fullMap": "Full map",
+    "weather": "Weather",
+    "weatherA11y": "Weather for {{day}}: {{max}} degrees, {{sky}}",
+    "weatherA11yLater": "Weather for {{day}}: {{words}}. Open the weather",
+    "weatherOpen": "Open the weather",
+    "low": "Low {{n}}°",
+    "layers": "Map options",
+    "layersClose": "Close map options",
+    "mapType": "Map type",
+    "mapDefault": "Default",
     "showPlan": "Show the plan",
     "gettingAll": "See every way there, leg by leg"
   },
@@ -1164,6 +1173,21 @@
     "noForecastShort": "Forecast later",
     "sunsetAt": "Sunset {{time}}",
     "seaChip": "Sea {{wave}} m",
+    "skyShort": {
+      "clear": "Clear",
+      "partly": "Some sun",
+      "cloudy": "Cloudy",
+      "fog": "Fog",
+      "rain": "Rain",
+      "heavyRain": "Downpour",
+      "storm": "Storms",
+      "unknown": "Weather"
+    },
+    "seaShort": {
+      "calm": "Sea calm",
+      "moderate": "Some waves",
+      "rough": "Rough sea"
+    },
     "warnings_one": "{{n}} warning",
     "warnings_other": "{{n}} warnings",
     "noWarnings": "No warnings",

@@ -3,8 +3,10 @@
  * meals) joined in visiting order: along the road where we have the road line,
  * otherwise by a dashed straight line (an estimate). Tapping a pin
  * selects that stop; selecting a stop elsewhere eases the camera to it.
- * `bottomPadding` keeps pins clear of the plan sheet. Two buttons: satellite imagery or the
- * street map, and 2D or 3D (the camera tilts, relief is shaded, buildings stand up).
+ * `bottomPadding` keeps pins clear of the plan sheet. Satellite imagery or the street map, and 2D or
+ * 3D (the camera tilts, relief is shaded, buildings stand up), are chosen in the trip screen's map
+ * options (docs/ui-refresh step 7); the map has no buttons of its own. Its credit ("i") sits just
+ * above the plan sheet, clear of the row at the top.
  * Where the traveller stays (docs/trip-upgrades, step 2): a bed or house pin, joined to the day's
  * first stop and from its last one, like the other legs.
  */
@@ -17,7 +19,6 @@ import { Text, View } from 'react-native';
 
 import { boundsFor } from '../../../components/TripMap';
 import type { StayKind } from '../../../types';
-import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
 import { useReduceMotion } from '../../../ui/useReduceMotion';
 import { planColors } from './colors';
@@ -55,7 +56,8 @@ export function DayMap({
   topPadding,
   bottomPadding,
   accessibilityLabel,
-  onFullMap,
+  satellite = false,
+  is3d = false,
   start = null,
   end = null,
   baseLines = {},
@@ -72,8 +74,10 @@ export function DayMap({
   topPadding: number;
   bottomPadding: number;
   accessibilityLabel: string;
-  /** Shows a "Full map" button next to Satellite and 3D */
-  onFullMap?: () => void;
+  /** Satellite imagery instead of the street map */
+  satellite?: boolean;
+  /** The camera tilted, relief shaded */
+  is3d?: boolean;
   /** The stay the day starts from and the one it ends at */
   start?: MapBase | null;
   end?: MapBase | null;
@@ -88,15 +92,13 @@ export function DayMap({
   const lang = i18n.language;
   const camera = useRef<CameraRef>(null);
   const { t } = useTranslation();
-  const [satellite, setSatellite] = React.useState(false);
-  const [is3d, setIs3d] = React.useState(false);
   const mapStyle = useStreetStyle(theme.scheme);
   // Our lines go under the map's labels, so road names stay readable
   const under = ANCHORS[theme.scheme].route;
-  // Room at the top for the Satellite / 3D / Full map buttons, and for a stay's pin, which stands above its spot
+  // `topPadding` clears the screen's row; a stay's pin stands above its spot, so it needs more
   const hasBase = !!(start || end);
   const padding = useMemo(
-    () => ({ top: topPadding + (hasBase ? 104 : 24), right: 48, bottom: bottomPadding + 24, left: 48 }),
+    () => ({ top: topPadding + (hasBase ? 48 : 12), right: 48, bottom: bottomPadding + 24, left: 48 }),
     [topPadding, bottomPadding, hasBase],
   );
   // The stay is in view too, unless it's far away (day trips from home): then the day's stops fill the map
@@ -211,7 +213,7 @@ export function DayMap({
         compass={false}
         touchPitch={is3d}
         attribution
-        attributionPosition={{ top: topPadding + 8, right: 8 }}
+        attributionPosition={{ bottom: bottomPadding + 8, right: 8 }}
       >
         <Camera
           ref={camera}
@@ -320,49 +322,6 @@ export function DayMap({
           </Marker>
         ))}
       </Map>
-      <View style={[styles.toggles, { top: topPadding + 8 }]}>
-        <PressableScale
-          pressEffect="opacity"
-          haptic="selection"
-          onPress={() => setSatellite((s) => !s)}
-          style={styles.toggle}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: satellite }}
-          accessibilityLabel={t('plan.mapSatellite')}
-          hitSlop={8}
-          testID="map-satellite-toggle"
-        >
-          <Text style={styles.toggleText}>{satellite ? t('plan.mapStreets') : t('plan.mapSatellite')}</Text>
-        </PressableScale>
-        <PressableScale
-          pressEffect="opacity"
-          haptic="selection"
-          onPress={() => setIs3d((v) => !v)}
-          style={styles.toggle}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: is3d }}
-          accessibilityLabel={t('plan.map3d')}
-          hitSlop={8}
-          testID="map-3d-toggle"
-        >
-          <Text style={styles.toggleText}>{is3d ? '2D' : '3D'}</Text>
-        </PressableScale>
-        {onFullMap ? (
-          <PressableScale
-            pressEffect="opacity"
-            haptic="selection"
-            onPress={onFullMap}
-            style={[styles.toggle, styles.toggleRow]}
-            accessibilityRole="button"
-            accessibilityLabel={t('plan.fullMap')}
-            hitSlop={8}
-            testID="trip-full-map"
-          >
-            <MaterialCommunityIcons name="arrow-expand" size={16} color={theme.colors.textPrimary} />
-            <Text style={styles.toggleText}>{t('plan.fullMap')}</Text>
-          </PressableScale>
-        ) : null}
-      </View>
       {satellite ? (
         <Text style={[styles.credit, { bottom: bottomPadding + 4 }]} accessibilityElementsHidden importantForAccessibility="no">
           {ESRI_CREDIT}
@@ -375,19 +334,6 @@ export function DayMap({
 const useStyles = makeStyles((t) => ({
   wrap: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: t.colors.surfaceInset },
   map: { flex: 1 },
-  toggles: { position: 'absolute', left: 12, flexDirection: 'row', gap: 8 },
-  toggle: {
-    minHeight: 48,
-    minWidth: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-    borderRadius: 24,
-    backgroundColor: t.colors.surface,
-    elevation: 3,
-  },
-  toggleRow: { flexDirection: 'row', gap: 6 },
-  toggleText: { color: t.colors.textPrimary, fontSize: 14, fontWeight: '600' },
   basePin: { alignItems: 'center' },
   // A small triangle under the pin, pointing at the stay
   baseTip: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', marginTop: -1 },

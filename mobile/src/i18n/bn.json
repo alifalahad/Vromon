@@ -783,6 +783,15 @@
     },
     "map3d": "ত্রিমাত্রিক দৃশ্য",
     "fullMap": "পুরো মানচিত্র",
+    "weather": "আবহাওয়া",
+    "weatherA11y": "{{day}}-এর আবহাওয়া: {{max}} ডিগ্রি, {{sky}}",
+    "weatherA11yLater": "{{day}}-এর আবহাওয়া: {{words}}। আবহাওয়া খুলুন",
+    "weatherOpen": "আবহাওয়া খুলুন",
+    "low": "সর্বনিম্ন {{n}}°",
+    "layers": "মানচিত্রের অপশন",
+    "layersClose": "মানচিত্রের অপশন বন্ধ করুন",
+    "mapType": "মানচিত্রের ধরন",
+    "mapDefault": "সাধারণ",
     "showPlan": "পরিকল্পনা দেখুন",
     "gettingAll": "সব উপায় ধাপে ধাপে দেখুন"
   },
@@ -1164,6 +1173,21 @@
     "noForecastShort": "পূর্বাভাস পরে",
     "sunsetAt": "সূর্যাস্ত {{time}}",
     "seaChip": "সমুদ্র {{wave}} মি",
+    "skyShort": {
+      "clear": "রোদ",
+      "partly": "কিছু মেঘ",
+      "cloudy": "মেঘলা",
+      "fog": "কুয়াশা",
+      "rain": "বৃষ্টি",
+      "heavyRain": "ভারী বৃষ্টি",
+      "storm": "ঝড়",
+      "unknown": "আবহাওয়া"
+    },
+    "seaShort": {
+      "calm": "সাগর শান্ত",
+      "moderate": "কিছু ঢেউ",
+      "rough": "সাগর উত্তাল"
+    },
     "warnings_one": "{{n}}টি সতর্কতা",
     "warnings_other": "{{n}}টি সতর্কতা",
     "noWarnings": "কোনো সতর্কতা নেই",

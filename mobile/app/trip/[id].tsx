@@ -17,7 +17,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Text, useWindowDimensions, View } from 'react-native';
 import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -30,6 +30,7 @@ import { tripCard } from '../../src/features/chat/share';
 import { addDays, localToday } from '../../src/features/trips/dates';
 import { DayMap, type MapBase, type MapPin } from '../../src/features/trips/plan/DayMap';
 import { DayRibbon } from '../../src/features/trips/plan/DayRibbon';
+import { MapOptions, TripTopBar, weatherLook } from '../../src/features/trips/plan/TripTopBar';
 import { FreeRow, LegRow, StopCard } from '../../src/features/trips/plan/PlanRows';
 import { ConditionChips } from '../../src/features/trips/conditions/ConditionChips';
 import { isSerious, useConditionText } from '../../src/features/trips/conditions/useConditionText';
@@ -110,6 +111,9 @@ function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** The row over the map: its top (8 under the status bar), its height (58) and a little room below it */
+const TOP_ROW = 8 + 58 + 8;
+
 export default function TripScreen() {
   const styles = useStyles();
   const theme = useTheme();
@@ -150,6 +154,20 @@ export default function TripScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   // Full map: the plan sheet steps aside and the map takes the whole screen
   const [fullMap, setFullMap] = useState(false);
+  // The map options panel, and what it sets (docs/ui-refresh step 7)
+  const [layersOpen, setLayersOpen] = useState(false);
+  const [satellite, setSatellite] = useState(false);
+  const [is3d, setIs3d] = useState(false);
+  // Without a back arrow, the phone's back first closes the panel, then leaves Full map, then the screen
+  useEffect(() => {
+    if (!layersOpen && !fullMap) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (layersOpen) setLayersOpen(false);
+      else setFullMap(false);
+      return true;
+    });
+    return () => sub.remove();
+  }, [layersOpen, fullMap]);
   const [fitCount, setFitCount] = useState(0);
   const [snack, setSnack] = useState<{ message: string; undo?: () => void } | null>(null);
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null);
@@ -385,17 +403,6 @@ export default function TripScreen() {
   const conditionText = useConditionText();
   const dayConditions = conditions.data?.days.find((d) => d.day_id === day?.id);
   const openConditions = () => router.push({ pathname: '/trip/conditions/[id]', params: { id: tripId, day: day?.day_number ?? 1 } });
-  const [refreshingConditions, setRefreshingConditions] = useState(false);
-  const refreshConditions = async () => {
-    setRefreshingConditions(true);
-    try {
-      queryClient.setQueryData(['conditions', tripId], await tripsApi.conditions(tripId, true));
-    } catch {
-      setSnack({ message: t('conditions.refreshFailed') });
-    } finally {
-      setRefreshingConditions(false);
-    }
-  };
 
   // Road lines for the map, a day at a time (kept on the server); legs without one are drawn straight.
   // A day whose route is missing a leg (routing was down, or still working) is asked again every 30 s
@@ -894,58 +901,24 @@ export default function TripScreen() {
         start={startBase}
         end={endBase}
         baseLines={baseLines}
-        topPadding={insets.top + 56}
+        topPadding={insets.top + TOP_ROW}
         bottomPadding={fullMap ? insets.bottom + 96 : sheetLow}
         accessibilityLabel={t('plan.mapLabel', { n: f.n(day?.day_number ?? 1) })}
-        onFullMap={pins.length > 0 && !fullMap ? () => setFullMap(true) : undefined}
+        satellite={satellite}
+        is3d={is3d}
       />
 
-      <View style={[styles.topBar, { top: insets.top + 8 }]} pointerEvents="box-none">
-        <RoundButton icon="arrow-left" label={t('common.back')} onPress={() => router.back()} testID="trip-back" />
-        {conditions.data?.fetched_at ? (
-          <View style={styles.updatedPill}>
-            <PressableScale
-              pressEffect="opacity"
-              haptic="selection"
-              onPress={openConditions}
-              style={styles.updatedOpen}
-              accessibilityRole="button"
-              accessibilityLabel={`${t('conditions.title')}: ${t('conditions.updated', { age: conditionText.age(conditions.data.fetched_at) })}`}
-              testID="conditions-pill"
-            >
-              <View style={[styles.liveDot, conditions.data.stale && styles.staleDot]} />
-              <Text style={styles.updatedText} numberOfLines={1}>
-                {conditions.data.stale
-                  ? t('conditions.offlinePill', { age: conditionText.age(conditions.data.fetched_at) })
-                  : t('conditions.updated', { age: conditionText.age(conditions.data.fetched_at) })}
-              </Text>
-            </PressableScale>
-            <PressableScale
-              pressEffect="opacity"
-              haptic="selection"
-              onPress={refreshConditions}
-              disabled={refreshingConditions}
-              style={styles.updatedRefresh}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel={t('conditions.refresh')}
-              accessibilityState={{ busy: refreshingConditions }}
-              testID="conditions-refresh-pill"
-            >
-              {refreshingConditions ? (
-                <ActivityIndicator size="small" color={theme.colors.link} />
-              ) : (
-                <MaterialCommunityIcons name="refresh" size={20} color={theme.colors.link} />
-              )}
-            </PressableScale>
-          </View>
-        ) : null}
-        <View style={styles.topRight} pointerEvents="box-none">
-          {pins.length > 1 && <RoundButton icon="arrow-expand-all" label={t('plan.showDay')} onPress={() => setFitCount((c) => c + 1)} testID="trip-fit" />}
-          {mine && <RoundButton icon="dots-vertical" label={t('plan.more')} onPress={() => setMenuOpen(true)} testID="trip-menu" />}
-        </View>
-      </View>
-
+      {/* The row over the map (docs/ui-refresh step 7): weather, map options, Full map, ⋮; no back arrow */}
+      <TripTopBar
+        top={insets.top + 8}
+        look={weatherLook(dayConditions, conditions.data)}
+        dayNumber={day?.day_number ?? 1}
+        layersOpen={layersOpen}
+        onWeather={openConditions}
+        onLayers={() => setLayersOpen((o) => !o)}
+        onFullMap={pins.length > 0 && !fullMap ? () => setFullMap(true) : undefined}
+        onMore={mine ? () => setMenuOpen(true) : undefined}
+      />
       {fullMap ? (
         <PressableScale
           haptic="selection"
@@ -957,6 +930,25 @@ export default function TripScreen() {
           <MaterialCommunityIcons name="format-list-bulleted" size={20} color={theme.colors.onAccent} />
           <Text style={styles.showPlanText}>{t('plan.showPlan')}</Text>
         </PressableScale>
+      ) : null}
+
+      {layersOpen ? (
+        <MapOptions
+          top={insets.top + TOP_ROW + 2}
+          satellite={satellite}
+          is3d={is3d}
+          onSatellite={setSatellite}
+          on3d={setIs3d}
+          onShowDay={
+            pins.length > 1
+              ? () => {
+                  setLayersOpen(false);
+                  setFitCount((c) => c + 1);
+                }
+              : undefined
+          }
+          onClose={() => setLayersOpen(false)}
+        />
       ) : null}
 
       {fullMap || !settled ? null : (
@@ -1414,26 +1406,6 @@ function DropChip({ label, onRect }: { label: string; onRect: (r: { x: number; y
   );
 }
 
-function RoundButton({
-  icon,
-  label,
-  onPress,
-  testID,
-}: {
-  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
-  label: string;
-  onPress: () => void;
-  testID?: string;
-}) {
-  const styles = useStyles();
-  const { colors } = useTheme();
-  return (
-    <PressableScale onPress={onPress} accessibilityLabel={label} style={styles.round} testID={testID}>
-      <MaterialCommunityIcons name={icon} size={24} color={colors.textPrimary} />
-    </PressableScale>
-  );
-}
-
 const useStyles = makeStyles((t) => {
   const sheetBg = t.scheme === 'dark' ? t.colors.bg : t.colors.surface;
   return {
@@ -1442,29 +1414,6 @@ const useStyles = makeStyles((t) => {
     errorText: { ...t.type.headline, color: t.colors.danger, textAlign: 'center' },
     muted: { ...t.type.callout, color: t.colors.textSecondary },
     note: { ...t.type.footnote, color: t.colors.textTertiary, marginTop: t.spacing.sm },
-    topBar: { position: 'absolute', left: t.spacing.md, right: t.spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    updatedOpen: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, height: 36 },
-    updatedRefresh: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-    updatedPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      height: 40,
-      paddingLeft: 12,
-      paddingRight: 4,
-      borderRadius: 999,
-      backgroundColor: t.colors.surface,
-      shadowColor: t.colors.shadow,
-      shadowOpacity: 0.3,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 4,
-      flexShrink: 1,
-    },
-    liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: t.colors.success },
-    staleDot: { backgroundColor: t.colors.warning },
-    updatedText: { ...t.type.footnote, color: t.colors.textSecondary },
-    topRight: { flexDirection: 'row', gap: t.spacing.sm },
     showPlan: {
       position: 'absolute',
       alignSelf: 'center',
@@ -1478,19 +1427,6 @@ const useStyles = makeStyles((t) => {
       elevation: 6,
     },
     showPlanText: { ...t.type.headline, color: t.colors.onAccent },
-    round: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: t.colors.surface,
-      shadowColor: t.colors.shadow,
-      shadowOpacity: 0.25,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 4,
-    },
     sheet: { backgroundColor: sheetBg, borderTopLeftRadius: t.radius.sheet, borderTopRightRadius: t.radius.sheet },
     handle: { backgroundColor: t.colors.textTertiary, width: 40 },
     sheetBody: { paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.xs, gap: t.spacing.md },

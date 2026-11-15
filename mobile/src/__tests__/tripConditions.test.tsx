@@ -207,15 +207,23 @@ describe('live conditions (trip planner step 6)', () => {
     api.dayRoute.mockResolvedValue({ day_id: 11, provider: 'ors', legs: [] });
     api.conditions.mockResolvedValue(COND);
     await renderWithQuery(<TripScreen />);
-    expect(await screen.findByText('32° / 25°')).toBeTruthy();
+    // The weather button at the top (docs/ui-refresh step 7): the day's high, its sky, the low, a warning mark
+    expect(await screen.findByText('32°')).toBeTruthy();
+    expect(screen.getByTestId('trip-weather-second')).toHaveTextContent('Low 25°');
+    expect(screen.getByTestId('trip-weather-warning')).toBeTruthy();
+    // The chips say what the button doesn't
+    expect(screen.queryByText('32° / 25°')).toBeNull();
     expect(screen.getByText('2 warnings')).toBeTruthy();
     expect(screen.getByText('Sunset 17:25')).toBeTruthy();
-    expect(screen.getByText('Sea 1.8 m')).toBeTruthy();
+    expect(screen.getByText('Rough sea')).toBeTruthy();
     expect(screen.getByText('Storms likely 10:00–12:00')).toBeTruthy();
     expect(screen.getByText('Rough sea at the beaches')).toBeTruthy();
     expect(screen.getByText('Usually slow 17:00–20:00 · about +4 min')).toBeTruthy();
-    expect(screen.getByText('Updated just now')).toBeTruthy();
     await act(async () => fireEvent.press(screen.getByTestId('cond-chip-warnings')));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/trip/conditions/[id]', params: { id: 5, day: 1 } });
+    // The weather button opens the same screen on the same day
+    mockPush.mockClear();
+    await act(async () => fireEvent.press(screen.getByTestId('trip-weather')));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/trip/conditions/[id]', params: { id: 5, day: 1 } });
   });
 
@@ -242,12 +250,11 @@ describe('live conditions (trip planner step 6)', () => {
     expect(screen.getByLabelText('10:00, Laboni Beach: Partly cloudy, 29°, 40% chance of rain')).toBeTruthy();
   });
 
-  it('refreshes on request, from the screen and from the trip', async () => {
+  it('refreshes on request on the weather screen (the trip screen has no refresh of its own)', async () => {
     setUp();
-    api.dayRoute.mockResolvedValue({ day_id: 11, provider: 'ors', legs: [] });
     api.conditions.mockResolvedValue(COND);
-    await renderWithQuery(<TripScreen />);
-    await act(async () => fireEvent.press(await screen.findByTestId('conditions-refresh-pill')));
+    await renderWithQuery(<ConditionsScreen />);
+    await act(async () => fireEvent.press(await screen.findByTestId('conditions-refresh')));
     await waitFor(() => expect(api.conditions).toHaveBeenCalledWith(5, true));
   });
 
@@ -269,6 +276,7 @@ describe('live conditions (trip planner step 6)', () => {
     api.dayRoute.mockResolvedValue({ day_id: 11, provider: 'ors', legs: [] });
     api.conditions.mockResolvedValue({ ...COND, stale: true, fetched_at: new Date(Date.now() - 2 * 3600_000).toISOString() });
     await renderWithQuery(<TripScreen />);
-    expect(await screen.findByText('Offline · updated 2 h ago')).toBeTruthy();
+    // Quieter, and how old it is, on the weather button
+    expect(await screen.findByTestId('trip-weather-second')).toHaveTextContent('2 h ago');
   });
 });

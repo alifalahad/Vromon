@@ -22,7 +22,12 @@ export type LineIconName =
   | 'bus'
   | 'train'
   | 'plane'
-  | 'car';
+  | 'car'
+  | 'layers'
+  | 'fullMap'
+  | 'more'
+  | 'cube'
+  | 'fitDay';
 
 /** Each icon's shapes and the stroke width its frame uses; `color` for the few filled parts */
 const ICONS: Record<LineIconName, { width: number; draw: React.ReactNode | ((color: string) => React.ReactNode) }> = {
@@ -102,6 +107,29 @@ const ICONS: Record<LineIconName, { width: number; draw: React.ReactNode | ((col
     ),
   },
   car: { width: 2, draw: <Path d="M4 16h16v-3.5l-2-5A2 2 0 0 0 16.1 6H7.9A2 2 0 0 0 6 7.5l-2 5V16ZM5.5 16v2.5M18.5 16v2.5M4.5 12h15" /> },
+  // The trip screen's row and its map options (frames 11 and 12)
+  layers: { width: 1.9, draw: <Path d="M12 4l8 4.5-8 4.5-8-4.5L12 4ZM4 13l8 4.5 8-4.5" /> },
+  fullMap: { width: 2, draw: <Path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /> },
+  more: {
+    width: 0,
+    draw: (color) => (
+      <>
+        <Circle cx={12} cy={5} r={1.9} fill={color} stroke="none" />
+        <Circle cx={12} cy={12} r={1.9} fill={color} stroke="none" />
+        <Circle cx={12} cy={19} r={1.9} fill={color} stroke="none" />
+      </>
+    ),
+  },
+  cube: { width: 1.9, draw: <Path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3ZM4 7.5L12 12l8-4.5M12 12v9" /> },
+  fitDay: {
+    width: 1.9,
+    draw: (
+      <>
+        <Path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4" />
+        <Circle cx={12} cy={12} r={2.5} />
+      </>
+    ),
+  },
 };
 
 export function LineIcon({ name, size = 24, color, strokeWidth }: { name: LineIconName; size?: number; color: string; strokeWidth?: number }) {

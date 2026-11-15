@@ -17,7 +17,7 @@
 | 4 | 4 | New trip: weekday only under the dates; type the number of travellers | ✅ done 2026-11-15 | [step-4-report.md](reports/step-4-report.md) |
 | 5 | 5 | New trip: getting there (optional, precise location, ways to get there) | ✅ done 2026-11-15 | [step-5-report.md](reports/step-5-report.md) |
 | 6 | 6 | Must-dos: type the busy time's From and To | ✅ done 2026-11-15 | [step-6-report.md](reports/step-6-report.md) |
-| 7 | 7 | Trip screen: the row of buttons over the map | not started | |
+| 7 | 7 | Trip screen: the row of buttons over the map | ✅ done 2026-11-15 | [step-7-report.md](reports/step-7-report.md) |
 | 8 | 8 | Trip screen: drag and drop that works for long trips | not started | |
 | 9 | 9 | Trips tab and trip stats, rebuilt | not started | |
 | 10 | (all tabs) | The account picture, top right on every tab's front page | not started | |

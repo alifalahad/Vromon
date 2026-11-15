@@ -131,9 +131,9 @@ name: 09 The whole journey - a trip from today, rearranged, its conditions, Toda
     commands:
       - back
 
-# Live conditions: the pill opens them
+# Live conditions: the weather button at the top opens them (docs/ui-refresh step 7)
 - tapOn:
-    id: conditions-pill
+    id: trip-weather
 - extendedWaitUntil:
     visible:
       id: conditions-updated
