@@ -123,6 +123,15 @@ describe('Friends tab', () => {
     await fireEvent.press(screen.getByTestId('friends-add-via-code'));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/friends/add', params: { tab: 'search' } });
   });
+
+  it('keeps "Friends" and the account picture in a fixed header, with or without friends (UI refresh step 10)', async () => {
+    api.requests.mockResolvedValue([]);
+    api.list.mockResolvedValue([]);
+    await renderWithQuery(<FriendsScreen />);
+    expect(await screen.findByTestId('friends-header')).toHaveTextContent(/^Friends/);
+    await fireEvent.press(screen.getByTestId('account-button-friends'));
+    expect(mockPush).toHaveBeenCalledWith('/settings');
+  });
 });
 
 describe('the action for each relation', () => {

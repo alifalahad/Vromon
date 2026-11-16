@@ -26,6 +26,7 @@ import { TripNumbers } from '../../src/features/trips/TripNumbers';
 import { onMap, useMarkVisited } from '../../src/features/trips/useMarkVisited';
 import { roomsApi } from '../../src/services/api';
 import type { Trip } from '../../src/types';
+import { AccountButton } from '../../src/ui/AccountButton';
 import { Button } from '../../src/ui/Button';
 import { HeaderPill, TabHeader } from '../../src/ui/TabHeader';
 import { makeStyles, useTheme } from '../../src/ui/theme';
@@ -75,6 +76,7 @@ export default function TripsScreen() {
         title={t('trips.title')}
         scrolled={scrolled}
         actions={<HeaderPill label={t('trips.newTrip')} onPress={() => router.push('/trip/new')} testID="plan-trip-fab" />}
+        account={<AccountButton testID="account-button-trips" />}
         testID="trips-header"
       />
       <SectionList

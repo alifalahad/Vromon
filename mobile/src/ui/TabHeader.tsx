@@ -1,7 +1,11 @@
 /**
- * A tab's fixed header (docs/ui-refresh step 9, frame 15): the title stays at the top, clear of the status
- * bar, while the page scrolls under it, with a hairline once something is under it. On the right, the tab's
- * own actions (a pill such as "New trip"), then a slot for the account picture (step 10).
+ * A tab's fixed header (docs/ui-refresh steps 9 and 10, frames 15, 18 and 19): the title (or, on Explore,
+ * the search field) stays at the top, clear of the status bar, while the page scrolls under it, with a
+ * hairline once something is under it. On the right, the tab's own actions (a pill such as "New trip"),
+ * then the account picture.
+ *
+ * The row is 56 dp tall, 8 dp under the status bar, so the 48 dp account button sits 12 dp under it and
+ * 8 dp from the right: where the Map tab's floats (AccountButton's ACCOUNT), on every tab.
  */
 
 import React from 'react';
@@ -12,14 +16,21 @@ import { LineIcon } from './LineIcon';
 import { PressableScale } from './PressableScale';
 import { makeStyles, useTheme } from './theme';
 
+/** The header's row, under the status bar, and the line under it (so the row stays 56) */
+const ROW = 56;
+const HAIRLINE = 1;
+
 export function TabHeader({
   title,
+  children,
   scrolled = false,
   actions,
   account,
   testID,
 }: {
-  title: string;
+  title?: string;
+  /** In place of the title (Explore's search field) */
+  children?: React.ReactNode;
   /** Something is scrolled under the header: show the hairline */
   scrolled?: boolean;
   /** The tab's own buttons, on the right */
@@ -31,10 +42,23 @@ export function TabHeader({
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.header, { paddingTop: insets.top + 4 }, account ? styles.withAccount : null, scrolled && styles.scrolled]} testID={testID}>
-      <Text style={styles.title} accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.3}>
-        {title}
-      </Text>
+    <View
+      // A 56 dp row under the status bar, fixed: the 48 dp account button is centred 12 dp under it whatever is beside it,
+      // at any text size (the title's line grows with the phone's text size)
+      style={[
+        styles.header,
+        { paddingTop: insets.top + 8, height: insets.top + 8 + ROW + HAIRLINE },
+        children ? styles.custom : null,
+        account ? styles.withAccount : null,
+        scrolled && styles.scrolled,
+      ]}
+      testID={testID}
+    >
+      {children ?? (
+        <Text style={styles.title} accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.3}>
+          {title}
+        </Text>
+      )}
       {actions}
       {account}
     </View>
@@ -60,15 +84,14 @@ const useStyles = makeStyles((t) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: t.spacing.sm,
-    minHeight: 56,
     paddingLeft: t.spacing.xl,
     paddingRight: t.spacing.lg,
-    paddingBottom: 4,
     backgroundColor: t.colors.bg,
-    borderBottomWidth: 1,
+    borderBottomWidth: HAIRLINE,
     borderBottomColor: 'transparent',
     zIndex: 10,
   },
+  custom: { paddingLeft: t.spacing.lg, gap: 6 },
   withAccount: { paddingRight: t.spacing.sm },
   scrolled: { borderBottomColor: t.colors.hairline },
   title: {

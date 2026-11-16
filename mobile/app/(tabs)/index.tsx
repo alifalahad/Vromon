@@ -52,7 +52,7 @@ import { useHere } from '../../src/features/trips/today/useHere';
 import { resolveLanguage } from '../../src/i18n';
 import { destinationsApi } from '../../src/services/api';
 import type { Destination } from '../../src/types';
-import { Avatar } from '../../src/ui/Avatar';
+import { ACCOUNT, AccountButton } from '../../src/ui/AccountButton';
 import { glass } from '../../src/ui/GlassSurface';
 import { haptics } from '../../src/ui/haptics';
 import { PressableScale } from '../../src/ui/PressableScale';
@@ -332,17 +332,10 @@ export default function MapScreen() {
         ) : null}
       </View>
 
-      <PressableScale
-        style={[styles.round, styles.profileButton, { top: top + 4 }]}
-        onPress={() => {
-          setPlace(null);
-          router.push('/settings');
-        }}
-        accessibilityLabel={t('map.openSettings')}
-        testID="map-profile-button"
-      >
-        <Avatar name={me?.display_name ?? me?.username} id={me?.id} uri={me?.avatar_url} size={ROUND - 6} />
-      </PressableScale>
+      {/* Your account picture: the same spot as in the other tabs' headers (step 10) */}
+      <View style={[styles.account, { top: insets.top + ACCOUNT.fromTop }]} pointerEvents="box-none">
+        <AccountButton floating onOpen={() => setPlace(null)} testID="map-profile-button" />
+      </View>
 
       <View style={[styles.column, { bottom: DOCK_GAP + 6 }]} pointerEvents="box-none">
         <PressableScale
@@ -510,7 +503,7 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  profileButton: { position: 'absolute', right: t.spacing.lg },
+  account: { position: 'absolute', right: ACCOUNT.fromRight },
   // Bottom-right, above the tab bar
   column: { position: 'absolute', right: t.spacing.lg, alignItems: 'center', gap: t.spacing.md },
   mark: { width: MARK, height: MARK, borderRadius: MARK / 2 },

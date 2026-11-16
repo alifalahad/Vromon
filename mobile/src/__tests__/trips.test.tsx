@@ -180,7 +180,10 @@ describe('Trips tab', () => {
     api.list.mockResolvedValue([trip(1, addDays(20), addDays(22))]);
     api.stats.mockResolvedValue(ZERO);
     await renderWithQuery(<TripsScreen />);
-    expect(await screen.findByTestId('trips-header')).toHaveTextContent(/^TripsNew trip$/);
+    expect(await screen.findByTestId('trips-header')).toHaveTextContent(/^TripsNew trip/);
+    // The account picture last in the header (step 10), opening Settings
+    await fireEvent.press(screen.getByTestId('account-button-trips'));
+    expect(mockPush).toHaveBeenCalledWith('/settings');
     expect(screen.getByTestId('trips-header')).toHaveStyle({ borderBottomColor: 'transparent' });
     await fireEvent.scroll(screen.getByTestId('trips-list'), { nativeEvent: { contentOffset: { y: 40 }, contentSize: { height: 2000, width: 390 }, layoutMeasurement: { height: 800, width: 390 } } });
     expect([lightColors.hairline, darkColors.hairline]).toContain(StyleSheet.flatten(screen.getByTestId('trips-header').props.style).borderBottomColor);

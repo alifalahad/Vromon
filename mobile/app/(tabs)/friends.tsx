@@ -28,12 +28,13 @@ import { shareInvite } from '../../src/features/friends/share';
 import { useFriendActions } from '../../src/features/friends/useFriendActions';
 import { usePlanFormat } from '../../src/features/trips/plan/usePlanFormat';
 import type { Conversation, Friend, FriendRequest } from '../../src/types';
+import { AccountButton } from '../../src/ui/AccountButton';
 import { Avatar } from '../../src/ui/Avatar';
 import { Button } from '../../src/ui/Button';
 import { Fab } from '../../src/ui/Fab';
-import { LargeTitle } from '../../src/ui/LargeTitle';
 import { PressableScale } from '../../src/ui/PressableScale';
 import { SegmentedControl } from '../../src/ui/SegmentedControl';
+import { TabHeader } from '../../src/ui/TabHeader';
 import { makeStyles, useTheme } from '../../src/ui/theme';
 import { useDevPerf, useScrollPerf } from '../../src/utils/devPerf';
 import { notify } from '../../src/utils/dialogs';
@@ -52,6 +53,10 @@ export default function FriendsScreen() {
   useScrollToTop(scrollRef);
   useScrollToTop(listRef);
   const [segment, setSegment] = useState<Segment>('chats');
+  // The fixed header (docs/ui-refresh step 10), with its hairline once something is scrolled under it
+  const [scrolled, setScrolled] = useState(false);
+  const onScroll = (e: { nativeEvent: { contentOffset: { y: number } } }) => setScrolled(e.nativeEvent.contentOffset.y > 2);
+  const header = <TabHeader title={t('friends.title')} scrolled={scrolled} account={<AccountButton testID="account-button-friends" />} testID="friends-header" />;
   const now = useMinuteClock();
   const openChat = useCallback((id: number) => router.push({ pathname: '/chat/[id]', params: { id: String(id) } }), [router]);
 
@@ -98,11 +103,13 @@ export default function FriendsScreen() {
   if (nobody) {
     return (
       <View style={styles.container}>
+        {header}
         <ScrollView
           contentContainerStyle={styles.emptyScroll}
           refreshControl={<RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.textSecondary} colors={[colors.accent]} />}
+          onScroll={onScroll}
+          scrollEventThrottle={32}
         >
-          <LargeTitle title={t('friends.title')} />
           <EmptyState
             onInvite={() => me && shareInvite(me.friend_code, t)}
             onAddByCode={() => router.push({ pathname: '/friends/add', params: { tab: 'search' } })}
@@ -116,7 +123,6 @@ export default function FriendsScreen() {
   const refreshControl = <RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.textSecondary} colors={[colors.accent]} />;
   const top = (
     <>
-      <LargeTitle title={t('friends.title')} />
       <SegmentedControl
         options={[
           { value: 'chats', label: unread > 0 ? `${t('chat.chats')} (${f.n(unread)})` : t('chat.chats') },
@@ -132,10 +138,16 @@ export default function FriendsScreen() {
 
   return (
     <View style={styles.container}>
+      {header}
       {segment === 'chats' ? (
         <FlatList
           ref={listRef}
           {...scrollPerf}
+          onScroll={(e) => {
+            scrollPerf.onScroll?.(e);
+            onScroll(e);
+          }}
+          scrollEventThrottle={scrollPerf.scrollEventThrottle ?? 32}
           data={myId ? (chats.data ?? []) : []}
           keyExtractor={(c) => String(c.id)}
           renderItem={renderChat}
@@ -175,7 +187,7 @@ export default function FriendsScreen() {
           testID="chat-list"
         />
       ) : (
-        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} refreshControl={refreshControl}>
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} refreshControl={refreshControl} onScroll={onScroll} scrollEventThrottle={32}>
           {top}
           {loading ? <Skeleton /> : null}
           {incoming.data?.length ? (
@@ -399,7 +411,7 @@ const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.bg },
   content: { paddingBottom: 120 },
   emptyScroll: { flexGrow: 1, paddingBottom: 120 },
-  segments: { marginHorizontal: t.spacing.lg, marginBottom: t.spacing.md },
+  segments: { marginHorizontal: t.spacing.lg, marginTop: t.spacing.xs, marginBottom: t.spacing.md },
   chats: { paddingTop: t.spacing.xs },
   requests: {
     flexDirection: 'row',

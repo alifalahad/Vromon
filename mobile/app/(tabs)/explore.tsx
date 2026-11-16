@@ -14,7 +14,6 @@ import { Image } from 'expo-image';
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, FlatList, ScrollView, Text, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   CONTINENT_KEYS,
@@ -33,7 +32,9 @@ import {
 import { PhotoCard, PhotoCredits } from '../../src/features/explore/PhotoCard';
 import { flagEmoji } from '../../src/features/geo/countries';
 import { localDigits } from '../../src/features/trips/plan/usePlanFormat';
+import { AccountButton } from '../../src/ui/AccountButton';
 import { PressableScale } from '../../src/ui/PressableScale';
+import { TabHeader } from '../../src/ui/TabHeader';
 import { makeStyles, useTheme } from '../../src/ui/theme';
 
 // Esri's World Imagery over Bangladesh (keyless export, as on the district cards)
@@ -46,10 +47,12 @@ export default function ExploreScreen() {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
   const [query, setQuery] = useState('');
+  // The header's hairline once something is scrolled under it
+  const [scrolled, setScrolled] = useState(false);
+  const onScroll = (e: { nativeEvent: { contentOffset: { y: number } } }) => setScrolled(e.nativeEvent.contentOffset.y > 2);
   const [division, setDivision] = useState<string | null>(null);
 
   const bd = useBangladesh();
@@ -79,7 +82,7 @@ export default function ExploreScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.searchBar, { paddingTop: insets.top + 12 }]}>
+      <TabHeader scrolled={scrolled} account={<AccountButton testID="account-button-explore" />} testID="explore-header">
         <View style={styles.searchField}>
           <MaterialIcons name="search" size={22} color={colors.textSecondary} />
           <TextInput
@@ -88,6 +91,7 @@ export default function ExploreScreen() {
             placeholder={t('explore.searchPlaceholder')}
             placeholderTextColor={colors.textTertiary}
             style={styles.searchInput}
+            maxFontSizeMultiplier={1.3}
             returnKeyType="search"
             autoCorrect={false}
             accessibilityLabel={t('explore.searchPlaceholder')}
@@ -99,10 +103,10 @@ export default function ExploreScreen() {
             </PressableScale>
           ) : null}
         </View>
-      </View>
+      </TabHeader>
 
       {searching ? (
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={32}>
           {search.isLoading ? <ActivityIndicator color={colors.link} style={styles.loading} /> : null}
           {search.data && !search.data.districts.length && !search.data.countries.length && !search.data.cities.length ? (
             <Text style={styles.muted}>{t('explore.noResults')}</Text>
@@ -118,7 +122,7 @@ export default function ExploreScreen() {
           ))}
         </ScrollView>
       ) : (
-        <ScrollView ref={scrollRef} contentContainerStyle={styles.body} testID="explore-home">
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.body} onScroll={onScroll} scrollEventThrottle={32} testID="explore-home">
           {/* Bangladesh */}
           <PressableScale
             style={styles.hero}
@@ -340,19 +344,20 @@ function ResultRow({ icon, flag, title, subtitle, onPress }: { icon?: 'place'; f
 const useStyles = makeStyles((t) => ({
   screen: { flex: 1, backgroundColor: t.colors.bg },
   fill: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
-  searchBar: { paddingHorizontal: 16, paddingBottom: 10, backgroundColor: t.colors.bg },
+  // Frame 18: the field beside the account picture, a fixed height so the picture never moves
   searchField: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    minHeight: 52,
+    height: 52,
     borderRadius: 26,
     paddingHorizontal: 16,
     backgroundColor: t.colors.surface,
     borderWidth: 1,
     borderColor: t.colors.border,
   },
-  searchInput: { flex: 1, ...t.type.body, color: t.colors.textPrimary, paddingVertical: 10 },
+  searchInput: { flex: 1, ...t.type.body, color: t.colors.textPrimary, paddingVertical: 0 },
   body: { paddingHorizontal: 16, paddingBottom: 40 },
   loading: { marginVertical: 24 },
   muted: { ...t.type.footnote, color: t.colors.textSecondary },

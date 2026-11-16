@@ -26,7 +26,8 @@
     "saved": "Saved",
     "error": "Something went wrong. Please try again.",
     "signOut": "Sign out",
-    "back": "Back"
+    "back": "Back",
+    "account": "Your profile and settings"
   },
   "map": {
     "views": {
@@ -187,7 +188,6 @@
       "undatedPlaces_other": "No date yet: {{places}}, and {{n}} more",
       "undatedPlacesOnly": "No date yet: {{places}}"
     },
-    "openSettings": "Your profile and settings",
     "searchAll": "Search countries, divisions and cities"
   },
   "mapTheme": {
