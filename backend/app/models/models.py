@@ -209,6 +209,9 @@ class Hotel(Base):
     destination_id: Mapped[int] = mapped_column(Integer, ForeignKey("destinations.id"), nullable=False)
     destination_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     category: Mapped[str] = mapped_column(String(50), default="Standard")  # Budget / Standard / Luxury
+    # What sort of place to stay (docs/ui-refresh step 11): hotel, resort, guest_house, rest_house, motel,
+    # cottage, bed_and_breakfast, hostel; None for the demo hotels
+    kind: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     price_per_night: Mapped[float] = mapped_column(Float, default=2000.0)  # BDT
     currency: Mapped[str] = mapped_column(String(10), default="BDT")
     rating: Mapped[float] = mapped_column(Float, default=4.0)

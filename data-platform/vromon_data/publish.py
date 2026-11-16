@@ -24,6 +24,9 @@ Hotels and restaurants (service places) → `hotels`, `restaurants`:
     rate, price unknown. Its level: the ministry's 5 stars or a rate over 8,000 is Luxury,
     a rate under 3,000 Budget, otherwise Standard
   - a restaurant's meal cost and hours stay unknown
+  - a hotel's kind (hotel, resort, guest house, rest house …: vromon_data.lodging) goes with it
+  - a listing that moved between the two (a "hotel" that is a place to eat, step 11) hides its old row;
+    trips that chose that row keep it
   - the demo hotels and restaurants (no source_ref) are hidden once real ones are published
 
 Districts → `destinations` (publish_destinations), so a trip can start in any district:
@@ -52,6 +55,7 @@ from app.models.catalog import (AdminUnit, Attraction, AttractionCategory, Entit
 from app.models.catalog import AdminBoundary
 from app.models.models import City, Destination, Hotel, ItineraryItem, Place, Restaurant, TripPreference
 from vromon_data.geo import haversine_km, load as load_geometry
+from vromon_data.lodging import lodging_kind
 from vromon_data.text import match_key, name_similarity
 
 DEMO_DESTINATIONS = {"Cox's Bazar"}
@@ -231,7 +235,7 @@ def _hotel_level(stars: int | None, price: float | None) -> str:
 
 
 def publish_service_places(session: Session, *, dry_run: bool = False) -> dict:
-    counts = {"hotels": 0, "restaurants": 0, "priced_hotels": 0, "hidden": 0, "demo_hidden": 0, "out_of_town": 0}
+    counts = {"hotels": 0, "restaurants": 0, "priced_hotels": 0, "hidden": 0, "moved": 0, "demo_hidden": 0, "out_of_town": 0}
     destinations = list(session.scalars(select(Destination).where(Destination.is_active.is_(True))))
     rates = _room_rates(session)
     published_dest: dict[type, set[int]] = {Hotel: set(), Restaurant: set()}
@@ -239,6 +243,11 @@ def publish_service_places(session: Session, *, dry_run: bool = False) -> dict:
     for sp in session.scalars(select(ServicePlace).where(ServicePlace.kind.in_(("accommodation", "food")))):
         model = Hotel if sp.kind == "accommodation" else Restaurant
         ref = f"{CATALOG_REF_PREFIX}{sp.slug}"
+        # Listed on the other side before (a "hotel" that is a place to eat): that row goes
+        other = Restaurant if model is Hotel else Hotel
+        for old in session.scalars(select(other).where(other.source_ref == ref, other.is_active.is_(True))):
+            old.is_active = False
+            counts["moved"] += 1
         row = session.scalar(select(model).where(model.source_ref == ref))
         near = None
         if sp.status == "published" and sp.latitude is not None:
@@ -266,6 +275,7 @@ def publish_service_places(session: Session, *, dry_run: bool = False) -> dict:
             row.price_known = price is not None
             row.price_per_night = price if price is not None else 0.0
             row.category = _hotel_level(sp.official_star_rating, price)
+            row.kind = lodging_kind(sp.category, sp.name_en, sp.name_bn)
             row.amenities = []
             counts["hotels"] += 1
             counts["priced_hotels"] += row.price_known

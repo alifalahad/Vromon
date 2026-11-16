@@ -137,6 +137,17 @@ def _publish(args) -> int:
     return 0
 
 
+def _lodging(args) -> int:
+    from vromon_data import lodging
+    with _session() as s:
+        out = lodging.apply(s, dry_run=args.dry_run)
+    changes = out.pop("changes")
+    print(json.dumps(out, indent=2, ensure_ascii=False))
+    for c in changes:
+        print(f"{c['verdict']:9} {c['category'] or '-':18} {c['name']}  ({', '.join(c['words'])})")
+    return 0
+
+
 def _maps(args) -> int:
     from sqlalchemy import select
     from app.models.catalog import AdminUnit
@@ -252,6 +263,10 @@ def build_parser() -> argparse.ArgumentParser:
     pb.add_argument("what", choices=["destinations", "places", "service-places", "tidy"])
     pb.add_argument("--dry-run", action="store_true")
     pb.set_defaults(func=_publish)
+
+    lg = sub.add_parser("lodging", help="hotels that aren't places to stay: to the restaurants, out, or to review (step 11)")
+    lg.add_argument("--dry-run", action="store_true")
+    lg.set_defaults(func=_lodging)
 
     mp = sub.add_parser("maps", help="district maps")
     mp.add_argument("action", choices=["render"])

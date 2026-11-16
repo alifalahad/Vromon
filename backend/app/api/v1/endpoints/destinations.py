@@ -4,13 +4,14 @@ Vromon API v1 — Destinations endpoints.
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.models import Destination, Place, Restaurant, Hotel
 from app.schemas.schemas import DestinationOut, PlaceOut, RestaurantOut, HotelOut
+from app.services.routing.roads import haversine_km
 
 router = APIRouter(prefix="/destinations", tags=["destinations"])
 
@@ -106,7 +107,7 @@ def get_destination_hotels(destination_id: int, db: Session = Depends(get_db)):
     hotels = db.query(Hotel).filter(
         Hotel.destination_id == dest.id, Hotel.is_active == True
     ).order_by(Hotel.id).all()
-    return [_hotel_out(h) for h in hotels]
+    return [_hotel_out(h, dest) for h in hotels]
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +158,10 @@ def _restaurant_out(r: Restaurant) -> RestaurantOut:
     )
 
 
-def _hotel_out(h: Hotel) -> HotelOut:
+def _hotel_out(h: Hotel, dest: Optional[Destination] = None) -> HotelOut:
+    km = None
+    if dest is not None and dest.latitude is not None and h.latitude is not None:
+        km = round(haversine_km((dest.latitude, dest.longitude), (h.latitude, h.longitude)), 1)
     return HotelOut(
         id=h.id,
         name=h.name,
@@ -174,4 +178,6 @@ def _hotel_out(h: Hotel) -> HotelOut:
         # without these every hotel looked priced and rated ("৳0 a night" in the stays sheet)
         price_known=h.price_known,
         rating_known=h.rating_known,
+        kind=h.kind,
+        km_from_centre=km,
     )

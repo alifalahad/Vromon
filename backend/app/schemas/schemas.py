@@ -126,6 +126,10 @@ class HotelOut(BaseModel):
     amenities: List[str] = []
     price_known: bool = True
     rating_known: bool = True
+    # What sort of place (hotel, resort, guest_house, rest_house …; None for demo hotels) and how far from
+    # the destination's centre, so a hotel without a price still says something about itself (step 11)
+    kind: Optional[str] = None
+    km_from_centre: Optional[float] = None
 
     model_config = {"from_attributes": True}
 

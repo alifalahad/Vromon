@@ -2117,7 +2117,19 @@
     "budgetFree": "No room to pay for: with family or friends, or day trips",
     "budgetUndecided": "Some nights aren't chosen yet, so they aren't counted",
     "budgetMixed_one": "{{n}} stay, below",
-    "budgetMixed_other": "{{n}} stays, night by night below"
+    "budgetMixed_other": "{{n}} stays, night by night below",
+    "kind": {
+      "hotel": "Hotel",
+      "resort": "Resort",
+      "guest_house": "Guest house",
+      "rest_house": "Rest house",
+      "motel": "Motel",
+      "cottage": "Cottage",
+      "bed_and_breakfast": "Bed and breakfast",
+      "hostel": "Hostel"
+    },
+    "fromCentre": "{{km}} km from the centre",
+    "inCentre": "In the centre"
   },
   "placePicker": {
     "search": "Search a place or town",

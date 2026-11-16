@@ -32,6 +32,7 @@ from sqlalchemy import select
 from app.models.catalog import AdminUnit, ServicePlace
 from vromon_data import artifacts, http
 from vromon_data.admin_lookup import AdminLookup
+from vromon_data.lodging import FOOD_CATEGORY, SWEETS, classify
 from vromon_data.pipeline import Connector, Context, Record
 from vromon_data.text import bn_to_latin, clean, match_key, slugify
 
@@ -136,20 +137,34 @@ class OvertureServicePlaces(_ServicePlaceConnector):
         name_bn = clean(common.get("bn")) or (name if name and _BN.search(name) else None)
         name_en = clean(common.get("en")) or (name if name and not _BN.search(name) else None)
         addr = (raw.get("addresses") or [{}])[0] or {}
-        fields = {"kind": "accommodation" if raw["category"] in LODGING else "food", "category": raw["category"],
+        kind, category, status = ("accommodation" if raw["category"] in LODGING else "food"), raw["category"], None
+        if kind == "accommodation":
+            # A place to stay or not (docs/ui-refresh step 11): the category first, the name tips a doubtful one
+            v = classify(raw["category"], name_en, name_bn)
+            if v.kind == "food":
+                kind, category = "food", "dessert_shop" if set(v.words) & SWEETS else FOOD_CATEGORY
+                ctx.count("lodging_was_food")
+            elif v.kind == "not_stay":
+                status = "rejected"
+                ctx.count("lodging_not_a_stay")
+            elif v.kind == "review":
+                status = "needs_review"
+                ctx.count("lodging_in_doubt")
+        fields = {"kind": kind, "category": category,
                   "name_en": name_en, "name_bn": name_bn, "latitude": round(raw["lat"], 6), "longitude": round(raw["lon"], 6),
                   **admin, "address": clean(", ".join(x for x in (addr.get("freeform"), addr.get("locality")) if x)) or None,
                   "website": (raw.get("websites") or [None])[0], "phone": (raw.get("phones") or [None])[0],
                   "brand": clean(raw.get("brand")), "listing_confidence": round(raw["confidence"], 3)}
         rec = Record(entity_type="service_place", source_record_id=raw["id"], fields=fields,
-                     raw={"datasets": raw.get("datasets"), "_status": "published" if raw["confidence"] >= PUBLISH_AT else "needs_review"},
+                     raw={"datasets": raw.get("datasets"),
+                          "_status": status or ("published" if raw["confidence"] >= PUBLISH_AT else "needs_review")},
                      external_ids=[("overture", raw["id"])],
                      names=[(lang, n, "label") for lang, n in (("en", name_en), ("bn", name_bn)) if n],
                      artifact_id=getattr(self, "art", None) and self.art.id, source_url="https://docs.overturemaps.org/guides/places",
                      confidence="medium", verification_method="business_listing")
-        if edge:
+        if edge and rec.raw["_status"] != "rejected":
             rec.raw["_status"] = "needs_review"
-        if name_is_address(name_en or name_bn):
+        if name_is_address(name_en or name_bn) and rec.raw["_status"] != "rejected":
             rec.raw["_status"] = "needs_review"
             ctx.count("name_looks_like_address")
         return rec

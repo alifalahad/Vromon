@@ -34,6 +34,10 @@ export interface Hotel {
   /** false: the price shown is a placeholder, not the hotel's (never shown as a price) */
   price_known?: boolean;
   rating_known?: boolean;
+  /** What sort of place to stay (hotel, resort, guest_house, rest_house, motel, cottage, bed_and_breakfast, hostel); none for demo hotels */
+  kind?: string | null;
+  /** How far from the destination's centre, in km */
+  km_from_centre?: number | null;
 }
 
 // ---------------------------------------------------------------------------

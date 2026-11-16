@@ -24,6 +24,7 @@ import { useSheetPresentation } from '../../../ui/useSheetPresentation';
 import { PlacePicker } from '../../places/PlacePicker';
 import { addDays, parseDay } from '../dates';
 import { localDigits, usePlanFormat } from '../plan/usePlanFormat';
+import { hotelLine, sortHotels } from './hotelRow';
 import { allSame, hotelPick, pickName, samePick, stayIcon, type StayPick } from './stays';
 
 const SNAP_POINTS = ['85%'];
@@ -78,12 +79,8 @@ export function StaysSheet({
     queryFn: () => destinationsApi.hotels(destination!.id),
     enabled: visible && !!destination,
   });
-  // Priced hotels first, cheapest first; then the others by rating
-  const list = [...(hotels.data ?? [])].sort((a, b) => {
-    const pa = a.price_known !== false, pb = b.price_known !== false;
-    if (pa !== pb) return pa ? -1 : 1;
-    return pa ? a.price_per_night - b.price_per_night : (b.rating ?? 0) - (a.rating ?? 0);
-  });
+  // Priced hotels first, cheapest first; then rated ones; then the rest nearest the centre first (step 11)
+  const list = sortHotels(hotels.data ?? []);
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} pressBehavior="close" />,
@@ -197,9 +194,7 @@ export function StaysSheet({
                   `hotel-${h.id}`,
                   'bed-outline',
                   h.name,
-                  [h.category ? t(`stays.level.${h.category}`, { defaultValue: h.category }) : null, h.price_known === false ? t('stays.priceUnknown') : t('stays.perNight', { amount: f.money(h.price_per_night) })]
-                    .filter(Boolean)
-                    .join(' · '),
+                  hotelLine(h, t, f),
                   current?.kind === 'hotel' && current.hotelId === h.id,
                   () => choose(hotelPick(h)),
                 ),

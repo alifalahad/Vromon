@@ -67,6 +67,11 @@ def decide(session: Session, task_id: uuid.UUID, decision: str, *, reviewer: str
         for svc in services:
             svc.status = "published"
         task.decision["services"] = len(services)
+    if task.task_type == "not_a_stay" and task.entity_id and decision in ("approve", "reject"):
+        # Approve: it is a place to stay, listed among the hotels; reject: it isn't (step 11, vromon_data.lodging)
+        entity = session.get(ENTITY_TYPES[task.entity_type].model, task.entity_id)
+        if entity is not None:
+            entity.status = "published" if decision == "approve" else "rejected"
     if task.entity_type and task.entity_id:
         session.add(VerificationEvent(entity_type=task.entity_type, entity_id=task.entity_id, method=method,
                                       reviewer=reviewer, reason=f"{task.task_type}: {decision}: {reason}"))

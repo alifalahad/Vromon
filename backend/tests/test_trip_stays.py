@@ -155,6 +155,27 @@ def test_the_hotel_list_says_which_prices_and_ratings_are_known(client):
     assert (rows["Hotel Unknown"]["price_known"], rows["Hotel Unknown"]["rating_known"]) == (False, False)
 
 
+def test_a_hotel_says_what_sort_of_place_and_how_far_from_the_centre(client):
+    """So a hotel without a price still says something about itself (docs/ui-refresh step 11)."""
+    place = f"Kindpur{uuid.uuid4().hex[:4]}"
+    with _ApiTestSession() as db:
+        from app.models.models import Destination
+        dest = Destination(name=place, country="Bangladesh", latitude=23.0, longitude=90.0)
+        db.add(dest)
+        db.flush()
+        common = dict(destination_id=dest.id, destination_name=place, is_active=True, category="Standard", price_known=False,
+                      price_per_night=0)
+        db.add_all([Hotel(name="Riverside Rest House", kind="rest_house", latitude=23.0, longitude=90.012, **common),
+                    Hotel(name="Demo Hotel", latitude=23.0, longitude=90.0, **common),
+                    Hotel(name="Gone Sweets", kind="hotel", latitude=23.0, longitude=90.0, **{**common, "is_active": False})])
+        db.commit()
+        dest_id = dest.id
+    rows = {h["name"]: h for h in client.get(f"{API}/destinations/{dest_id}/hotels").json()}
+    assert (rows["Riverside Rest House"]["kind"], rows["Riverside Rest House"]["km_from_centre"]) == ("rest_house", 1.2)
+    assert (rows["Demo Hotel"]["kind"], rows["Demo Hotel"]["km_from_centre"]) == (None, 0.0)
+    assert "Gone Sweets" not in rows   # out of the lists (step 11: not a place to stay)
+
+
 # ---------------------------------------------------------------------------
 # The stays
 # ---------------------------------------------------------------------------

@@ -21,7 +21,7 @@
 | 8 | 8 | Trip screen: drag and drop that works for long trips | ✅ done 2026-11-16 | [step-8-report.md](reports/step-8-report.md) |
 | 9 | 9 | Trips tab and trip stats, rebuilt | ✅ done 2026-11-16 | [step-9-report.md](reports/step-9-report.md) |
 | 10 | (all tabs) | The account picture, top right on every tab's front page | ✅ done 2026-11-16 | [step-10-report.md](reports/step-10-report.md) |
-| 11 | (screenshots 3, 5) | The hotel list: only places to stay | not started | |
+| 11 | (screenshots 3, 5) | The hotel list: only places to stay | ✅ done 2026-11-16 | [step-11-report.md](reports/step-11-report.md) |
 | 12 | (asked 2026-11-14) | Explore, redesigned: "Your country" and "The world" | not started | |
 | 13 | (asked 2026-11-14) | Account and settings, redesigned | not started | |
 | 14 | (asked 2026-11-14) | The trip plan: the sheet, the day as a timeline, a stop's sheet | not started | |
