@@ -99,6 +99,19 @@ describe.each([
     expect(contrast(colors.textPrimary, colors.accentTint)).toBeGreaterThanOrEqual(AA);
   });
 
+  it("the Trips tab: the hero card's button, \"On now\", the labels over its picture, the place chips (UI refresh step 9)", () => {
+    expect(contrast(colors.onHeroButton, colors.heroButton)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.onHighlight, colors.highlight)).toBeGreaterThanOrEqual(AA);
+    // A label's see-through fill over the lightest the picture gets (white)
+    const [r, g, b, a] = colors.heroChip.match(/[\d.]+/g)!.map(Number);
+    const over = (c: number) => Math.round(c * a + 255 * (1 - a)).toString(16).padStart(2, '0');
+    expect(contrast(colors.onHero, `#${over(r)}${over(g)}${over(b)}`)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.textPrimary, colors.surfaceInset)).toBeGreaterThanOrEqual(AA);
+    // A quiet button's ring and the meter show on the hero card (3:1)
+    expect(contrast(colors.heroOutline, colors.hero)).toBeGreaterThanOrEqual(1.9);
+    expect(contrast(colors.heroMeter, colors.heroTrack)).toBeGreaterThanOrEqual(3);
+  });
+
   it('moving a stop to another day: the chips, the chosen one and the current day (UI refresh step 8)', () => {
     expect(contrast(colors.link, colors.accentTint)).toBeGreaterThanOrEqual(AA);
     expect(contrast(colors.onAccent, colors.accentStrong)).toBeGreaterThanOrEqual(AA);

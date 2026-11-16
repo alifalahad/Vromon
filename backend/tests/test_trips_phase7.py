@@ -1,6 +1,7 @@
 """
 Android Phase 7: trip stops (D7), trip statistics (prompt §6.8: completed trips
-only, duration = end − start + 1, weeks / months / years, the 20-day example),
+only, duration = end − start + 1, the 20-day example; "Your trips so far" in
+docs/ui-refresh step 9: the trips behind each number, without where a trip starts),
 and the "mark these places as visited?" offer.
 """
 
@@ -80,6 +81,8 @@ class _Stop:
     country_iso2: str
     city_geonameid: int | None = None
     transport_mode: str | None = None
+    position: int = 0
+    arrive_on: date | None = None
 
 
 @dataclass
@@ -92,7 +95,8 @@ class _Trip:
     destination: str = "Somewhere"
 
 
-COUNTRIES = {"BD": ("Bangladesh", "Asia"), "IN": ("India", "Asia"), "FR": ("France", "Europe")}
+COUNTRIES = {"BD": ("Bangladesh", "বাংলাদেশ"), "IN": ("India", "ভারত"), "FR": ("France", None)}
+CITIES = {DHAKA: "Dhaka", KOLKATA: "Kolkata", COX: "Cox’s Bāzār"}
 
 
 class TestMaths:
@@ -109,34 +113,50 @@ class TestMaths:
         assert (before.trips, before.total_days, before.upcoming) == (0, 0, 1)  # the screenshot: 0 trips, 1 upcoming
         assert (during.trips, during.ongoing) == (0, 1)
         assert last_day.trips == 0  # still ongoing on its last day
-        assert (after.trips, after.total_days, after.countries, after.cities, after.continents) == (1, 20, 2, 2, 1)
+        assert (after.trips, after.total_days, after.countries, after.cities) == (1, 20, 2, 2)
 
-    def test_weeks_months_years_and_average(self):
+    def test_average_longest_and_years_with_their_trips(self):
         trips = [_Trip(date(2026, 10, 12), date(2026, 10, 31), id=1), _Trip(date(2025, 3, 1), date(2025, 3, 3), id=2)]
         s = summarize(trips, date(2027, 1, 1), COUNTRIES)
         assert s.total_days == 23
-        assert s.weeks == round(23 / 7, 2) == 3.29
-        assert s.months == round(23 / 30.44, 2) == 0.76
-        assert s.years == round(23 / 365.25, 2) == 0.06
         assert s.average_days == 11.5
         assert s.longest_trip == {"trip_id": 1, "title": "Somewhere", "days": 20}
-        assert s.per_year == [{"year": 2025, "trips": 1, "days": 3}, {"year": 2026, "trips": 1, "days": 20}]
+        # The last to end first; each year with its trips, the newest year first
+        assert s.finished == [1, 2]
+        assert s.per_year == [
+            {"year": 2026, "trips": 1, "days": 20, "trip_ids": [1]},
+            {"year": 2025, "trips": 1, "days": 3, "trip_ids": [2]},
+        ]
 
     def test_nothing_completed_is_all_zeros(self):
         s = summarize([], date(2026, 10, 17), COUNTRIES)
-        assert (s.trips, s.total_days, s.weeks, s.months, s.years, s.average_days) == (0, 0, 0.0, 0.0, 0.0, 0.0)
-        assert s.longest_trip is None and s.most_visited_country is None
+        assert (s.trips, s.total_days, s.average_days, s.countries, s.cities) == (0, 0, 0.0, 0, 0)
+        assert s.longest_trip is None and s.finished == [] and s.places == {"countries": [], "cities": []}
 
-    def test_countries_continents_modes_and_most_visited(self):
+    def test_where_you_went_leaves_out_where_a_trip_starts(self):
         trips = [
-            _Trip(date(2026, 1, 1), date(2026, 1, 5), [_Stop("BD", DHAKA, "bus"), _Stop("IN", KOLKATA, "train")], id=1),
-            _Trip(date(2026, 2, 1), date(2026, 2, 2), [_Stop("BD", DHAKA), _Stop("FR", None, "plane")], id=2),
+            # Dhaka is reached by bus here: a place of the trip
+            _Trip(date(2026, 1, 1), date(2026, 1, 5), [_Stop("BD", DHAKA, "bus", 0), _Stop("IN", KOLKATA, "train", 1)], id=1),
+            # From Dhaka (no way there, no arrival day: where it starts) to France
+            _Trip(date(2026, 2, 1), date(2026, 2, 2), [_Stop("BD", DHAKA, None, 0), _Stop("FR", None, "plane", 1)], id=2),
+            # As the app saves "from Dhaka to Cox's Bazar"
+            _Trip(date(2026, 3, 1), date(2026, 3, 3), [_Stop("BD", DHAKA, None, 0), _Stop("BD", COX, "bus", 1, date(2026, 3, 1))], id=3),
+            # One stop, no way there: it's the place, not a start
+            _Trip(date(2026, 4, 1), date(2026, 4, 2), [_Stop("BD", COX, None, 0, date(2026, 4, 1))], id=4),
         ]
-        s = summarize(trips, date(2026, 10, 17), COUNTRIES)
-        assert (s.countries, s.cities, s.continents) == (3, 2, 2)
-        assert s.continent_names == ["Asia", "Europe"]
-        assert s.most_visited_country == {"iso2": "BD", "name": "Bangladesh", "trips": 2}
-        assert {m["mode"]: m["count"] for m in s.transport_modes} == {"bus": 1, "train": 1, "plane": 1}
+        s = summarize(trips, date(2026, 10, 17), COUNTRIES, CITIES)
+        assert (s.countries, s.cities) == (3, 3)
+        assert s.places["countries"] == [
+            {"iso2": "BD", "name": "Bangladesh", "name_bn": "বাংলাদেশ", "trip_ids": [4, 3, 1]},
+            {"iso2": "FR", "name": "France", "name_bn": None, "trip_ids": [2]},
+            {"iso2": "IN", "name": "India", "name_bn": "ভারত", "trip_ids": [1]},
+        ]
+        # Names as people write them; the most visited first
+        assert s.places["cities"] == [
+            {"geonameid": COX, "name": "Cox's Bazar", "country_iso2": "BD", "trip_ids": [4, 3]},
+            {"geonameid": DHAKA, "name": "Dhaka", "country_iso2": "BD", "trip_ids": [1]},
+            {"geonameid": KOLKATA, "name": "Kolkata", "country_iso2": "IN", "trip_ids": [1]},
+        ]
 
     def test_phases(self):
         today = date(2026, 10, 17)
@@ -280,8 +300,21 @@ class TestStatsEndpoints:
         _trip(client, today + timedelta(days=5), days=4)  # upcoming
         s = client.get(f"{API}/me/trips/stats", params={"today": str(today)}).json()
         assert (s["trips"], s["total_days"], s["ongoing"], s["upcoming"]) == (1, 20, 1, 1)
-        assert (s["weeks"], s["months"], s["years"], s["average_days"]) == (2.86, 0.66, 0.05, 20.0)
-        assert (s["countries"], s["cities"], s["continents"]) == (1, 1, 1)
+        assert s["average_days"] == 20.0
+        assert (s["countries"], s["cities"]) == (1, 1)
+        assert len(s["finished"]) == 1
+        assert s["places"]["cities"][0]["name"] == "Cox's Bazar"
+        assert "weeks" not in s and "transport_modes" not in s
+
+    def test_where_a_trip_starts_isnt_a_place_you_went(self, client, act_as):
+        act_as(_user("una"))
+        today = date.today()
+        trip = _trip(client, today - timedelta(days=10), days=3, origin={"city_geonameid": DHAKA, "country_iso2": "BD"})
+        assert [s["city_geonameid"] for s in trip["stops"]] == [DHAKA, COX]
+        s = client.get(f"{API}/me/trips/stats", params={"today": str(today)}).json()
+        assert [c["geonameid"] for c in s["places"]["cities"]] == [COX]
+        assert s["places"]["countries"] == [{"iso2": "BD", "name": "Bangladesh", "name_bn": s["places"]["countries"][0]["name_bn"], "trip_ids": [trip["id"]]}]
+        assert s["per_year"][0]["trip_ids"] == [trip["id"]]
 
     def test_a_friend_sees_trip_stats_a_stranger_gets_404(self, client, act_as):
         mo, ned, oz = _user("mo"), _user("ned"), _user("oz")

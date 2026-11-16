@@ -64,6 +64,18 @@ export type ThemeColors = {
   onHeroSecondary: string;
   /** Marigold, the one highlight (countdowns, "On now"): on the hero card or as a fill, never as text on white */
   highlight: string;
+  /** Text on a marigold fill ("ON NOW") */
+  onHighlight: string;
+  /** On the hero card (UI refresh step 9, frames 15–17): the dashed line, a quiet button's ring, the budget meter and its track */
+  heroLine: string;
+  heroOutline: string;
+  heroMeter: string;
+  heroTrack: string;
+  /** The hero card's white button and its text */
+  heroButton: string;
+  onHeroButton: string;
+  /** A label over the picture at the top of the hero card */
+  heroChip: string;
   /** The solid blue tint (the pill behind the selected tab, quiet blue buttons), with `onAccentSoft` text */
   accentTint: string;
   /** The Map tab's globe (UI refresh step 1, frame 2): the sky behind it, the glow at its rim, its shadow */
@@ -117,6 +129,14 @@ export const darkColors: ThemeColors = {
   onHero: '#FFFFFF',
   onHeroSecondary: '#B9C6DA',
   highlight: '#FFB547',
+  onHighlight: '#3B1E00',
+  heroLine: '#3A4C69',
+  heroOutline: '#5A6C8A',
+  heroMeter: '#4CC38A',
+  heroTrack: '#2A3B57',
+  heroButton: '#FFFFFF',
+  onHeroButton: '#0F1B2D',
+  heroChip: 'rgba(11, 17, 26, 0.8)',
   accentTint: '#17284A',
   globeSky: '#070C15',
   globeGlow: '#4F7FD9',
@@ -163,6 +183,14 @@ export const lightColors: ThemeColors = {
   onHero: '#FFFFFF',
   onHeroSecondary: '#B9C6DA',
   highlight: '#FFB547',
+  onHighlight: '#3B1E00',
+  heroLine: '#3A4C69',
+  heroOutline: '#5A6C8A',
+  heroMeter: '#4CC38A',
+  heroTrack: '#2A3B57',
+  heroButton: '#FFFFFF',
+  onHeroButton: '#0F1B2D',
+  heroChip: 'rgba(15, 27, 45, 0.78)',
   accentTint: '#E7EEFC',
   globeSky: '#E9F1FA',
   globeGlow: '#FFFFFF',

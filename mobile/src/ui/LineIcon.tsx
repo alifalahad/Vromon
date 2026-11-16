@@ -30,7 +30,9 @@ export type LineIconName =
   | 'fitDay'
   | 'grip'
   | 'arrowUp'
-  | 'chevronLeft';
+  | 'chevronLeft'
+  | 'arrowRight'
+  | 'invite';
 
 /** Each icon's shapes and the stroke width its frame uses; `color` for the few filled parts */
 const ICONS: Record<LineIconName, { width: number; draw: React.ReactNode | ((color: string) => React.ReactNode) }> = {
@@ -151,6 +153,18 @@ const ICONS: Record<LineIconName, { width: number; draw: React.ReactNode | ((col
   arrowUp: { width: 2.2, draw: <Path d="M12 19V5m-6 6 6-6 6 6" /> },
   // The strip's left edge when it can scroll back (frame 14)
   chevronLeft: { width: 2.6, draw: <Path d="m15 6-6 6 6 6" /> },
+  // "Open plan →" (frames 15 and 16)
+  arrowRight: { width: 2.2, draw: <Path d="M5 12h14m-6-6 6 6-6 6" /> },
+  // Invite friends to a trip: a person and a plus (frame 15)
+  invite: {
+    width: 1.9,
+    draw: (
+      <>
+        <Circle cx={10} cy={8.5} r={3.2} />
+        <Path d="M4 19c.6-3 3-4.7 6-4.7s5.4 1.7 6 4.7M19 7v6M16 10h6" />
+      </>
+    ),
+  },
 };
 
 export function LineIcon({ name, size = 24, color, strokeWidth }: { name: LineIconName; size?: number; color: string; strokeWidth?: number }) {

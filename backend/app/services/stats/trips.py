@@ -1,30 +1,29 @@
 """
-Trip statistics (prompt §6.8).
+Trip statistics: "Your trips so far" (prompt §6.8; redrawn in docs/ui-refresh step 9).
 
 Rules:
-- Only completed trips count: the end date is before today. Upcoming and ongoing
+- Only finished trips count: the end date is before today. Upcoming and ongoing
   trips are counted separately and never added to the totals.
 - Duration = end − start + 1 days (12–31 Oct = 20 days).
-- Weeks = days / 7, months = days / 30.44, years = days / 365.25.
-- Average trip time = total days / completed trips.
-- Continents, countries and cities come from the completed trips' stops.
+- Average = total days / finished trips, to one decimal.
+- Where you went comes from the finished trips' stops, without where a trip starts:
+  the first stop of a trip with more stops, when it has no arrival day and no way
+  of getting there, is the start (the app saves "from Dhaka" that way, D7).
+- Every number comes with the trips behind it (`finished`, each place's and each
+  year's `trip_ids`), so the app shows the same trips it counts.
 """
 
 from __future__ import annotations
 
+import unicodedata
 import uuid
-from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.models import Country, Trip
-
-DAYS_PER_WEEK = 7
-DAYS_PER_MONTH = 30.44
-DAYS_PER_YEAR = 365.25
+from app.models.models import City, Country, Trip
 
 
 def trip_days(start: date, end: date) -> int:
@@ -38,22 +37,36 @@ def trip_phase(start: date, end: date, today: date) -> str:
     return "upcoming" if start > today else "ongoing"
 
 
+def visited_stops(stops: list) -> list:
+    """A trip's stops without where it starts (see the rules above)."""
+    ordered = sorted(stops, key=lambda s: getattr(s, "position", 0))
+    if len(ordered) > 1:
+        first = ordered[0]
+        if getattr(first, "arrive_on", None) is None and not getattr(first, "transport_mode", None):
+            return ordered[1:]
+    return ordered
+
+
+def plain_name(name: str) -> str:
+    """A GeoNames name as people write it: "Cox’s Bāzār" → "Cox's Bazar"."""
+    text = unicodedata.normalize("NFKD", name.replace("’", "'"))
+    return "".join(c for c in text if not unicodedata.combining(c))
+
+
 @dataclass
 class TripStats:
     trips: int
     total_days: int
-    weeks: float
-    months: float
-    years: float
     average_days: float
-    continents: int
     countries: int
     cities: int
-    continent_names: list[str] = field(default_factory=list)
+    # The finished trips, the last to end first
+    finished: list[int] = field(default_factory=list)
     longest_trip: dict | None = None
-    most_visited_country: dict | None = None
+    # {"countries": [{iso2, name, name_bn, trip_ids}], "cities": [{geonameid, name, country_iso2, trip_ids}]}
+    places: dict = field(default_factory=lambda: {"countries": [], "cities": []})
+    # Newest year first: {year, trips, days, trip_ids}
     per_year: list[dict] = field(default_factory=list)
-    transport_modes: list[dict] = field(default_factory=list)
     upcoming: int = 0
     ongoing: int = 0
 
@@ -61,49 +74,71 @@ class TripStats:
         return asdict(self)
 
 
-def summarize(trips: list[Trip], today: date, countries: dict[str, tuple[str, str | None]]) -> TripStats:
+def summarize(
+    trips: list[Trip],
+    today: date,
+    countries: dict[str, tuple[str, str | None]],
+    cities: dict[int, str] | None = None,
+) -> TripStats:
     """
-    `countries`: iso2 → (name, continent) for every country on the trips' stops.
-    Pure: no database access, so the maths is easy to test.
+    `countries`: iso2 → (name, Bangla name) and `cities`: geonameid → name, for the places
+    on the trips' stops. Pure: no database access, so the maths is easy to test.
     """
-    done = [t for t in trips if trip_phase(t.start_date, t.end_date, today) == "past"]
-    phases = Counter(trip_phase(t.start_date, t.end_date, today) for t in trips)
-    days = [trip_days(t.start_date, t.end_date) for t in done]
-    total = sum(days)
+    cities = cities or {}
+    done = sorted(
+        (t for t in trips if trip_phase(t.start_date, t.end_date, today) == "past"),
+        key=lambda t: (t.end_date, t.start_date, t.id),
+        reverse=True,
+    )
+    phases = [trip_phase(t.start_date, t.end_date, today) for t in trips]
+    days = {t.id: trip_days(t.start_date, t.end_date) for t in done}
+    total = sum(days.values())
 
-    stop_countries = [{s.country_iso2 for s in t.stops} for t in done]
-    country_codes = set().union(*stop_countries) if stop_countries else set()
-    city_ids = {s.city_geonameid for t in done for s in t.stops if s.city_geonameid}
-    continents = sorted({c for iso in country_codes if (c := countries.get(iso, ("", None))[1]) and not c.startswith("Seven seas")})
+    by_country: dict[str, list[int]] = {}
+    by_city: dict[int, tuple[str, list[int]]] = {}
+    for t in done:
+        for s in visited_stops(list(t.stops)):
+            ids = by_country.setdefault(s.country_iso2, [])
+            if t.id not in ids:
+                ids.append(t.id)
+            if s.city_geonameid:
+                _, city_ids = by_city.setdefault(s.city_geonameid, (s.country_iso2, []))
+                if t.id not in city_ids:
+                    city_ids.append(t.id)
 
-    longest = max(done, key=lambda t: (trip_days(t.start_date, t.end_date), t.end_date), default=None)
-    per_country = Counter(iso for codes in stop_countries for iso in codes)
-    top = per_country.most_common(1)[0] if per_country else None
+    def country_name(iso: str) -> tuple[str, str | None]:
+        return countries.get(iso, (iso, None))
+
+    place_countries = sorted(
+        ({"iso2": iso, "name": country_name(iso)[0], "name_bn": country_name(iso)[1], "trip_ids": ids} for iso, ids in by_country.items()),
+        key=lambda p: (-len(p["trip_ids"]), p["name"]),
+    )
+    place_cities = sorted(
+        ({"geonameid": gid, "name": plain_name(cities.get(gid, str(gid))), "country_iso2": iso, "trip_ids": ids}
+         for gid, (iso, ids) in by_city.items()),
+        key=lambda p: (-len(p["trip_ids"]), p["name"]),
+    )
+
+    longest = max(done, key=lambda t: (days[t.id], t.end_date), default=None)
     per_year: dict[int, dict] = {}
-    for t, d in zip(done, days):
-        row = per_year.setdefault(t.start_date.year, {"year": t.start_date.year, "trips": 0, "days": 0})
+    for t in done:
+        row = per_year.setdefault(t.start_date.year, {"year": t.start_date.year, "trips": 0, "days": 0, "trip_ids": []})
         row["trips"] += 1
-        row["days"] += d
-    modes = Counter(s.transport_mode for t in done for s in t.stops if s.transport_mode)
+        row["days"] += days[t.id]
+        row["trip_ids"].append(t.id)
 
     return TripStats(
         trips=len(done),
         total_days=total,
-        weeks=round(total / DAYS_PER_WEEK, 2),
-        months=round(total / DAYS_PER_MONTH, 2),
-        years=round(total / DAYS_PER_YEAR, 2),
         average_days=round(total / len(done), 1) if done else 0.0,
-        continents=len(continents),
-        countries=len(country_codes),
-        cities=len(city_ids),
-        continent_names=continents,
-        longest_trip={"trip_id": longest.id, "title": longest.title or longest.destination,
-                      "days": trip_days(longest.start_date, longest.end_date)} if longest else None,
-        most_visited_country={"iso2": top[0], "name": countries.get(top[0], (top[0], None))[0], "trips": top[1]} if top else None,
-        per_year=[per_year[y] for y in sorted(per_year)],
-        transport_modes=[{"mode": m, "count": n} for m, n in modes.most_common()],
-        upcoming=phases["upcoming"],
-        ongoing=phases["ongoing"],
+        countries=len(place_countries),
+        cities=len(place_cities),
+        finished=[t.id for t in done],
+        longest_trip={"trip_id": longest.id, "title": longest.title or longest.destination, "days": days[longest.id]} if longest else None,
+        places={"countries": place_countries, "cities": place_cities},
+        per_year=[per_year[y] for y in sorted(per_year, reverse=True)],
+        upcoming=phases.count("upcoming"),
+        ongoing=phases.count("ongoing"),
     )
 
 
@@ -118,7 +153,9 @@ def viewer_today(requested: date | None) -> date:
 def trip_stats(db: Session, user_id: uuid.UUID, today: date) -> TripStats:
     trips = list(db.scalars(select(Trip).where(Trip.user_id == user_id).options(selectinload(Trip.stops))))
     codes = {s.country_iso2 for t in trips for s in t.stops}
-    countries = {iso: (name, cont) for iso, name, cont in db.execute(
-        select(Country.iso2, Country.name, Country.continent).where(Country.iso2.in_(codes))
+    city_ids = {s.city_geonameid for t in trips for s in t.stops if s.city_geonameid}
+    countries = {iso: (name, name_bn) for iso, name, name_bn in db.execute(
+        select(Country.iso2, Country.name, Country.name_bn).where(Country.iso2.in_(codes))
     )} if codes else {}
-    return summarize(trips, today, countries)
+    cities = dict(db.execute(select(City.geonameid, City.name).where(City.geonameid.in_(city_ids))).tuples().all()) if city_ids else {}
+    return summarize(trips, today, countries, cities)

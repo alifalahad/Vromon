@@ -1472,21 +1472,23 @@ export type PhotoTarget = { place_type?: PlaceType; place_code?: string; trip_id
 // Trip statistics (Android Phase 7): completed trips only
 // ---------------------------------------------------------------------------
 
+/** "Your trips so far" (docs/ui-refresh step 9): finished trips only, each number with the trips behind it. */
 export interface TripStats {
   trips: number;
   total_days: number;
-  weeks: number;
-  months: number;
-  years: number;
   average_days: number;
-  continents: number;
   countries: number;
   cities: number;
-  continent_names: string[];
+  /** The finished trips, the last to end first */
+  finished: number[];
   longest_trip: { trip_id: number; title: string; days: number } | null;
-  most_visited_country: { iso2: string; name: string; trips: number } | null;
-  per_year: { year: number; trips: number; days: number }[];
-  transport_modes: { mode: TransportMode; count: number }[];
+  /** Where you went, without where a trip starts; the most visited first */
+  places: {
+    countries: { iso2: string; name: string; name_bn: string | null; trip_ids: number[] }[];
+    cities: { geonameid: number; name: string; country_iso2: string; trip_ids: number[] }[];
+  };
+  /** The newest year first */
+  per_year: { year: number; trips: number; days: number; trip_ids: number[] }[];
   upcoming: number;
   ongoing: number;
 }

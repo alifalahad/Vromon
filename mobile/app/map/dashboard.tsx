@@ -125,10 +125,10 @@ export default function TravelsScreen() {
               value={f.n(sum.trips)}
               of={t('travels.finished')}
               label={sum.coming > 0 ? t('travels.tripsComing', { count: sum.coming, n: f.n(sum.coming) }) : t('travels.trips')}
-              onPress={() => open('trips')}
+              onPress={() => router.push('/stats/trips')}
               testID="travels-trips"
             />
-            <Tile icon="calendar-range" tone="green" value={f.n(sum.days)} label={t('travels.days')} onPress={() => open('trips')} testID="travels-days" />
+            <Tile icon="calendar-range" tone="green" value={f.n(sum.days)} label={t('travels.days')} onPress={() => router.push('/stats/trips')} testID="travels-days" />
           </View>
         </View>
 

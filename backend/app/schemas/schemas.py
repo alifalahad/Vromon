@@ -668,21 +668,19 @@ class MarkVisitedOut(BaseModel):
 
 
 class TripStatsOut(BaseModel):
-    """Completed trips only (end date before `today`)."""
+    """
+    Finished trips only (end date before `today`), each number with the trips behind it:
+    `finished` (the last to end first), each place's and each year's `trip_ids`.
+    """
     trips: int
     total_days: int
-    weeks: float
-    months: float
-    years: float
     average_days: float
-    continents: int
     countries: int
     cities: int
-    continent_names: List[str] = []
+    finished: List[int] = []
     longest_trip: Optional[Dict[str, Any]] = None
-    most_visited_country: Optional[Dict[str, Any]] = None
+    places: Dict[str, List[Dict[str, Any]]] = {"countries": [], "cities": []}
     per_year: List[Dict[str, Any]] = []
-    transport_modes: List[Dict[str, Any]] = []
     upcoming: int = 0
     ongoing: int = 0
 

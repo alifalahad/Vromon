@@ -19,7 +19,7 @@
 | 6 | 6 | Must-dos: type the busy time's From and To | ✅ done 2026-11-15 | [step-6-report.md](reports/step-6-report.md) |
 | 7 | 7 | Trip screen: the row of buttons over the map | ✅ done 2026-11-15 | [step-7-report.md](reports/step-7-report.md) |
 | 8 | 8 | Trip screen: drag and drop that works for long trips | ✅ done 2026-11-16 | [step-8-report.md](reports/step-8-report.md) |
-| 9 | 9 | Trips tab and trip stats, rebuilt | not started | |
+| 9 | 9 | Trips tab and trip stats, rebuilt | ✅ done 2026-11-16 | [step-9-report.md](reports/step-9-report.md) |
 | 10 | (all tabs) | The account picture, top right on every tab's front page | not started | |
 | 11 | (screenshots 3, 5) | The hotel list: only places to stay | not started | |
 | 12 | (asked 2026-11-14) | Explore, redesigned: "Your country" and "The world" | not started | |
@@ -39,7 +39,7 @@ Steps 1–9 have the same numbers as your nine points.
 1. Run **one step per session**. Copy the step's **Prompt** block and paste it into the coding agent (or say "start step N of the UI refresh").
 2. The agent reads "Rules for every step" below, the step's section, the mockups and the previous report. It builds the step, checks it on the phone, writes `docs/ui-refresh/reports/step-N-report.md`, updates the Status table above, and **stops**.
 3. You check the step on your phone ("You check" in each step), then approve it or ask for fixes.
-4. The agent commits each finished step itself (no co-author line) and never pushes. Pushing is yours.
+4. The agent commits each finished step itself (with your co-author line for mdsulaimanshakil, no Claude co-author) and never pushes. Pushing is yours.
 
 **Order.** Step 0 is done. Run step 0b next: it puts the approved colours and the title font into the app's theme, so the whole app changes together and every later step builds on the same base. Steps 1–9 don't depend on each other, so after 0b you can run them in any order. Step 10 comes after step 9 (it uses the fixed header that step 9 builds). Steps 11, 12 and 13 are independent. The trip's own steps run in this order: 7 and 8 first, then 14, then 15 and 16 in either order. Step 17 needs step 7. Step 18 is independent. Step 19 needs step 18 (and uses step 15's Today and step 16's finished trip: where one isn't built yet, step 19 leaves that row out and says so). Step 20 is last. Step 1 (the globe) has the most unknowns and adds a library with native code; steps 4 and 6 are the smallest; steps 14, 17 and 19 are the largest.
 
@@ -199,7 +199,7 @@ The system behind the frames (step 0b puts it into `mobile/src/ui/theme/tokens.t
     - `mobile/`: `npx tsc --noEmit`, `npx eslint . --max-warnings 0`, `npx jest`. Baseline 2026-11-13: 657 passed.
     - `backend/` (when touched): `venv/bin/python -m pytest -q`. Baseline: 825 passed.
     - Run them once before changing anything and note the numbers.
-13. **Commit the step when it's done** (its files only, on the current branch, a plain message with no `Co-Authored-By` line). **Never push** or open a PR (owner, 2026-11-14).
+13. **Commit the step when it's done** (its files only, on the current branch, a plain message ending with `Co-authored-by: mdsulaimanshakil <mdsulaimanshakil@gmail.com>` (owner, 2026-11-16); no Claude co-author line). **Never push** or open a PR (owner, 2026-11-14).
 14. **End the step** with `docs/ui-refresh/reports/step-N-report.md`: what changed and why, the files, how each part was checked (tests, phone screenshots described in words), what's left open. Update the Status table. Then stop.
 
 ### Testing safely

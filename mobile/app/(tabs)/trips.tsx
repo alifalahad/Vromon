@@ -1,38 +1,34 @@
 /**
- * Vromon Mobile — Trips tab (trip planner step 8, the "Trips tab" mockup).
+ * Vromon Mobile — Trips tab (rebuilt in docs/ui-refresh step 9, frames 15, 16 and 21).
  *
- * Large title, the next trip (the one you're on, else the soonest) as a card
- * with its countdown, weather and "Open plan", the stats card, then the other
- * trips: Upcoming / On now / Past, as compact cards. A finished trip shows its
- * photos and "Mark visited" (or "On your map"). No trips: "Plan your first trip".
- * "+ Plan a trip" opens the new-trip flow, which returns here when it's saved.
+ * A fixed header ("Trips", "New trip") that the list scrolls under, with a hairline once something is
+ * under it. Then the next trip (the one you're on, else the soonest) as the hero card, one line of
+ * numbers that opens "Your trips so far", the "Rate your trip" card when a finished trip waits for it,
+ * and the other trips: On now / Upcoming / With friends / Past. Nothing covers anything (D9).
+ * No trips: "Plan your first trip".
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter, useScrollToTop } from 'expo-router';
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, SectionList, Text, View } from 'react-native';
 
 import { useMe } from '../../src/features/account/useMe';
 import { useVisits } from '../../src/features/map/visits';
-import { usePhotos } from '../../src/features/photos/queries';
-import { addDays, groupTrips, localToday } from '../../src/features/trips/dates';
+import { groupTrips, localToday } from '../../src/features/trips/dates';
 import { NextTripCard } from '../../src/features/trips/NextTripCard';
 import { RateTripReminder } from '../../src/features/trips/review/RateTripReminder';
 import { useTrips, useTripStats } from '../../src/features/trips/queries';
-import { StatsCard } from '../../src/features/trips/StatsCard';
-import { TripCard } from '../../src/features/trips/TripCard';
+import { TripRow } from '../../src/features/trips/TripCard';
+import { TripNumbers } from '../../src/features/trips/TripNumbers';
 import { onMap, useMarkVisited } from '../../src/features/trips/useMarkVisited';
 import { roomsApi } from '../../src/services/api';
-import type { Photo, Trip } from '../../src/types';
+import type { Trip } from '../../src/types';
 import { Button } from '../../src/ui/Button';
-import { Fab } from '../../src/ui/Fab';
-import { LargeTitle } from '../../src/ui/LargeTitle';
+import { HeaderPill, TabHeader } from '../../src/ui/TabHeader';
 import { makeStyles, useTheme } from '../../src/ui/theme';
-
-const NO_PHOTOS: Photo[] = [];
 
 export default function TripsScreen() {
   const styles = useStyles();
@@ -41,6 +37,7 @@ export default function TripsScreen() {
   const router = useRouter();
   const listRef = useRef<SectionList<Trip>>(null);
   useScrollToTop(listRef);
+  const [scrolled, setScrolled] = useState(false);
 
   const today = localToday();
   const me = useMe();
@@ -49,14 +46,8 @@ export default function TripsScreen() {
   const joined = useQuery({ queryKey: ['joinedTrips'], queryFn: () => roomsApi.joined(), enabled: !!me.data });
   const stats = useTripStats(undefined, today);
   const visits = useVisits(me.data?.id);
-  const photos = usePhotos(me.data?.id, {});
   const marking = useMarkVisited(me.data?.id);
   const visited = useMemo(() => new Set((visits.data ?? []).filter((v) => v.status !== 'want').map((v) => `${v.place_type}:${v.place_code}`)), [visits.data]);
-  const photosByTrip = useMemo(() => {
-    const by = new Map<number, Photo[]>();
-    for (const p of photos.data ?? []) if (p.trip_id != null) by.set(p.trip_id, [...(by.get(p.trip_id) ?? []), p]);
-    return by;
-  }, [photos.data]);
 
   // The next trip: the one you're on, else the soonest upcoming; the rest are listed below it
   const all = groupTrips(trips.data ?? [], today);
@@ -71,21 +62,21 @@ export default function TripsScreen() {
   ];
   const hasTrips = (trips.data?.length ?? 0) > 0 || withFriends.length > 0;
   const open = (trip: Trip) => router.push({ pathname: '/trip/[id]', params: { id: trip.id } });
-  // On the trip (or the evening before it starts), the next trip opens on Today mode
-  const openNext = (trip: Trip) =>
-    trip.status !== 'draft' && trip.start_date <= addDays(today, 1) && trip.end_date >= today
-      ? router.push({ pathname: '/trip/today/[id]', params: { id: trip.id } })
-      : open(trip);
 
   const refresh = () => {
     void trips.refetch();
     void joined.refetch();
     void stats.refetch();
-    void photos.refetch();
   };
 
   return (
     <View style={styles.container}>
+      <TabHeader
+        title={t('trips.title')}
+        scrolled={scrolled}
+        actions={<HeaderPill label={t('trips.newTrip')} onPress={() => router.push('/trip/new')} testID="plan-trip-fab" />}
+        testID="trips-header"
+      />
       <SectionList
         ref={listRef}
         sections={sections}
@@ -94,13 +85,17 @@ export default function TripsScreen() {
         stickySectionHeadersEnabled={false}
         refreshing={trips.isRefetching}
         onRefresh={refresh}
+        onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 2)}
+        scrollEventThrottle={32}
+        testID="trips-list"
         ListHeaderComponent={
-          <View style={styles.header}>
-            <LargeTitle title={t('trips.title')} />
-            <RateTripReminder trips={[...(trips.data ?? []), ...(joined.data ?? [])]} today={today} />
-            {next ? <NextTripCard trip={next} today={today} onOpen={() => openNext(next)} /> : null}
-            {hasTrips ? <StatsCard stats={stats.data} /> : null}
-          </View>
+          hasTrips ? (
+            <View style={styles.header}>
+              {next ? <NextTripCard trip={next} today={today} /> : null}
+              <TripNumbers stats={stats.data} onPress={() => router.push('/stats/trips')} />
+              <RateTripReminder trips={[...(trips.data ?? []), ...(joined.data ?? [])]} today={today} />
+            </View>
+          ) : null
         }
         renderSectionHeader={({ section }) => (
           <Text style={styles.sectionTitle} accessibilityRole="header" testID={`section-${section.phase}`}>
@@ -111,11 +106,10 @@ export default function TripsScreen() {
           const past = item.end_date < today;
           const theirs = !!me.data && !!item.user_id && item.user_id !== me.data.id;
           return (
-            <TripCard
+            <TripRow
               trip={item}
               today={today}
               onPress={() => open(item)}
-              photos={photosByTrip.get(item.id) ?? NO_PHOTOS}
               onMap={past && !theirs && visits.data ? onMap(item, visited) : undefined}
               onMark={past && !theirs && visits.data && (item.stops?.length ?? 0) > 0 ? () => marking.mark(item) : undefined}
               marking={marking.busyId === item.id}
@@ -147,24 +141,25 @@ export default function TripsScreen() {
           )
         }
       />
-      <Fab onPress={() => router.push('/trip/new')} label={t('trips.planTrip')} accessibilityLabel={t('trips.planTrip')} testID="plan-trip-fab" />
     </View>
   );
 }
 
 const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.bg },
-  list: { paddingBottom: 120 },
-  header: { gap: t.spacing.lg + 6, paddingBottom: t.spacing.xs },
+  list: { paddingTop: t.spacing.xs, paddingBottom: t.spacing.xxl },
+  header: { gap: t.spacing.md },
   sectionTitle: {
-    ...t.type.headline,
+    fontFamily: t.type.title.fontFamily,
     fontSize: 20,
+    lineHeight: 26,
+    fontWeight: 'normal',
     color: t.colors.textPrimary,
-    paddingHorizontal: t.spacing.lg + 4,
-    paddingTop: t.spacing.xl,
-    paddingBottom: t.spacing.md,
+    paddingHorizontal: t.spacing.xl,
+    paddingTop: t.spacing.lg + 2,
+    paddingBottom: 10,
   },
-  separator: { height: 10 },
+  separator: { height: t.spacing.md },
   center: { alignItems: 'center', justifyContent: 'center', gap: t.spacing.md, paddingHorizontal: 32, paddingTop: 48 },
   muted: { ...t.type.callout, color: t.colors.textSecondary, textAlign: 'center' },
   errorText: { ...t.type.callout, color: t.colors.danger, textAlign: 'center' },

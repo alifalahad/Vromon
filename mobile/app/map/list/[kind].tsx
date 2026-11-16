@@ -1,6 +1,6 @@
 /**
  * A list behind a number on "Your travels" (docs/ui-refresh step 2, frames 4–5): countries,
- * divisions or regions, districts, cities, finished trips, the Want list, or one division's
+ * divisions or regions, districts, cities, the Want list, or one division's
  * districts and cities. Every list is built by the same function that gives the tile its number
  * (features/map/travels.ts). Each place can be shown on the map; a place not visited yet can be
  * marked from here. With nothing in it, a list says how to fill it.
@@ -19,24 +19,23 @@ import { mapCountryName } from '../../../src/features/map/mapCountries';
 import { RegionList, useTravelKit } from '../../../src/features/map/TravelKit';
 import { Card, EmptyList, StatusChip, TravelRow } from '../../../src/features/map/TravelParts';
 import { placeName } from '../../../src/features/map/travelPlaces';
-import { beenCities, beenCountries, beenDistricts, bundledDistricts, countryOf, finishedTrips, wantList } from '../../../src/features/map/travels';
+import { beenCities, beenCountries, beenDistricts, bundledDistricts, countryOf, wantList } from '../../../src/features/map/travels';
 import { statusOf } from '../../../src/features/map/visits';
-import { durationDays, formatRange } from '../../../src/features/trips/dates';
 import { usePlanFormat } from '../../../src/features/trips/plan/usePlanFormat';
 import type { PlaceType, Visit, VisitStatus } from '../../../src/types';
 import { makeStyles } from '../../../src/ui/theme';
 
-export type ListKind = 'countries' | 'regions' | 'districts' | 'cities' | 'trips' | 'want' | 'region';
+export type ListKind = 'countries' | 'regions' | 'districts' | 'cities' | 'want' | 'region';
 
 export default function TravelList() {
   const styles = useStyles();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const f = usePlanFormat();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { kind, country, region } = useLocalSearchParams<{ kind: ListKind; country?: string; region?: string }>();
   const kit = useTravelKit();
-  const { lang, visits, trips, lookup, today, name, year, mapButton, markButton } = kit;
+  const { lang, visits, lookup, name, year, mapButton, markButton } = kit;
   const regionTitle = (code: string) => placeName({ place_type: 'region', place_code: code }, lang, lookup) ?? code;
 
   let title = '';
@@ -187,30 +186,6 @@ export default function TravelList() {
         })
       ) : (
         <EmptyList icon="city-variant-outline" title={t('travels.empty.cities.title')} body={t('travels.empty.cities.body')} action={t('travels.openMap')} onAction={() => router.dismissAll()} testID="travels-empty" />
-      );
-      break;
-    }
-    case 'trips': {
-      title = t('travels.tripsTitle');
-      const list = finishedTrips(trips, today);
-      body = list.length ? (
-        <Card>
-          {list.map((trip, i) => {
-            const n = durationDays(trip.start_date, trip.end_date);
-            return (
-              <TravelRow
-                key={trip.id}
-                name={trip.title || trip.destination}
-                sub={t('travels.tripLine', { count: n, n: f.n(n), dates: f.time(formatRange(trip.start_date, trip.end_date, i18n.language)) })}
-                onPress={() => router.push({ pathname: '/trip/[id]', params: { id: String(trip.id) } })}
-                last={i === list.length - 1}
-                testID={`travel-trip-${trip.id}`}
-              />
-            );
-          })}
-        </Card>
-      ) : (
-        <EmptyList icon="bag-suitcase-outline" title={t('travels.empty.trips.title')} body={t('travels.empty.trips.body')} action={t('travels.openTrips')} onAction={() => router.navigate('/(tabs)/trips')} testID="travels-empty" />
       );
       break;
     }
