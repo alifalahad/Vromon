@@ -52,6 +52,15 @@ name: 08 Rearrange a plan from a stop's details and add a stop
     visible:
       id: day-tab-1
     timeout: 60000
+# A trip that's on today opens on today with its Now card, and today's stops that are over can't change
+# (docs/ui-refresh step 15): work on the next day instead
+- runFlow:
+    when:
+      visible:
+        id: plan-now
+    commands:
+      - tapOn:
+          id: day-tab-2
 # Pull the plan up so the stop cards are on screen (a day's warnings can push them below the half-open sheet)
 - swipe:
     start: "50%,56%"
@@ -74,7 +83,7 @@ name: 08 Rearrange a plan from a stop's details and add a stop
     id: stay-more
 - tapOn:
     id: stop-pin
-# …and move it to day 2, in the same visit to its details
+# …and move it to another day (day 2, or day 1 when working on day 2), in the same visit to its details
 - scrollUntilVisible:
     element:
       id: stop-move-day
@@ -83,10 +92,11 @@ name: 08 Rearrange a plan from a stop's details and add a stop
     id: stop-move-day
 - scrollUntilVisible:
     element:
-      id: move-to-day-2
+      id: "move-to-day-\\d+"
     direction: DOWN
 - tapOn:
-    id: move-to-day-2
+    id: "move-to-day-\\d+"
+    index: 0
 - extendedWaitUntil:
     notVisible: ${maestro.copiedText}
     timeout: 20000

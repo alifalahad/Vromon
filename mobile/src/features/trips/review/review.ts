@@ -5,7 +5,7 @@
  */
 
 import type { ReviewThing, Trip, TripReviewIn, Verdict } from '../../../types';
-import { addDays } from '../dates';
+import { addDays, tripPhase } from '../dates';
 
 /** What the screen holds for each thing: its verdict and the comment typed so far */
 export type Draft = Record<string, { verdict: Verdict | null; comment: string }>;
@@ -69,6 +69,6 @@ export const REMINDER_DAYS = 14;
  * ended, for two weeks; not a draft, not dismissed ("Not now" is for good). Whether it's rated is the server's
  * to say (the card checks). */
 export function reminderTrip(trips: readonly Trip[], today: string, dismissed: readonly number[]): Trip | null {
-  const waiting = trips.filter((t) => t.status !== 'draft' && t.end_date < today && addDays(t.end_date, REMINDER_DAYS) >= today && !dismissed.includes(t.id));
+  const waiting = trips.filter((t) => t.status !== 'draft' && tripPhase(t.start_date, t.end_date, today) === 'past' && addDays(t.end_date, REMINDER_DAYS) >= today && !dismissed.includes(t.id));
   return [...waiting].sort((a, b) => b.end_date.localeCompare(a.end_date))[0] ?? null;
 }

@@ -7,6 +7,7 @@
  */
 
 import type { Destination, Trip } from '../../types';
+import { tripPhase } from '../trips/dates';
 import { countryLabelPoint, HOME_REGIONS } from './geoData';
 
 type LngLat = [number, number];
@@ -41,7 +42,7 @@ export function stopPoints(trip: Trip): LngLat[] {
 export function trailsGeoJSON(trips: readonly Trip[], today: string): GeoJSON.FeatureCollection<GeoJSON.LineString> {
   const features: GeoJSON.Feature<GeoJSON.LineString>[] = [];
   for (const trip of trips) {
-    if (trip.end_date >= today) continue;
+    if (tripPhase(trip.start_date, trip.end_date, today) !== 'past') continue;
     const points = stopPoints(trip);
     if (points.length < 2) continue;
     const coordinates = points.slice(1).flatMap((p, i) => arc(points[i], p, i % 2 ? -0.16 : 0.16).slice(i === 0 ? 0 : 1));

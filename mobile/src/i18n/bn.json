@@ -889,7 +889,9 @@
     "rainMaybe": "বৃষ্টি হতে পারে ({{n}}%)",
     "rainLikely": "বৃষ্টির সম্ভাবনা বেশি ({{n}}%)",
     "priceGroup": "{{n}} জনের {{amount}}",
-    "sourceChecked": "{{source}} থেকে · যাচাই করা"
+    "sourceChecked": "{{source}} থেকে · যাচাই করা",
+    "statusNow": "এখন",
+    "statusNext": "পরের"
   },
   "timeField": {
     "hh": "ঘঘ",
@@ -1523,8 +1525,8 @@
     "lateDroppedCount_other": "{{n}}টি বাদ",
     "undone": "আগের মতো করা হলো।",
     "failed": "এটি বদলানো গেল না",
-    "useLocation": "“রওনা দিন”-এর জন্য আমার অবস্থান ব্যবহার করুন",
-    "useLocationSub": "শুধু এই স্ক্রিন খোলা থাকলে। এটি আপনার ফোনেই থাকে: কখনো সংরক্ষণ বা পাঠানো হয় না।",
+    "useLocation": "আমি যেখানে আছি সেখান থেকে “রওনা দিন” হিসাব করুন",
+    "useLocationSub": "শুধু এই স্ক্রিন খোলা থাকলে। কখনো সংরক্ষণ বা পাঠানো হয় না।",
     "locationDenied": "ভ্রমণের জন্য অবস্থান বন্ধ। ফোনের সেটিংসে চালু করতে পারেন।",
     "locationWaiting": "আপনার অবস্থান খোঁজা হচ্ছে…",
     "remindLeave": "রওনা দেওয়ার ১০ মিনিট আগে মনে করিয়ে দিন",
@@ -1554,7 +1556,22 @@
     "exactHint": "সময়মতো মনে করাতে ফোনের সেটিংসে ভ্রমণের জন্য “অ্যালার্ম ও রিমাইন্ডার” চালু করুন।",
     "openSettings": "সেটিংস খুলুন",
     "tellRoom": "ট্রিপ রুমকে জানান",
-    "backTo": "{{place}}-এ ফিরবেন প্রায় {{time}}-এ ({{travel}})"
+    "backTo": "{{place}}-এ ফিরবেন প্রায় {{time}}-এ ({{travel}})",
+    "timeToLeave": "রওনা দেওয়ার সময়",
+    "leaveFor": "{{place}}-এর জন্য",
+    "leaveForLate": "{{place}}-এর জন্য · {{time}} দেরি",
+    "freeThenLeave": "{{time}} পর্যন্ত, তারপর {{place}}-এর জন্য রওনা",
+    "headingBack": "ফেরার পথে",
+    "backAbout": "প্রায় {{time}}-এ {{place}}-এ ফেরা",
+    "backAboutAt": "প্রায় {{time}}-এ ফেরা",
+    "backBy": "প্রায় {{time}}-এ ফেরা",
+    "progressA11y": "{{all}} মিনিটের {{done}} মিনিট গেছে",
+    "leaveByAt": "{{time}}-এর মধ্যে রওনা দিন",
+    "rideShort": "{{mode}} {{time}}",
+    "openA11y": "আজকের দিন খুলুন",
+    "weatherA11y": "{{temp}}°, {{sky}}। পরিস্থিতি খুলবে",
+    "inTime": "{{time}} পরে",
+    "nextLabel": "পরের · {{time}}"
   },
   "chat": {
     "chats": "চ্যাট",

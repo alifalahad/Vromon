@@ -12,6 +12,7 @@
  */
 
 import type { BaseLeg, ItineraryDay, ItineraryItem, TravelMode } from '../../../types';
+import { isStayMeal } from '../meals/meals';
 
 export type Point = { lat: number; lon: number };
 
@@ -33,12 +34,17 @@ export function dayStart(day: ItineraryDay | null | undefined, hotel: Point | nu
   return b && b.latitude != null && b.longitude != null ? { lat: b.latitude, lon: b.longitude } : hotel;
 }
 
-/** Back at the stay after the day's last stop: when, and how long the way back takes. null without one. */
+/**
+ * Back at the stay after the day's last stop: when, and how long the way back takes. null without one.
+ * Dinner where you stay comes after getting back, so it isn't the day's last stop (found in UI refresh step 15).
+ */
 export function backAt(day: ItineraryDay | null | undefined): { at: string; minutes: number; cost: number } | null {
   const leg = day?.return_leg;
-  if (!day || !leg || !day.items.length) return null;
-  const end = Math.max(...day.items.map((i) => t2m(i.end_time)));
-  return { at: m2t(end + leg.minutes), minutes: Math.round(leg.minutes), cost: leg.cost };
+  const stops = day?.items.filter((i) => !isStayMeal(i)) ?? [];
+  if (!day || !leg || !stops.length) return null;
+  const end = Math.max(...stops.map((i) => t2m(i.end_time)));
+  // On the 5 minutes, as the plan's "Back at" row says it (D23): the mark after
+  return { at: m2t(Math.ceil(Math.round(end + leg.minutes) / 5) * 5), minutes: Math.round(leg.minutes), cost: leg.cost };
 }
 
 export const pointOf = (item: ItineraryItem): Point | null => {
@@ -200,6 +206,42 @@ export function leaveBy(state: TodayState, hotel: Point | null, nearHere: Point 
     at: m2t(Math.max(0, at)), atMin: at, far: far || undefined,
     minutes: Math.round(travel.minutes), mode: travel.mode, km: travel.km, traffic, from: travel.from, source: travel.source,
   };
+}
+
+/**
+ * What "Now" says, on the plan's card and on Today (docs/ui-refresh step 15), from the day's state and its
+ * "leave by", so the two never disagree:
+ *   - leave: "leave by" has come for a stop that hasn't started, whatever else is on: time to go, and how late
+ *     (step 0 found "Free time, until 18:38" over "Leave now 15:35, you're 1 h 18 min behind");
+ *   - at: on at a stop, until it ends;
+ *   - before: the day hasn't started;
+ *   - back: after the day's last stop, on the way back to where you sleep;
+ *   - free: between stops, until it's time to leave (not until the next stop starts);
+ *   - done: nothing more today.
+ */
+export type NowView =
+  | { kind: 'leave'; next: ItineraryItem; late: number }
+  | { kind: 'at'; item: ItineraryItem; until: string; left: number; elapsed: number; length: number }
+  | { kind: 'before'; startsAt: string | null }
+  | { kind: 'back'; at: string; left: number }
+  | { kind: 'free'; until: string; left: number; next: ItineraryItem | null }
+  | { kind: 'done' };
+
+export function nowView(state: TodayState, leave: LeaveBy | null, now: number, back: { at: string } | null): NowView {
+  const { current, next } = state;
+  if (next && leave && now >= leave.atMin && now < t2m(next.start_time)) return { kind: 'leave', next, late: now - Math.max(0, leave.atMin) };
+  if (current) {
+    const start = t2m(current.start_time);
+    const end = t2m(current.end_time);
+    return { kind: 'at', item: current, until: current.end_time, left: end - now, elapsed: now - start, length: end - start };
+  }
+  if (state.phase === 'before') return { kind: 'before', startsAt: state.rest[0]?.start_time ?? null };
+  // After the last stop (meals where you stay aren't stops): on the way back, until you're back
+  if (!next && back && now < t2m(back.at) && !state.rest.some((i) => !isStayMeal(i))) return { kind: 'back', at: back.at, left: t2m(back.at) - now };
+  const coming = next ?? state.rest[0] ?? null;
+  if (!coming) return { kind: 'done' };
+  const until = next && leave ? leave.atMin : t2m(coming.start_time);
+  return { kind: 'free', until: m2t(until), left: until - now, next };
 }
 
 /** Google Maps directions to the stop (opens the app if it's installed). */

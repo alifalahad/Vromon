@@ -39,14 +39,16 @@ export function PhaseChip({ start, end, today }: { start: string; end: string; t
   const { t } = useTranslation();
   const f = usePlanFormat();
   const p = planPhase(start, end, today);
+  // On the trip it's green with a dot (frame 31): it's happening now
   const [bg, ink] =
     p.kind === 'before'
       ? [colors.warningBg, colors.warning]
       : p.kind === 'on'
-        ? [colors.accentTint, colors.onAccentSoft]
+        ? [colors.successBg, colors.success]
         : [colors.surfaceInset, colors.textSecondary];
   return (
     <View style={[styles.chip, { backgroundColor: bg }]} testID="trip-phase">
+      {p.kind === 'on' ? <View style={[styles.chipDot, { backgroundColor: colors.success }]} /> : null}
       <Text style={[styles.chipText, { color: ink }]} maxFontSizeMultiplier={1.3} numberOfLines={1}>
         {phaseText(p, t, f.n)}
       </Text>
@@ -146,17 +148,23 @@ function tabSky(day: ConditionsDay | undefined) {
   return code == null ? null : { code, ...sky(code) };
 }
 
-/** The day tabs (frame 28): "Day 1", "Fri 20" and the sky. More days than fit scroll; the chosen day stays in view. */
+/**
+ * The day tabs (frame 28): "Day 1", "Fri 20" and the sky. More days than fit scroll; the chosen day stays in view.
+ * On the trip (frame 31): days gone by say "Done" with a tick, and today's says "Today".
+ */
 export function DayTabs({
   days,
   index,
   conditions,
   onPick,
+  today,
 }: {
   days: ItineraryDay[];
   index: number;
   conditions?: readonly ConditionsDay[];
   onPick: (i: number) => void;
+  /** The phone's date, while the trip is on */
+  today?: string | null;
 }) {
   const styles = useStyles();
   const theme = useTheme();
@@ -173,9 +181,16 @@ export function DayTabs({
   const tabs = days.map((d, i) => {
     const on = i === index;
     const parts = d.day_date ? dayParts(d.day_date, i18n.language) : null;
-    const s = tabSky(conditions?.find((c) => c.day_id === d.id));
+    const gone = !!today && !!d.day_date && d.day_date < today;
+    const isToday = !!today && d.day_date === today;
+    const s = gone || isToday ? null : tabSky(conditions?.find((c) => c.day_id === d.id));
     const sun = s && (s.key === 'clear' || s.key === 'partly');
-    const label = [t('plan.day', { n: f.n(d.day_number) }), parts ? `${parts.weekday} ${parts.day}` : null, s ? text.sky(s.code) : null]
+    const label = [
+      t('plan.day', { n: f.n(d.day_number) }),
+      isToday ? t('today.open') : parts ? `${parts.weekday} ${parts.day}` : null,
+      gone ? t('today.done') : null,
+      s ? text.sky(s.code) : null,
+    ]
       .filter(Boolean)
       .join(', ');
     return (
@@ -189,11 +204,22 @@ export function DayTabs({
         style={[styles.tab, scrollable ? styles.tabFixed : styles.tabFlex, on && styles.tabOn]}
         testID={`day-tab-${d.day_number}`}
       >
-        <Text style={[styles.tabTitle, on && styles.tabTextOn]} maxFontSizeMultiplier={1.3} numberOfLines={1}>
+        <Text style={[styles.tabTitle, gone && !on && styles.tabTitleGone, on && styles.tabTextOn]} maxFontSizeMultiplier={1.3} numberOfLines={1}>
           {t('plan.day', { n: f.n(d.day_number) })}
         </Text>
         <View style={styles.tabSubRow}>
-          {parts ? (
+          {gone ? (
+            <>
+              <MaterialCommunityIcons name="check" size={13} color={on ? colors.onAccent : colors.success} />
+              <Text style={[styles.tabSub, on && styles.tabTextOn]} maxFontSizeMultiplier={1.3} numberOfLines={1}>
+                {t('today.done')}
+              </Text>
+            </>
+          ) : isToday ? (
+            <Text style={[styles.tabSub, on && styles.tabTextOn]} maxFontSizeMultiplier={1.3} numberOfLines={1}>
+              {t('today.open')}
+            </Text>
+          ) : parts ? (
             <Text style={[styles.tabSub, on && styles.tabTextOn]} maxFontSizeMultiplier={1.3} numberOfLines={1}>
               {localDigits(`${parts.weekday} ${parts.day}`, i18n.language)}
             </Text>
@@ -273,7 +299,8 @@ export function DayLine({
 }
 
 const useStyles = makeStyles((t) => ({
-  chip: { minHeight: 28, paddingHorizontal: 12, borderRadius: 14, justifyContent: 'center', flexShrink: 0 },
+  chip: { minHeight: 28, paddingHorizontal: 12, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 0 },
+  chipDot: { width: 8, height: 8, borderRadius: 4 },
   chipText: { fontSize: 13, fontWeight: '700' },
   room: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.accentTint, flexShrink: 0 },
   roomBadge: {
@@ -323,6 +350,7 @@ const useStyles = makeStyles((t) => ({
   tabFixed: { width: TAB_WIDTH },
   tabOn: { backgroundColor: t.colors.accentStrong },
   tabTitle: { fontSize: 15.5, fontWeight: '700', color: t.colors.textPrimary },
+  tabTitleGone: { color: t.colors.textSecondary },
   tabSubRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   tabSub: { fontSize: 12.5, color: t.colors.textSecondary },
   tabTextOn: { color: t.colors.onAccent },

@@ -108,7 +108,13 @@ name: 09 The whole journey - a trip from today, rearranged, its conditions, Toda
       id: day-tab-1
     timeout: 30000
 
-# Rearrange: stay longer at a stop, and the day's line changes
+# Today's tab opens with the Now card (docs/ui-refresh step 15)
+- assertVisible:
+    id: plan-now
+# Rearrange on tomorrow: today's stops that are over can't change any more, and late in the day that's all
+# of them. Stay longer at a stop, and the day's line changes
+- tapOn:
+    id: day-tab-2
 - swipe:
     start: "50%,56%"
     end: "50%,12%"

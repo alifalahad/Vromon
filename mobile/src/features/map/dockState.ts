@@ -10,7 +10,7 @@
  */
 
 import type { Destination, FriendFootprint, Trip, Visit } from '../../types';
-import { durationDays } from '../trips/dates';
+import { durationDays, tripPhase } from '../trips/dates';
 
 export const UPCOMING_DAYS = 30;
 
@@ -28,7 +28,7 @@ const byStart = (a: Trip, b: Trip) => a.start_date.localeCompare(b.start_date) |
 /** Want-list places with a destination there, one card per destination. */
 export function ideasFrom(visits: readonly Visit[], destinations: readonly Destination[], trips: readonly Trip[], today: string): Idea[] {
   // A destination with a trip still to come is in hand, not an idea
-  const planned = new Set(trips.filter((t) => t.end_date >= today).map((t) => t.destination));
+  const planned = new Set(trips.filter((t) => tripPhase(t.start_date, t.end_date, today) !== 'past').map((t) => t.destination));
   const wants = visits.filter((v) => v.status === 'want').sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   const seen = new Set<number>();
   const out: Idea[] = [];
@@ -54,9 +54,9 @@ export function pickDockState(
   social: FriendFootprint | null = null,
 ): DockState {
   const sorted = [...trips].sort(byStart);
-  const now = sorted.find((t) => t.start_date <= today && today <= t.end_date);
+  const now = sorted.find((t) => tripPhase(t.start_date, t.end_date, today) === 'ongoing');
   if (now) return { kind: 'today', trip: now, day: durationDays(now.start_date, today), days: durationDays(now.start_date, now.end_date) };
-  const next = sorted.find((t) => t.start_date > today);
+  const next = sorted.find((t) => tripPhase(t.start_date, t.end_date, today) === 'upcoming');
   if (next) {
     const daysAway = durationDays(today, next.start_date) - 1;
     if (daysAway <= UPCOMING_DAYS) return { kind: 'upcoming', trip: next, daysAway };

@@ -45,6 +45,7 @@ export function useStopDrag({
   onLift,
   onReorder,
   onMoveToDay,
+  minIndex = 0,
 }: {
   /** Every stop of the day, in order */
   stopIds: number[];
@@ -57,6 +58,8 @@ export function useStopDrag({
   onLift?: () => void;
   onReorder: (itemId: number, to: number) => void;
   onMoveToDay: (itemId: number, dayId: number) => void;
+  /** On the trip (docs/ui-refresh step 15): the stops done or on now stay first; nothing lands above them */
+  minIndex?: number;
 }) {
   const [drag, setDrag] = useState<DragState>(null);
   // The copy that follows the finger: its place on screen and width
@@ -78,9 +81,9 @@ export function useStopDrag({
   const dragRef = useRef<DragState>(null);
   const endedAt = useRef(0);
   // The latest props, for the gesture's JS handlers
-  const latest = useRef({ stopIds, onLift, onReorder, onMoveToDay, screenHeight, sheetHeights, bottomInset });
+  const latest = useRef({ stopIds, onLift, onReorder, onMoveToDay, screenHeight, sheetHeights, bottomInset, minIndex });
   useEffect(() => {
-    latest.current = { stopIds, onLift, onReorder, onMoveToDay, screenHeight, sheetHeights, bottomInset };
+    latest.current = { stopIds, onLift, onReorder, onMoveToDay, screenHeight, sheetHeights, bottomInset, minIndex };
   });
 
   const lastEvent = useRef(0);
@@ -100,7 +103,7 @@ export function useStopDrag({
       const r = taken.current[id];
       if (r && fingerY > rowsTop.current + r.y + r.height / 2 - shift) to += 1;
     }
-    return to;
+    return Math.max(latest.current.minIndex, to);
   };
 
   const updateRef = useRef<(fingerX: number, fingerY: number) => void>(() => {});

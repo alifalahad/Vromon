@@ -17,7 +17,7 @@ import { ActivityIndicator, SectionList, Text, View } from 'react-native';
 
 import { useMe } from '../../src/features/account/useMe';
 import { useVisits } from '../../src/features/map/visits';
-import { groupTrips, localToday } from '../../src/features/trips/dates';
+import { groupTrips, localToday, tripPhase } from '../../src/features/trips/dates';
 import { NextTripCard } from '../../src/features/trips/NextTripCard';
 import { RateTripReminder } from '../../src/features/trips/review/RateTripReminder';
 import { useTrips, useTripStats } from '../../src/features/trips/queries';
@@ -53,7 +53,7 @@ export default function TripsScreen() {
   // The next trip: the one you're on, else the soonest upcoming; the rest are listed below it
   const all = groupTrips(trips.data ?? [], today);
   const next = all.find((s) => s.phase === 'ongoing')?.data[0] ?? all.find((s) => s.phase === 'upcoming')?.data[0];
-  const withFriends = (joined.data ?? []).filter((trip) => trip.end_date >= today);
+  const withFriends = (joined.data ?? []).filter((trip) => tripPhase(trip.start_date, trip.end_date, today) !== 'past');
   const mineSections = all.map((s) => ({ ...s, data: s.data.filter((trip) => trip !== next) })).filter((s) => s.data.length);
   // "With friends" goes before past trips
   const sections: { phase: string; data: Trip[] }[] = [
@@ -105,7 +105,7 @@ export default function TripsScreen() {
           </Text>
         )}
         renderItem={({ item }) => {
-          const past = item.end_date < today;
+          const past = tripPhase(item.start_date, item.end_date, today) === 'past';
           const theirs = !!me.data && !!item.user_id && item.user_id !== me.data.id;
           return (
             <TripRow

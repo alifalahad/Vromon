@@ -181,6 +181,27 @@ describe.each([
     expect(contrast(plan.sun, sheet)).toBeGreaterThanOrEqual(3);
   });
 
+  it('on the trip (UI refresh step 15): the Now card, "Now" and "Next", the green "Day 2 of 3", "Done"', () => {
+    const dark = colors === darkColors;
+    const sheet = dark ? colors.bg : colors.surface;
+    const seen = (tint: string, under: string) => {
+      const m = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(tint);
+      if (!m) return tint;
+      const top = `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+      return mix(under, top, Number(m[4]));
+    };
+    // The hero card: "NOW · 11:30", the stop, its second line, "Today ›", and late words
+    for (const text of [colors.highlight, colors.onHero, colors.onHeroSecondary, colors.heroLink, colors.heroWarning]) {
+      expect(contrast(text, colors.hero)).toBeGreaterThanOrEqual(AA);
+    }
+    // The "Now" pill (amber words on the warm tint) and "Next" (blue on the blue tint)
+    expect(contrast(colors.warning, colors.markTint)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.onAccentSoft, colors.accentTint)).toBeGreaterThanOrEqual(AA);
+    // "Day 2 of 3" in green on its tint, over the sheet; "Done" in green on the sheet
+    expect(contrast(colors.success, seen(colors.successBg, sheet))).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.success, sheet)).toBeGreaterThanOrEqual(AA);
+  });
+
   it("a switch's track when off shows on a card and on the ground (3:1)", () => {
     expect(contrast(colors.switchOff, colors.surface)).toBeGreaterThanOrEqual(3);
     expect(contrast(colors.switchOff, colors.bg)).toBeGreaterThanOrEqual(3);

@@ -24,7 +24,7 @@ import type { SheetAction } from '../../../ui/ActionSheet';
 import { useMe } from '../../account/useMe';
 import { homeRegionName } from '../../map/geoData';
 import { setVisitStatus, statusOf, useVisits, type PlaceRef } from '../../map/visits';
-import { formatRange, localToday } from '../../trips/dates';
+import { formatRange, localToday, tripPhase } from '../../trips/dates';
 import { refreshTrips, useTrips } from '../../trips/queries';
 import { stopLiveShare } from '../liveShare';
 import { chatKeys, messageChanged, type Thread } from '../queries';
@@ -175,7 +175,7 @@ export function useChatCardActions(names: Record<string, string>, room: RoomCont
       addToTrip: (place) => {
         if (place.type !== 'attraction' || !place.id || !place.destination) return;
         const today = localToday();
-        const there = (trips.data ?? []).filter((trip) => trip.destination === place.destination && trip.end_date >= today);
+        const there = (trips.data ?? []).filter((trip) => trip.destination === place.destination && tripPhase(trip.start_date, trip.end_date, today) !== 'past');
         const placeId = place.id;
         setPicker({
           title: t('chat.cards.place.pickTrip', { place: placeName(place) }),

@@ -97,6 +97,7 @@ export function StopCard({
   onEatNearby,
   weather,
   mustDo,
+  status,
 }: {
   item: ItineraryItem;
   n: number;
@@ -127,6 +128,8 @@ export function StopCard({
   weather?: StopWeather | null;
   /** "Your must-do at sunset": one of the traveller's must-dos, with when they wanted it */
   mustDo?: string | null;
+  /** On the trip (docs/ui-refresh step 15, frame 31): the stop that's on now, or the next one */
+  status?: 'now' | 'next' | null;
 }) {
   const styles = useStyles();
   const theme = useTheme();
@@ -140,7 +143,8 @@ export function StopCard({
   const problems = issues.filter((v) => v.severity !== 'info');
   const hard = problems.some((v) => v.severity === 'hard');
   const tag = kind === 'visit' && !mustDo ? forYou(item.recommendation_reasons) : null;
-  const ring = dragging || selected ? theme.colors.accent : hard ? theme.colors.danger : problems.length ? theme.colors.warning : 'transparent';
+  const ring =
+    dragging || selected || status === 'now' ? theme.colors.accent : hard ? theme.colors.danger : problems.length ? theme.colors.warning : 'transparent';
   // Only what's true: a must-do says so, and "keeps its time" only when it does (kept with "Keep this time")
   const keepLine = mustDo ? (item.pinned ? `${mustDo} · ${t('plan.keepsTime')}` : mustDo) : item.pinned ? t('plan.pinned') : null;
   const look = weather?.code != null ? weatherIcon(weather) : null;
@@ -164,8 +168,13 @@ export function StopCard({
     <PressableScale
       onPress={onPress}
       haptic="selection"
-      style={[styles.card, { borderColor: ring }]}
-      accessibilityLabel={t('plan.stopA11y', { n: f.n(n), title: cardTitle(item, t), time: f.time(item.start_time) })}
+      style={[styles.card, status === 'now' && styles.cardNow, { borderColor: ring }]}
+      accessibilityLabel={[
+        t('plan.stopA11y', { n: f.n(n), title: cardTitle(item, t), time: f.time(item.start_time) }),
+        status ? t(status === 'now' ? 'plan.statusNow' : 'plan.statusNext') : null,
+      ]
+        .filter(Boolean)
+        .join(', ')}
       accessibilityHint={[
         f.duration(item.duration_minutes),
         look ? [temp, conditionText.sky(weather?.code)].filter(Boolean).join(', ') : null,
@@ -221,6 +230,13 @@ export function StopCard({
           );
         })}
       </View>
+      {status ? (
+        <View style={[styles.pill, status === 'now' ? styles.pillNow : styles.pillNext]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <Text style={[styles.pillText, status === 'now' ? styles.pillNowText : styles.pillNextText]} maxFontSizeMultiplier={1.3}>
+            {t(status === 'now' ? 'plan.statusNow' : 'plan.statusNext')}
+          </Text>
+        </View>
+      ) : null}
       {/* Only on a stop that can be moved */}
       {drag ? (
         <View style={styles.grip} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID={`stop-grip-${item.id}`}>
@@ -332,6 +348,7 @@ export function LegRow({
   crossing,
   onPress,
   dimmed,
+  leaveAt,
 }: {
   minutes: number;
   km: number;
@@ -346,6 +363,8 @@ export function LegRow({
   onPress?: () => void;
   /** A stop is being dragged */
   dimmed?: boolean;
+  /** On the trip: when to leave for the next stop (frame 31: "12:40" beside its ride) */
+  leaveAt?: string | null;
 }) {
   const styles = useStyles();
   const theme = useTheme();
@@ -360,6 +379,7 @@ export function LegRow({
   const price = mode && !crossing ? (fare ? t('plan.legFare', { amount: f.money(fare) }) : t('plan.legFree')) : null;
   const legNote = [crossing ? t('plan.legBoatNote') : null, note].filter(Boolean).join(' ');
   const a11y = [
+    leaveAt ? t('today.leaveByAt', { time: f.time(leaveAt) }) : null,
     crossing ? text : mode ? t('plan.legModeA11y', { mode: t(`plan.modes.${mode}`), time, km: kmText }) : t('plan.legA11y', { time, km: kmText }),
     price,
     legNote,
@@ -380,7 +400,13 @@ export function LegRow({
   );
   return (
     <Animated.View layout={GLIDE} entering={APPEAR} style={[styles.legRow, dimmed && styles.dimmed]}>
-      <View style={styles.timeColEmpty} />
+      {leaveAt ? (
+        <Text style={styles.leaveAt} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit importantForAccessibility="no" accessibilityElementsHidden testID="leg-leave-at">
+          {f.time(leaveAt)}
+        </Text>
+      ) : (
+        <View style={styles.timeColEmpty} />
+      )}
       {onPress ? (
         <PressableScale
           pressEffect="opacity"
@@ -397,6 +423,50 @@ export function LegRow({
       ) : (
         <View style={styles.flex} accessible accessibilityLabel={a11y}>
           {body}
+        </View>
+      )}
+    </Animated.View>
+  );
+}
+
+/**
+ * A finished stop on the trip (docs/ui-refresh step 15, frame 31): a short row with a tick and "Done". It still
+ * opens the stop's details; it can't be moved or removed.
+ */
+export function DoneRow({ item, onPress, dimmed }: { item: ItineraryItem; onPress?: () => void; dimmed?: boolean }) {
+  const styles = useStyles();
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const f = usePlanFormat();
+  const title = cardTitle(item, t);
+  const inside = (
+    <>
+      <Text style={styles.sideTime} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit>
+        {f.time(item.start_time)}
+      </Text>
+      <View style={styles.doneBody}>
+        <View style={styles.doneTick}>
+          <MaterialCommunityIcons name="check" size={16} color={theme.colors.success} />
+        </View>
+        <Text style={styles.doneTitle} numberOfLines={2}>
+          {title}
+        </Text>
+        <Text style={styles.doneWord} maxFontSizeMultiplier={1.3}>
+          {t('today.done')}
+        </Text>
+      </View>
+    </>
+  );
+  const label = `${f.time(item.start_time)}, ${title}, ${t('today.done')}`;
+  return (
+    <Animated.View layout={GLIDE} style={[styles.doneRow, dimmed && styles.dimmed]}>
+      {onPress ? (
+        <PressableScale pressEffect="opacity" haptic="selection" onPress={onPress} style={styles.doneInner} accessibilityRole="button" accessibilityLabel={label} testID={`stop-${item.id}`}>
+          {inside}
+        </PressableScale>
+      ) : (
+        <View style={styles.doneInner} accessible accessibilityLabel={label} testID={`stop-${item.id}`}>
+          {inside}
         </View>
       )}
     </Animated.View>
@@ -628,4 +698,26 @@ const useStyles = makeStyles((t) => ({
   freeText: { flex: 1, fontSize: 13.5, color: t.colors.textSecondary },
   freeAdd: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   freeAddText: { fontSize: 13.5, fontWeight: '500', color: t.colors.link },
+  // On the trip (frame 31)
+  cardNow: {
+    backgroundColor: t.colors.surface,
+    shadowColor: t.colors.accent,
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  pill: { minHeight: 24, paddingHorizontal: 9, borderRadius: 12, justifyContent: 'center', alignSelf: 'center' },
+  pillNow: { backgroundColor: t.colors.markTint },
+  pillNext: { backgroundColor: t.colors.accentTint },
+  pillText: { fontSize: 12, fontWeight: '700' },
+  pillNowText: { color: t.colors.warning },
+  pillNextText: { color: t.colors.onAccentSoft },
+  leaveAt: { width: TIME_COL, textAlign: 'right', fontSize: 13, fontWeight: '700', color: t.colors.link },
+  doneRow: { marginVertical: 1 },
+  doneInner: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
+  doneBody: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 12, paddingRight: 8 },
+  doneTick: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.successBg },
+  doneTitle: { flex: 1, fontSize: 14.5, color: t.colors.textSecondary },
+  doneWord: { fontSize: 12.5, fontWeight: '500', color: t.colors.success },
 }));

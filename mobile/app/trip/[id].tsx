@@ -29,10 +29,21 @@ import { useMe } from '../../src/features/account/useMe';
 import { useConversations } from '../../src/features/chat/queries';
 import { tripCard } from '../../src/features/chat/share';
 import { usePreferences } from '../../src/features/preferences/store';
-import { addDays, localToday } from '../../src/features/trips/dates';
+import { localToday, planPhase } from '../../src/features/trips/dates';
 import { DayMap, type MapBase, type MapPin } from '../../src/features/trips/plan/DayMap';
 import { MapOptions, TripTopBar, weatherLook } from '../../src/features/trips/plan/TripTopBar';
-import { DragGhost, FreeRow, LandingLine, LegRow, StopCard, type StopWeather } from '../../src/features/trips/plan/PlanRows';
+import { DoneRow, DragGhost, FreeRow, LandingLine, LegRow, StopCard, type StopWeather } from '../../src/features/trips/plan/PlanRows';
+import { NowCard } from '../../src/features/trips/today/NowCard';
+import {
+  backAt as wayBackAt,
+  dayStart,
+  leaveBy,
+  minuteOfDay,
+  nowView,
+  t2m,
+  todayState,
+  type Point,
+} from '../../src/features/trips/today/today';
 import { BudgetRow, DayLine, DayTabs, PhaseChip, RoomButton } from '../../src/features/trips/plan/PlanTop';
 import { ChangePlan } from '../../src/features/trips/plan/ChangePlan';
 import { AboutTrip } from '../../src/features/trips/plan/AboutTrip';
@@ -45,6 +56,7 @@ import { StopSheet } from '../../src/features/trips/plan/StopSheet';
 import {
   backAt,
   dayCounts,
+  dayDate,
   friendlyRange,
   initialDayIndex,
   leaveAt,
@@ -118,7 +130,9 @@ export default function TripScreen() {
   const { height } = useWindowDimensions();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `at` and `date` set the clock for checking a trip day, in development builds only (as on Today)
+  const params = useLocalSearchParams<{ id: string; at?: string; date?: string }>();
+  const { id } = params;
   const tripId = Number(id);
   const me = useMe();
   const f = usePlanFormat();
@@ -129,20 +143,45 @@ export default function TripScreen() {
   const hasPlan = days.length > 0;
   // Step 11: "opens in under a second from the cache", measured in development builds
   useDevPerf('trip screen', hasPlan, itinerary.isFetchedAfterMount === false);
-  // On the trip, or the evening before it starts: Today mode
-  const onTrip = hasPlan && !!trip.data && trip.data.start_date <= addDays(localToday(), 1) && trip.data.end_date >= localToday();
+  // The phone's clock: on the trip the plan follows the day (docs/ui-refresh step 15)
+  const [clock, setClock] = useState(() => new Date());
+  const today = (__DEV__ && params.date) || localToday(clock);
+  const nowMin = __DEV__ && params.at ? t2m(params.at) : minuteOfDay(clock);
+  // Where the trip is: one rule for it (dates.ts, the same as the server's)
+  const phase = trip.data ? planPhase(trip.data.start_date, trip.data.end_date, today) : null;
+  // Today opens on the trip, and from the evening before it starts ("Starts tomorrow")
+  const todayOpen = hasPlan && !!phase && (phase.kind === 'on' || (phase.kind === 'before' && phase.days <= 1));
+  useEffect(() => {
+    if (!todayOpen) return;
+    const timer = setInterval(() => setClock(new Date()), 30_000);
+    return () => clearInterval(timer);
+  }, [todayOpen]);
   const budget = useQuery({ queryKey: ['budget', tripId], queryFn: () => tripsApi.budget(tripId), enabled: hasPlan });
 
   // A friend's trip is read-only; until the owner is known, nothing is editable
   const mine = !!trip.data && !!me.data && (!trip.data.user_id || trip.data.user_id === me.data.id);
   // The trip's room, once someone was invited (friends-chat step 7), with what's unread
   const room = useConversations(!!me.data).data?.find((c) => c.kind === 'trip' && c.trip_id === tripId) ?? null;
-  const today = localToday();
   const openToday = () => router.push({ pathname: '/trip/today/[id]', params: { id: tripId } });
 
   const [dayChoice, setDayChoice] = useState<number | null>(null);
   const dayIndex = Math.min(dayChoice ?? initialDayIndex(days, today), Math.max(0, days.length - 1));
   const day: ItineraryDay | undefined = days[dayIndex];
+  // Today's tab while the trip is on: what's done, on now and next, and when to leave (today.ts, as on Today)
+  const live = phase?.kind === 'on' && !!day && day.day_date === today;
+  const tripHotel = itinerary.data?.hotel;
+  const hotelPoint = useMemo<Point | null>(
+    () => (tripHotel?.latitude != null && tripHotel.longitude != null ? { lat: tripHotel.latitude, lon: tripHotel.longitude } : null),
+    [tripHotel],
+  );
+  const liveState = useMemo(() => (live && day ? todayState(day, nowMin) : null), [live, day, nowMin]);
+  const liveLeave = useMemo(() => (liveState && day ? leaveBy(liveState, dayStart(day, hotelPoint), null, day.start_leg) : null), [liveState, day, hotelPoint]);
+  const liveBack = live ? wayBackAt(day) : null;
+  const liveView = liveState ? nowView(liveState, liveLeave, nowMin, liveBack) : null;
+  /** Finished today (it can't change any more) */
+  const isDone = (item: ItineraryItem) => !!liveState && t2m(item.end_time) <= nowMin;
+  /** Done or on now: it stays where it is */
+  const isFixed = (item: ItineraryItem) => isDone(item) || liveState?.current?.id === item.id;
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [sheetItem, setSheetItem] = useState<ItineraryItem | null>(null);
   const [why, setWhy] = useState<ItineraryItem | null>(null);
@@ -375,9 +414,11 @@ export default function TripScreen() {
       rows.flatMap((r) => {
         if (r.kind !== 'stop') return [];
         const coord = stopCoord(r.item);
-        return coord ? [{ id: r.item.id, n: r.n, kind: r.stopKind, coord, title: stopTitle(r.item), unchecked: isUnchecked(r.item.place) }] : [];
+        // Visited today: a quieter pin (docs/ui-refresh step 15)
+        const done = live && t2m(r.item.end_time) <= nowMin;
+        return coord ? [{ id: r.item.id, n: r.n, kind: r.stopKind, coord, title: stopTitle(r.item), unchecked: isUnchecked(r.item.place), done }] : [];
       }),
-    [rows],
+    [rows, live, nowMin],
   );
   // "Put a pin on the map" opens at the stop before the free time, else at the day's first stop
   const addCenter = useMemo(() => {
@@ -644,8 +685,12 @@ export default function TripScreen() {
   };
 
   const stopIds = useMemo(() => rows.flatMap((r) => (r.kind === 'stop' ? [r.item.id] : [])), [rows]);
+  // On the trip: the stops done or on now stay first (docs/ui-refresh step 15)
+  const stopRows = rows.filter((r): r is Extract<typeof r, { kind: 'stop' }> => r.kind === 'stop');
+  const fixedCount = liveState ? stopRows.filter((r) => t2m(r.item.end_time) <= nowMin || liveState.current?.id === r.item.id).length : 0;
   const drag = useStopDrag({
     stopIds,
+    minIndex: fixedCount,
     enabled: mine && !busy,
     screenHeight: height,
     sheetHeights: [sheetLow, sheetHigh],
@@ -742,8 +787,13 @@ export default function TripScreen() {
     const line = (key: string) => <LandingLine key={key} time={dragging ? previewStarts?.[dragging.itemId] : undefined} />;
     const dim = !!dragging;
     let seen = 0;
-    for (const r of rows) {
+    // On the trip: the stop each ride goes to (the next stop row after it)
+    const goesTo = (i: number) => rows.slice(i + 1).find((x): x is Extract<typeof x, { kind: 'stop' }> => x.kind === 'stop')?.item;
+    rows.forEach((r, i) => {
       if (r.kind === 'leg') {
+        const to = goesTo(i);
+        // A ride already taken (to a stop done or on now) is left out
+        if (liveState && to && isFixed(to)) return;
         out.push(
           <LegRow
             key={r.key}
@@ -753,6 +803,7 @@ export default function TripScreen() {
             fare={r.fare}
             crossing={r.crossing}
             dimmed={dim}
+            leaveAt={liveLeave && to && liveState?.next?.id === to.id ? liveLeave.at : null}
             note={
               dayConditions?.legs[String(r.itemId)]
                 ? t('conditions.slowLeg', {
@@ -765,10 +816,12 @@ export default function TripScreen() {
             onPress={mine && !busy ? () => setLegItem(r.itemId) : undefined}
           />,
         );
-        continue;
+        return;
       }
       if (r.kind === 'free') {
-        const before = stops.findIndex((i) => `f${i.id}` === r.key);
+        // Free time that's over is left out
+        if (liveState && t2m(r.start) + r.minutes <= nowMin) return;
+        const before = stops.findIndex((x) => `f${x.id}` === r.key);
         out.push(
           <FreeRow
             key={r.key}
@@ -778,13 +831,30 @@ export default function TripScreen() {
             onAdd={mine && !busy && before >= 0 ? () => setAddTarget({ dayId: d.id, position: before + 1, nearItemId: stops[before].id }) : undefined}
           />,
         );
-        continue;
+        return;
       }
       const item = r.item;
-      const index = stops.findIndex((i) => i.id === item.id);
+      const index = stops.findIndex((x) => x.id === item.id);
       const isDragged = dragging?.itemId === item.id;
       if (dragging && !isDragged && dragging.to !== dragging.from && seen === dragging.to) out.push(line(`line-${r.key}`));
       if (!isDragged) seen += 1;
+      // Done today: a short row with a tick (frame 31); it still opens its details
+      if (isDone(item)) {
+        out.push(
+          <DoneRow
+            key={r.key}
+            item={item}
+            dimmed={dim}
+            onPress={() => {
+              setSelectedId(item.id);
+              setSheetItem(item);
+            }}
+          />,
+        );
+        return;
+      }
+      const fixed = isFixed(item);
+      const status = liveState?.current?.id === item.id ? ('now' as const) : liveState?.next?.id === item.id ? ('next' as const) : null;
       out.push(
         <StopCard
           key={r.key}
@@ -798,20 +868,20 @@ export default function TripScreen() {
               .map((w) => ({ severity: isSerious(w) ? ('hard' as const) : ('soft' as const), code: w.code, message: conditionText.title(w) })),
           ]}
           selected={selectedId === item.id}
-          removable={mine && item.item_type === 'activity' && !busy}
+          removable={mine && item.item_type === 'activity' && !busy && !fixed}
           onLayoutRow={(y, h) => {
             drag.setRow(item.id, y, h);
           }}
           onCardWidth={drag.setCardWidth}
-          drag={mine && !busy && !item.pinned ? gestures[item.id] : undefined}
+          drag={mine && !busy && !item.pinned && !fixed ? gestures[item.id] : undefined}
           dragging={isDragged}
           dimmed={dim && !isDragged}
           previewStart={previewStarts?.[item.id]}
           glide={dropped !== item.id && !isDragged}
           move={
-            mine && !busy
+            mine && !busy && !fixed
               ? {
-                  earlier: index > 0 ? () => reorder(d, item.id, index - 1) : undefined,
+                  earlier: index > fixedCount ? () => reorder(d, item.id, index - 1) : undefined,
                   later: index < stops.length - 1 ? () => reorder(d, item.id, index + 1) : undefined,
                   toDay:
                     days.length > 1
@@ -832,15 +902,16 @@ export default function TripScreen() {
           onEatNearby={sourceOf(item) === 'own' ? () => setEatFor(item) : undefined}
           weather={weatherFor(item)}
           mustDo={mustDoFor(item)}
+          status={status}
         />,
       );
-    }
+    });
     if (dragging && dragging.to !== dragging.from && seen === dragging.to) out.push(line('line-end'));
     return out;
   }
 
   const actions: SheetAction[] = [];
-  if (onTrip) actions.push({ key: 'today', label: t('today.open'), icon: 'calendar-today', onPress: openToday });
+  if (todayOpen) actions.push({ key: 'today', label: t('today.open'), icon: 'calendar-today', onPress: openToday });
   // Meals (step 3): this day's, or the whole trip's
   if (mine && day) {
     actions.push({ key: 'mealsDay', label: t('meals.today'), icon: 'silverware-fork-knife', onPress: () => setMealsFor('day') });
@@ -1001,9 +1072,12 @@ export default function TripScreen() {
               {room ? <RoomButton unread={room.unread_count} onPress={() => router.push({ pathname: '/chat/[id]', params: { id: String(room.id) } })} /> : null}
             </View>
             <Text style={styles.subtitle}>
-              {friendlyRange(data.start_date, data.end_date, i18n.language, today)} · {t('plan.travellers', { count: data.num_travelers, n: f.n(data.num_travelers) })}
+              {/* On the trip, today's date (frame 31: "Sat 21 Nov · 2 travellers") */}
+              {phase?.kind === 'on' ? f.time(dayDate(today, i18n.language)) : friendlyRange(data.start_date, data.end_date, i18n.language, today)} ·{' '}
+              {t('plan.travellers', { count: data.num_travelers, n: f.n(data.num_travelers) })}
             </Text>
-            {onTrip ? (
+            {/* Today: from the Now card on today's tab, else here */}
+            {todayOpen && !live ? (
               <PressableScale haptic="selection" onPress={openToday} style={styles.todayPill} accessibilityRole="button" testID="open-today">
                 <MaterialCommunityIcons name="calendar-today" size={18} color={theme.colors.onAccent} />
                 <Text style={styles.todayPillText}>{t('today.open')}</Text>
@@ -1034,6 +1108,7 @@ export default function TripScreen() {
                   days={days}
                   index={dayIndex}
                   conditions={conditions.data?.days}
+                  today={phase?.kind === 'on' ? today : null}
                   onPick={(i) => {
                     setDayChoice(i);
                     setSelectedId(null);
@@ -1054,16 +1129,40 @@ export default function TripScreen() {
                   />
                 ))}
 
-                <DayLine
-                  title={daySummaryText(day.summary, t) ?? day.theme ?? null}
-                  places={counts.places}
-                  meals={counts.meals}
-                  money={byDay ? { amount: byDay.amount, estimate: byDay.estimate } : null}
-                  travellers={data.num_travelers}
-                  roadMinutes={day.total_travel_time}
-                />
-
-                {dayConditions && <ConditionChips day={dayConditions} onOpen={openConditions} />}
+                {/* Today's tab on the trip: the Now card in place of the day's line and chips (frame 31) */}
+                {live && liveState ? (
+                  <NowCard
+                    variant="plan"
+                    view={liveView}
+                    now={nowMin}
+                    next={liveState.next}
+                    leave={liveLeave}
+                    back={
+                      liveBack
+                        ? {
+                            at: liveBack.at,
+                            minutes: liveBack.minutes,
+                            place: baseName(day.end_base, t),
+                            point: day.end_base?.latitude != null && day.end_base.longitude != null ? { lat: day.end_base.latitude, lon: day.end_base.longitude } : null,
+                          }
+                        : null
+                    }
+                    onToday={openToday}
+                    testID="plan-now"
+                  />
+                ) : (
+                  <>
+                    <DayLine
+                      title={daySummaryText(day.summary, t) ?? day.theme ?? null}
+                      places={counts.places}
+                      meals={counts.meals}
+                      money={byDay ? { amount: byDay.amount, estimate: byDay.estimate } : null}
+                      travellers={data.num_travelers}
+                      roadMinutes={day.total_travel_time}
+                    />
+                    {dayConditions && <ConditionChips day={dayConditions} onOpen={openConditions} />}
+                  </>
+                )}
 
                 {dayIndex === 0 && itinerary.data?.getting_there ? (
                   <GettingThere trip={itinerary.data.getting_there} tripId={tripId} />
@@ -1142,13 +1241,22 @@ export default function TripScreen() {
                   {stopCount === 0 && <Text style={styles.muted}>{t('plan.emptyDay')}</Text>}
                   {/* Breakfast where you stay comes before leaving, dinner there after getting back */}
                   <View style={dragging ? styles.dimmed : undefined}>
-                    <StayMealRow item={stayMealsOf(day).breakfast} />
-                    {stopCount > 0 && <BaseRow way="from" base={day.start_base} leg={day.start_leg} at={leaveAt(day)} />}
+                    {/* On the trip, a meal where you stay that's over is a "Done" row, and once you've left, "From …" goes */}
+                    {stayMealsOf(day).breakfast && isDone(stayMealsOf(day).breakfast!) ? (
+                      <DoneRow item={stayMealsOf(day).breakfast!} />
+                    ) : (
+                      <StayMealRow item={stayMealsOf(day).breakfast} />
+                    )}
+                    {stopCount > 0 && !stopRows.some((r) => isFixed(r.item)) && <BaseRow way="from" base={day.start_base} leg={day.start_leg} at={leaveAt(day)} />}
                   </View>
                   {renderRows(day)}
                   <View style={dragging ? styles.dimmed : undefined}>
                     {stopCount > 0 && <BaseRow way="back" base={day.end_base} leg={day.return_leg} at={backAt(day)} />}
-                    <StayMealRow item={stayMealsOf(day).dinner} />
+                    {stayMealsOf(day).dinner && isDone(stayMealsOf(day).dinner!) ? (
+                      <DoneRow item={stayMealsOf(day).dinner!} />
+                    ) : (
+                      <StayMealRow item={stayMealsOf(day).dinner} />
+                    )}
                   </View>
                 </View>
 
@@ -1221,7 +1329,8 @@ export default function TripScreen() {
       <StopSheet
         item={sheetItem}
         issues={sheetItem ? issuesForItem(report, sheetItem.id) : []}
-        editable={mine && !busy}
+        // A stop done today can't be changed any more
+        editable={mine && !busy && !(sheetItem && isDone(sheetItem))}
         onClose={() => setSheetItem(null)}
         onExplain={setWhy}
         onSwap={setReplacing}

@@ -46,7 +46,7 @@ import { useFriendActions } from '../../src/features/friends/useFriendActions';
 import { countryName } from '../../src/features/geo/countries';
 import { homeRegionName } from '../../src/features/map/geoData';
 import { useVisits } from '../../src/features/map/visits';
-import { formatRange, localToday } from '../../src/features/trips/dates';
+import { formatRange, localToday, tripPhase } from '../../src/features/trips/dates';
 import { usePlanFormat } from '../../src/features/trips/plan/usePlanFormat';
 import { useTrips } from '../../src/features/trips/queries';
 import { ApiError, chatApi, destinationsApi, roomsApi } from '../../src/services/api';
@@ -146,7 +146,7 @@ export default function ChatScreen() {
   const shareTrips = useMemo(() => {
     const today = localToday();
     return (trips.data ?? [])
-      .filter((trip) => trip.end_date >= today && (!trip.user_id || trip.user_id === me))
+      .filter((trip) => tripPhase(trip.start_date, trip.end_date, today) !== 'past' && (!trip.user_id || trip.user_id === me))
       .sort((a, b) => a.start_date.localeCompare(b.start_date))
       .slice(0, 3);
   }, [trips.data, me]);

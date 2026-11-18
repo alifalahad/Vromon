@@ -41,8 +41,11 @@ function kmBetween(a: Coord, b: Coord): number {
   return Math.sqrt(x * x + y * y) * 111.32;
 }
 
-/** `unchecked`: a stop from outside Vromon's list (trip upgrades step 6), drawn hollow and named "Not checked" */
-export type MapPin = { id: number; n: number; kind: StopKind; coord: Coord; title: string; unchecked?: boolean };
+/**
+ * `unchecked`: a stop from outside Vromon's list (trip upgrades step 6), drawn hollow and named "Not checked".
+ * `done`: a stop already visited today (docs/ui-refresh step 15): its pin is quieter.
+ */
+export type MapPin = { id: number; n: number; kind: StopKind; coord: Coord; title: string; unchecked?: boolean; done?: boolean };
 /** Where the day starts or ends: the stay */
 export type MapBase = { kind: StayKind; coord: Coord; name: string };
 
@@ -194,6 +197,7 @@ export function DayMap({
           text: p.unchecked ? theme.colors.link : p.kind === 'meal' ? colors.onMeal : colors.onVisit,
           ring: p.unchecked ? colors.visit : '#FFFFFF',
           selected: p.id === selectedId ? 1 : 0,
+          done: p.done && p.id !== selectedId ? 1 : 0,
         },
         geometry: { type: 'Point', coordinates: [p.coord.longitude, p.coord.latitude] },
       })),
@@ -280,6 +284,9 @@ export function DayMap({
               'circle-color': ['get', 'color'],
               'circle-stroke-color': ['get', 'ring'],
               'circle-stroke-width': ['case', ['==', ['get', 'selected'], 1], 3, 2.5],
+              // A stop visited today steps back
+              'circle-opacity': ['case', ['==', ['get', 'done'], 1], 0.45, 1],
+              'circle-stroke-opacity': ['case', ['==', ['get', 'done'], 1], 0.45, 1],
             }}
           />
           <Layer
@@ -292,7 +299,7 @@ export function DayMap({
               'text-allow-overlap': true,
               'text-ignore-placement': true,
             }}
-            paint={{ 'text-color': ['get', 'text'] }}
+            paint={{ 'text-color': ['get', 'text'], 'text-opacity': ['case', ['==', ['get', 'done'], 1], 0.55, 1] }}
           />
           <Layer
             id="day-stop-name"

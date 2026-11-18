@@ -85,11 +85,15 @@ function renderWithQuery(ui: React.ReactElement) {
   clients.push(client);
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
-afterEach(() => clients.splice(0).forEach((c) => c.clear()));
+function cleanUpClients() {
+  clients.splice(0).forEach((c) => c.clear());
+}
+afterEach(cleanUpClients);
 // These trips are dated 19–20 Oct 2026: the clock is a week before, so no day is "today"
 // (only the date is fixed; timers stay real)
+const REAL_TIMERS = ['setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] as const;
 beforeAll(() => {
-  jest.useFakeTimers({ doNotFake: ['setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'], now: new Date(2026, 9, 12, 10, 0) });
+  jest.useFakeTimers({ doNotFake: [...REAL_TIMERS], now: new Date(2026, 9, 12, 10, 0) });
 });
 afterAll(() => jest.useRealTimers());
 beforeEach(() => jest.clearAllMocks());
@@ -493,6 +497,72 @@ describe('trip screen', () => {
     await waitFor(() => expect(screen.getByTestId('advice-6')).toBeTruthy());
     await fireEvent.press(screen.getByTestId('advice-notNow-6'));
     await waitFor(() => expect(api.notNowStaySuggestion).toHaveBeenCalledWith(5, 6));
+  });
+
+  // docs/ui-refresh step 15: on a trip day the plan follows the day (frame 31). The clock is set to the trip's
+  // first day, Mon 19 Oct: breakfast 09:00–10:00, Laboni Beach 10:02–12:32, Sunset Boat Ride 15:45 (2 min away)
+  describe('on a trip day', () => {
+    const on = async (hhmm: string) => {
+      const [h, m] = hhmm.split(':').map(Number);
+      // (a test above ends with real timers, where the clock can't be set: fake only the date again)
+      jest.useFakeTimers({ doNotFake: [...REAL_TIMERS], now: new Date(2026, 9, 19, h, m) });
+      api.get.mockResolvedValue(TRIP);
+      api.getItinerary.mockResolvedValue(ITIN([DAY1, DAY2]));
+      api.budget.mockResolvedValue(BUDGET);
+      await renderWithQuery(<TripScreen />);
+      await screen.findByTestId('plan-now');
+    };
+    afterEach(() => jest.useFakeTimers({ doNotFake: [...REAL_TIMERS], now: new Date(2026, 9, 12, 10, 0) }));
+
+    it("opens on today's tab with the Now card: what's on, until when, when to leave, and Today", async () => {
+      await on('11:00');
+      expect(screen.getByTestId('trip-phase')).toHaveTextContent('Day 1 of 2');
+      expect(screen.getByText(/^Mon 19 Oct · 2 travellers$/)).toBeTruthy();
+      expect(screen.getByTestId('plan-now')).toHaveTextContent(/NOW · 11:00.*Laboni Beach.*Until 12:32 · 1 h 32 min left/);
+      expect(screen.getByTestId('plan-now')).toHaveTextContent(/Leave by 15:40Sunset Boat Ride · /);
+      // The Now card takes the day line's place; Today opens from it (not from a pill as well)
+      expect(screen.queryByTestId('day-stats')).toBeNull();
+      expect(screen.getAllByTestId('open-today')).toHaveLength(1);
+      await fireEvent.press(screen.getByTestId('open-today'));
+      expect(mockPush).toHaveBeenCalledWith({ pathname: '/trip/today/[id]', params: { id: 5 } });
+    });
+
+    it('in the timeline: done, now, next, the time to leave on the ride; done and now stay where they are', async () => {
+      await on('11:00');
+      expect(screen.getByTestId('day-tab-1')).toHaveTextContent(/Day 1.*Today/);
+      expect(screen.getByTestId('day-tab-2')).toHaveTextContent(/Day 2.*Tue 20/);
+      // Breakfast is over: a short row with a tick
+      expect(screen.getByTestId('stop-1')).toHaveTextContent(/^09:00.*Breakfast · Jhaubon Restaurant.*Done$/);
+      expect(screen.getByTestId('stop-2').props.accessibilityLabel).toMatch(/Laboni Beach, 10:02, Now$/);
+      expect(screen.getByTestId('stop-3').props.accessibilityLabel).toMatch(/Sunset Boat Ride, 15:45, Next$/);
+      expect(screen.getByTestId('leg-leave-at', { includeHiddenElements: true })).toHaveTextContent('15:40');
+      // Only later stops move: no grip, no TalkBack moves on what's on now; the next can't go above it
+      expect(screen.queryByTestId('stop-grip-2', { includeHiddenElements: true })).toBeNull();
+      expect(screen.getByTestId('stop-grip-3', { includeHiddenElements: true })).toBeTruthy();
+      expect(screen.getByTestId('stop-2').props.accessibilityActions).toBeUndefined();
+      expect((screen.getByTestId('stop-3').props.accessibilityActions ?? []).map((a: { name: string }) => a.name)).not.toContain('earlier');
+      // The way from the stay is behind you
+      expect(screen.queryByTestId('base-from')).toBeNull();
+    });
+
+    it('between stops: free time until it is time to leave; then time to leave, never "free time"', async () => {
+      await on('12:40');
+      expect(screen.getByTestId('stop-2')).toHaveTextContent(/Laboni Beach.*Done/);
+      expect(screen.getByTestId('plan-now')).toHaveTextContent(/Free timeUntil 15:40, then leave for Sunset Boat Ride/);
+      cleanUpClients();
+      await on('15:42');
+      expect(screen.getByTestId('plan-now')).toHaveTextContent(/Time to leaveFor Sunset Boat Ride · 2 min late/);
+      expect(screen.getByTestId('plan-now')).toHaveTextContent(/Leave now/);
+      expect(screen.getByTestId('plan-now')).not.toHaveTextContent(/Free time/);
+    });
+
+    it("another day's tab: no Now card, Today from the pill", async () => {
+      await on('11:00');
+      await fireEvent.press(screen.getByTestId('day-tab-2'));
+      expect(screen.queryByTestId('plan-now')).toBeNull();
+      expect(screen.getByTestId('day-stats')).toBeTruthy();
+      expect(screen.getAllByTestId('open-today')).toHaveLength(1);
+    });
   });
 
   it("opens a friend's trip read-only", async () => {

@@ -889,7 +889,9 @@
     "rainMaybe": "rain possible ({{n}}%)",
     "rainLikely": "rain likely ({{n}}%)",
     "priceGroup": "{{amount}} for {{n}}",
-    "sourceChecked": "From {{source}} · checked"
+    "sourceChecked": "From {{source}} · checked",
+    "statusNow": "Now",
+    "statusNext": "Next"
   },
   "timeField": {
     "hh": "hh",
@@ -1523,8 +1525,8 @@
     "lateDroppedCount_other": "{{n}} dropped",
     "undone": "Changed back.",
     "failed": "Couldn't change that",
-    "useLocation": "Use my location for “leave by”",
-    "useLocationSub": "Only while this screen is open. It stays on your phone: never saved or sent.",
+    "useLocation": "Work out “leave by” from where I am",
+    "useLocationSub": "Only while this screen is open. Never saved or sent.",
     "locationDenied": "Location is off for Vromon. You can allow it in the phone's settings.",
     "locationWaiting": "Finding where you are…",
     "remindLeave": "Remind me 10 min before leaving",
@@ -1554,7 +1556,22 @@
     "exactHint": "For reminders on time, allow “Alarms & reminders” for Vromon in the phone's settings.",
     "openSettings": "Open settings",
     "tellRoom": "Tell the trip room",
-    "backTo": "Back to {{place}} around {{time}} ({{travel}})"
+    "backTo": "Back to {{place}} around {{time}} ({{travel}})",
+    "timeToLeave": "Time to leave",
+    "leaveFor": "For {{place}}",
+    "leaveForLate": "For {{place}} · {{time}} late",
+    "freeThenLeave": "Until {{time}}, then leave for {{place}}",
+    "headingBack": "On the way back",
+    "backAbout": "Back at {{place}} about {{time}}",
+    "backAboutAt": "Back about {{time}}",
+    "backBy": "Back about {{time}}",
+    "progressA11y": "{{done}} of {{all}} minutes gone",
+    "leaveByAt": "Leave by {{time}}",
+    "rideShort": "{{mode}} {{time}}",
+    "openA11y": "Open Today",
+    "weatherA11y": "{{temp}}°, {{sky}}. Opens the conditions",
+    "inTime": "in {{time}}",
+    "nextLabel": "Next · {{time}}"
   },
   "chat": {
     "chats": "Chats",

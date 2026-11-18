@@ -7,7 +7,7 @@
 import * as Location from 'expo-location';
 
 import type { CheckinCard, LateCard, RoomTrip } from '../../types';
-import { localToday } from '../trips/dates';
+import { localToday, tripPhase } from '../trips/dates';
 import type { OutgoingCard } from './share';
 
 /** "HH:MM" on the phone's clock */
@@ -17,7 +17,7 @@ export function localTime(now = new Date()): string {
 
 /** Is the trip on today (the room then offers I'm here, Running late and live location)? */
 export function tripIsOn(trip: Pick<RoomTrip, 'start_date' | 'end_date'> | null | undefined, today = localToday()): boolean {
-  return !!trip && trip.start_date <= today && today <= trip.end_date;
+  return !!trip && tripPhase(trip.start_date, trip.end_date, today) === 'ongoing';
 }
 
 export function lateCard(minutes: number, source: 'today' | 'room', now = new Date()): OutgoingCard {

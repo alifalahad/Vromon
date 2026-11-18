@@ -96,6 +96,9 @@ export type ThemeColors = {
   /** Settings (UI refresh step 13, frame 26): the panel of travel numbers on the hero card, and the lines between them */
   heroInset: string;
   heroInsetLine: string;
+  /** On the trip (UI refresh step 15, frames 31 and 32): a link on the hero card ("Today ›"), and late words on it */
+  heroLink: string;
+  heroWarning: string;
 };
 
 /** Names over other people's bubbles in a trip room, one per person; each 4.5:1 on `bubbleTheirs` (contrast.test.ts) */
@@ -164,6 +167,8 @@ export const darkColors: ThemeColors = {
   linkOnWhite: '#1D4BB8',
   heroInset: '#1F3050',
   heroInsetLine: '#34496B',
+  heroLink: '#8AB4F8',
+  heroWarning: '#FFD08A',
 };
 
 export const lightColors: ThemeColors = {
@@ -227,6 +232,8 @@ export const lightColors: ThemeColors = {
   linkOnWhite: '#1D4BB8',
   heroInset: '#1A2A42',
   heroInsetLine: '#2E405C',
+  heroLink: '#8AB4F8',
+  heroWarning: '#FFD08A',
 };
 
 export const radius = {

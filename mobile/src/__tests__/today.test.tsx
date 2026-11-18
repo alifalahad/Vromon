@@ -9,7 +9,7 @@ import TodayScreen, { lateEffect } from '../../app/trip/today/[id]';
 import { usePlanFormat } from '../features/trips/plan/usePlanFormat';
 import { at, eveningBefore, replaceReminders, todayPath } from '../features/trips/today/reminders';
 import { useTodaySettings } from '../features/trips/today/settings';
-import { directionsUrl, estimate, leaveBy, leaveTimes, todayState, usualTraffic, t2m } from '../features/trips/today/today';
+import { backAt, directionsUrl, estimate, leaveBy, leaveTimes, nowView, todayState, usualTraffic, t2m } from '../features/trips/today/today';
 import i18n from '../i18n';
 import { useChatOutbox } from '../features/chat/outbox';
 import { chatApi, tripsApi } from '../services/api';
@@ -143,6 +143,63 @@ describe('Today: the day now', () => {
     expect(times[1].leave.at).toBe('12:50');
   });
 
+  // docs/ui-refresh step 15: "Now" and "Leave by" from the same state, so they never disagree
+  describe('what "Now" says', () => {
+    // A 09:00–10:00, then 2 h by road to B at 14:00: leave by 12:00
+    const LONG: ItineraryDay = {
+      ...DAY,
+      items: [
+        item(21, { title: 'Laboni Beach', start_time: '09:00', end_time: '10:00', order_index: 0, place: place(8, 'Laboni Beach', LABONI),
+          travel_time_to_next: 120, distance_to_next: 70, travel_mode: 'cng', travel_source: 'road' }),
+        item(22, { title: 'Inani Beach', start_time: '14:00', end_time: '15:00', order_index: 1, place: place(9, 'Inani Beach', INANI) }),
+      ],
+      return_leg: { from_item_id: 22, minutes: 40, km: 20, mode: 'cng', cost: 400 },
+    };
+    const view = (at: string) => {
+      const s = todayState(LONG, t2m(at));
+      return nowView(s, leaveBy(s, HOTEL, null), t2m(at), backAt(LONG));
+    };
+
+    it('between stops it is free time until leave by, not until the next stop starts (step 0 found the two disagreeing)', () => {
+      expect(view('11:00')).toMatchObject({ kind: 'free', until: '12:00', left: 60 });
+    });
+    it('on time: time to leave', () => {
+      expect(view('12:00')).toMatchObject({ kind: 'leave', late: 0 });
+      expect(view('12:00')).toMatchObject({ next: { title: 'Inani Beach' } });
+    });
+    it('5 minutes late', () => {
+      expect(view('12:05')).toMatchObject({ kind: 'leave', late: 5 });
+    });
+    it('an hour late', () => {
+      expect(view('13:00')).toMatchObject({ kind: 'leave', late: 60 });
+    });
+    it('the next stop already started: the plan has you there, and the way back comes after it', () => {
+      expect(view('14:10')).toMatchObject({ kind: 'at', item: { title: 'Inani Beach' }, until: '15:00', left: 50, elapsed: 10, length: 60 });
+      expect(view('15:10')).toMatchObject({ kind: 'back', at: '15:40', left: 30 });
+      expect(view('15:50')).toEqual({ kind: 'done' });
+    });
+    it('at a stop when it is time to leave for the next: time to leave wins', () => {
+      // Lunch until 13:00, but Inani (13:30, 40 min away) needs leaving by 12:50
+      const s = todayState(DAY, t2m('12:55'));
+      expect(nowView(s, leaveBy(s, HOTEL, null), t2m('12:55'), backAt(DAY))).toMatchObject({ kind: 'leave', late: 5, next: { title: 'Inani Beach' } });
+    });
+    it('before the day starts', () => {
+      expect(view('07:00')).toEqual({ kind: 'before', startsAt: '09:00' });
+    });
+    it('the way back is after the last stop, not after dinner where you stay', () => {
+      const withDinner: ItineraryDay = {
+        ...LONG,
+        items: [...LONG.items, item(23, { item_type: 'meal', meal_source: 'stay', title: 'Dinner where you stay', start_time: '19:00', end_time: '19:45', order_index: 2 })],
+      };
+      expect(backAt(withDinner)).toEqual({ at: '15:40', minutes: 40, cost: 400 });
+      const s = todayState(withDinner, t2m('15:10'));
+      expect(nowView(s, leaveBy(s, HOTEL, null), t2m('15:10'), backAt(withDinner))).toMatchObject({ kind: 'back', at: '15:40' });
+      // Back at the stay, before dinner there: free until it
+      const later = todayState(withDinner, t2m('16:00'));
+      expect(nowView(later, null, t2m('16:00'), backAt(withDinner))).toMatchObject({ kind: 'free', until: '19:00', next: null });
+    });
+  });
+
   it('directions open Google Maps', () => {
     expect(directionsUrl(INANI, 'cng')).toBe('https://www.google.com/maps/dir/?api=1&destination=21.2272,92.0458&travelmode=driving');
     expect(directionsUrl(INANI, 'walk')).toContain('travelmode=walking');
@@ -195,8 +252,14 @@ describe('Today screen', () => {
     expect(await screen.findByTestId('today-now')).toHaveTextContent(/NOW · 10:30Laboni BeachUntil 12:00 · 1 h 30 min left/);
     expect(screen.getByTestId('today-leave-by')).toHaveTextContent('12:50');
     expect(screen.getByTestId('today-next')).toHaveTextContent(/CNG · 40 min · 24\.0 km · from Laboni Beach/);
-    expect(screen.getByTestId('today-next')).toHaveTextContent(/for Inani Beach at 13:30/);
-    expect(screen.getByTestId('today-item-1')).toHaveTextContent(/09:00Breakfast/);
+    // Frame 32: "NEXT · 13:30" over the stop, and "in …" under the time
+    expect(screen.getByTestId('today-next')).toHaveTextContent(/NEXT · 13:30Inani Beach/);
+    expect(screen.getByTestId('today-next')).toHaveTextContent(/Leave by12:50in 2 h 20 min/);
+    // The rest of today: what's still to come (breakfast is over, Laboni is in the Now card)
+    expect(screen.queryByTestId('today-item-1')).toBeNull();
+    expect(screen.queryByTestId('today-item-2')).toBeNull();
+    expect(screen.getByTestId('today-item-3')).toHaveTextContent(/^12:00Lunch at Mermaid/);
+    expect(screen.getByTestId('today-item-4')).toHaveTextContent(/13:30Inani Beach.*Next/);
     expect(screen.getByText(/Day 1 of 3 · Mon 19 Oct/)).toBeTruthy();
     expect(screen.queryByTestId('today-before-end')).toBeNull();
   });
@@ -209,12 +272,53 @@ describe('Today screen', () => {
     expect(await screen.findByTestId('today-before-end')).toHaveTextContent("That's 10 min before Lunch at Mermaid ends.");
   });
 
-  it('says leave now when you are behind', async () => {
+  it('says leave now when you are behind, and the Now card says the same (not "free time")', async () => {
     setUp();
     mockParams.at = '13:00';
     await renderWithQuery(<TodayScreen />);
     expect(await screen.findByText('Leave now')).toBeTruthy();
     expect(screen.getByText("You're 10 min behind")).toBeTruthy();
+    expect(screen.getByTestId('today-now')).toHaveTextContent(/NOW · 13:00Time to leaveFor Inani Beach · 10 min late/);
+    expect(screen.getByTestId('today-now')).not.toHaveTextContent(/Free time/);
+  });
+
+  it('between stops: free time until leave by, then where you go', async () => {
+    setUp();
+    // Inani ends 16:30; Marine Drive at 17:30, leave by 16:45 (with the evening traffic)
+    mockParams.at = '16:35';
+    await renderWithQuery(<TodayScreen />);
+    expect(await screen.findByTestId('today-now')).toHaveTextContent(/NOW · 16:35Free timeUntil 16:45, then leave for Marine Drive/);
+    expect(screen.getByTestId('today-leave-by')).toHaveTextContent('16:45');
+  });
+
+  it('the evening before the trip: it starts tomorrow, with the first day as it will be', async () => {
+    setUp();
+    mockParams.date = '2026-10-18';
+    mockParams.at = '20:00';
+    try {
+      await renderWithQuery(<TodayScreen />);
+      expect(await screen.findByTestId('today-now')).toHaveTextContent(/STARTS TOMORROWNot started yetYour day starts at 09:00/);
+      expect(screen.getByText('The day')).toBeTruthy();
+      expect(screen.getByTestId('today-item-1')).toHaveTextContent(/^09:00Breakfast at Jhaubon/);
+    } finally {
+      mockParams.date = '2026-10-19';
+    }
+  });
+
+  it('the weather now on the Now card opens the conditions', async () => {
+    setUp();
+    api.conditions.mockResolvedValue({
+      available: true, fetched_at: null, stale: false, forecast_until: null,
+      days: [{ day_id: 11, day_number: 1, date: '2026-10-19', in_forecast: true, sunrise: '05:52', sunset: '17:25', code: 2, temp_max: 30, temp_min: 24, rain_max: 10,
+        hours: [{ time: '09:00', temp: 27, rain: 5, code: 0 }, { time: '10:00', temp: 29, rain: 5, code: 2 }, { time: '11:00', temp: 30, rain: 5, code: 2 }],
+        sea: null, items: {}, legs: {}, warnings: [], checks: [] }],
+    });
+    await renderWithQuery(<TodayScreen />);
+    // 10:30: the 10:00 hour
+    expect(await screen.findByTestId('today-weather')).toHaveTextContent(/29°/);
+    expect(screen.getByTestId('today-weather').props.accessibilityLabel).toBe('29°, Partly cloudy. Opens the conditions');
+    await act(async () => fireEvent.press(screen.getByTestId('today-weather')));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/trip/conditions/[id]', params: { id: 5, day: 1 } });
   });
 
   it('running late: a preview, then apply with undo', async () => {

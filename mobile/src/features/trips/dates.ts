@@ -93,6 +93,6 @@ export function tripToMarkVisited(trips: readonly Trip[], today: string, visited
   const onMap = (t: Trip) =>
     (t.stops ?? []).every((s) => visited.has(s.city_geonameid ? `city:${s.city_geonameid}` : `country:${s.country_iso2}`));
   return trips
-    .filter((t) => t.end_date < today && !t.visited_prompt && (t.stops?.length ?? 0) > 0 && !onMap(t))
+    .filter((t) => tripPhase(t.start_date, t.end_date, today) === 'past' && !t.visited_prompt && (t.stops?.length ?? 0) > 0 && !onMap(t))
     .sort((a, b) => b.end_date.localeCompare(a.end_date) || b.id - a.id)[0];
 }
