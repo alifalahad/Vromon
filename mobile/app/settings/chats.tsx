@@ -1,6 +1,7 @@
 /**
  * Vromon Mobile — Settings → Chats and privacy (docs/friends-chat-plan.md, step 5;
- * mockup 8). Everything here is saved to the account (PUT /me/settings).
+ * mockup 8; the look of Settings since UI refresh step 13). Everything here is saved to the account
+ * (PUT /me/settings).
  *
  * - Read receipts are mutual: with them off you don't see anyone's either.
  * - Show my trips to friends (step 6, decisions C3 and C7): off hides your trips from the
@@ -85,7 +86,11 @@ export default function ChatSettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
-      <SettingsSection title={t('settings.chats.sectionPrivacy')}>
+      <SettingsSection
+        title={t('settings.chats.sectionPrivacy')}
+        tone="green"
+        footnote={`${t('settings.chats.readReceiptsNote')}\n\n${t('settings.chats.shareTripsNote')}`}
+      >
         <SettingsSwitchRow
           icon="check-all"
           title={t('settings.chats.readReceipts')}
@@ -102,13 +107,8 @@ export default function ChatSettingsScreen() {
           testID="settings-share-trips"
         />
       </SettingsSection>
-      <Text style={styles.note}>
-        {t('settings.chats.readReceiptsNote')}
-        {'\n\n'}
-        {t('settings.chats.shareTripsNote')}
-      </Text>
 
-      <SettingsSection title={t('settings.chats.sectionNotifications')}>
+      <SettingsSection title={t('settings.chats.sectionNotifications')} tone="blue" footnote={t('settings.chats.previewsNote')}>
         {pushAvailable() ? null : <SettingsRow icon="bell-off-outline" title={t('settings.pushUnavailable')} />}
         <SettingsSwitchRow
           icon="message-outline"
@@ -140,16 +140,15 @@ export default function ChatSettingsScreen() {
           testID="settings-notification-previews"
         />
       </SettingsSection>
-      <Text style={styles.note}>{t('settings.chats.previewsNote')}</Text>
 
-      <SettingsSection title={t('settings.chats.sectionLocation')}>
+      <SettingsSection title={t('settings.chats.sectionLocation')} tone="green">
         <View style={styles.explain} testID="settings-live-location">
           <Text style={styles.explainTitle}>{t('settings.chats.liveTitle')}</Text>
           <Text style={styles.explainText}>{t('settings.chats.liveBody')}</Text>
         </View>
       </SettingsSection>
 
-      <SettingsSection title={t('settings.chats.sectionPeople')}>
+      <SettingsSection title={t('settings.chats.sectionPeople')} tone="green">
         <SettingsRow
           icon="account-cancel-outline"
           title={t('friends.blockedUsers')}
@@ -159,7 +158,7 @@ export default function ChatSettingsScreen() {
         />
       </SettingsSection>
 
-      <SettingsSection title={t('settings.chats.sectionData')}>
+      <SettingsSection title={t('settings.chats.sectionData')} tone="grey" footnote={t('settings.chats.clearNote')}>
         <SettingsRow
           icon="download-outline"
           title={t('settings.chats.download')}
@@ -177,7 +176,6 @@ export default function ChatSettingsScreen() {
           testID="settings-clear-chats"
         />
       </SettingsSection>
-      <Text style={styles.note}>{t('settings.chats.clearNote')}</Text>
     </ScrollView>
   );
 }
@@ -185,8 +183,7 @@ export default function ChatSettingsScreen() {
 const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.bg },
   content: { paddingTop: t.spacing.sm },
-  note: { ...t.type.footnote, color: t.colors.textSecondary, paddingHorizontal: t.spacing.xl, marginTop: -t.spacing.lg, marginBottom: t.spacing.xl },
-  explain: { paddingHorizontal: t.spacing.xl, paddingVertical: t.spacing.md, gap: t.spacing.xs },
+  explain: { paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.md, gap: t.spacing.xs },
   explainTitle: { ...t.type.headline, color: t.colors.textPrimary },
   explainText: { ...t.type.footnote, color: t.colors.textSecondary },
 }));

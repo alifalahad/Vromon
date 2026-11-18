@@ -117,7 +117,8 @@ describe('Settings', () => {
   it('changes Appearance from the option sheet', async () => {
     await renderRouter(routes, { initialUrl: '/settings' });
     await screen.findByTestId('settings-appearance');
-    expect(screen.getByLabelText('Appearance, System')).toBeTruthy();
+    // The frame's words (UI refresh step 13): "Same as the phone", not "System"
+    expect(screen.getByLabelText('Appearance, Same as the phone')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('settings-appearance'));
     await fireEvent.press(screen.getAllByTestId('option-dark')[0]);
     expect(usePreferences.getState().appearance).toBe('dark');
@@ -133,7 +134,7 @@ describe('Settings', () => {
     });
     expect(usePreferences.getState().language).toBe('bn');
     // The screen is now in Bangla (its title is in the native header)
-    expect(screen.getByLabelText('Ali Ahad, প্রোফাইল সম্পাদনা')).toBeTruthy();
+    expect(screen.getByTestId('settings-profile')).toHaveProp('accessibilityLabel', 'প্রোফাইল সম্পাদনা');
     expect(screen.queryByText('Settings')).toBeNull();
   });
 

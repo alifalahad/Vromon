@@ -8,6 +8,7 @@
 
 import { Alert, Platform } from 'react-native';
 
+import i18n from '../i18n';
 import { haptics } from '../ui/haptics';
 
 export function confirm(title: string, message: string, confirmLabel: string, onConfirm: () => void, destructive = false) {
@@ -20,7 +21,8 @@ export function confirm(title: string, message: string, confirmLabel: string, on
     return;
   }
   Alert.alert(title, message, [
-    { text: 'Cancel', style: 'cancel' },
+    // In the app's language, like the rest of the dialog
+    { text: i18n.t('common.cancel'), style: 'cancel' },
     { text: confirmLabel, style: destructive ? 'destructive' : 'default', onPress: accept },
   ]);
 }

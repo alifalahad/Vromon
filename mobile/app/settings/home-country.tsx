@@ -1,12 +1,13 @@
 /**
- * Pick the home country; saves immediately and goes back.
+ * Pick your country (the home country); saves immediately and goes back. The line at the top says what
+ * it changes (UI refresh step 13).
  */
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { ME_QUERY_KEY, useMe } from '../../src/features/account/useMe';
 import { CountryList } from '../../src/features/geo/CountryList';
@@ -34,11 +35,13 @@ export default function HomeCountryScreen() {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.hint}>{t('profile.homeCountryHint')}</Text>
       <CountryList selected={me?.home_country_iso2 ?? null} onSelect={select} />
     </View>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  container: { flex: 1, backgroundColor: t.colors.bg, paddingHorizontal: t.spacing.xl, paddingTop: t.spacing.md },
+  container: { flex: 1, backgroundColor: t.colors.bg, paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.sm },
+  hint: { ...t.type.footnote, color: t.colors.textSecondary, paddingHorizontal: 4 },
 }));

@@ -1,9 +1,11 @@
 /**
- * The profile photo on Edit profile: your photo (or initials), "Add photo" / "Change photo" from
- * the gallery or the camera, cropped square on the phone, and "Remove". The server makes it
- * 512 px without metadata and stores it on ImgBB; everyone who sees your profile sees it.
+ * The profile photo on Edit profile (UI refresh step 13, frame 27): your photo (or initials) with a camera
+ * badge, and "Add photo" / "Change photo", which offers your photos, the camera, or "Remove". The photo is
+ * cropped square on the phone; the server makes it 512 px without metadata and stores it on ImgBB, and
+ * everyone who sees your profile sees it (the sheet says so).
  */
 
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
@@ -13,6 +15,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 
 import { meApi } from '../../services/api';
 import type { Me } from '../../types';
+import { ActionSheet } from '../../ui/ActionSheet';
 import { Avatar } from '../../ui/Avatar';
 import { haptics } from '../../ui/haptics';
 import { PressableScale } from '../../ui/PressableScale';
@@ -21,6 +24,8 @@ import { notify } from '../../utils/dialogs';
 import { ME_QUERY_KEY } from './useMe';
 
 const EDGE = 1024;
+const PHOTO = 104;
+const RING = 4;
 
 async function squareJpeg(asset: ImagePicker.ImagePickerAsset): Promise<string> {
   const context = ImageManipulator.manipulate(asset.uri);
@@ -41,6 +46,7 @@ export function AvatarPicker({ me }: { me: Me }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [choosing, setChoosing] = useState(false);
 
   const upload = async (pick: () => Promise<ImagePicker.ImagePickerResult>) => {
     const result = await pick();
@@ -75,39 +81,67 @@ export function AvatarPicker({ me }: { me: Me }) {
     }
   };
 
+  const hasPhoto = !!me.avatar_url;
+  const label = hasPhoto ? t('profile.changePhoto') : t('profile.addPhoto');
   return (
     <View style={styles.wrap}>
-      <View>
-        <Avatar name={me.display_name ?? me.username} id={me.id} uri={me.avatar_url} size={112} />
-        {busy ? (
-          <View style={styles.busy}>
-            <ActivityIndicator color="#FFFFFF" />
-          </View>
-        ) : null}
-      </View>
-      <View style={styles.buttons}>
-        <PressableScale style={styles.button} onPress={fromGallery} disabled={busy} testID="avatar-gallery">
-          <Text style={styles.buttonText}>{me.avatar_url ? t('profile.changePhoto') : t('profile.addPhoto')}</Text>
-        </PressableScale>
-        <PressableScale style={styles.button} onPress={fromCamera} disabled={busy} testID="avatar-camera">
-          <Text style={styles.buttonText}>{t('profile.takePhoto')}</Text>
-        </PressableScale>
-        {me.avatar_url ? (
-          <PressableScale style={styles.button} onPress={remove} disabled={busy} testID="avatar-remove">
-            <Text style={[styles.buttonText, { color: colors.danger }]}>{t('profile.removePhoto')}</Text>
-          </PressableScale>
-        ) : null}
-      </View>
-      <Text style={styles.note}>{t('profile.photoNote')}</Text>
+      <PressableScale
+        pressEffect="opacity"
+        onPress={() => setChoosing(true)}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        testID="avatar-photo"
+      >
+        <View style={styles.ring}>
+          <Avatar name={me.display_name ?? me.username} id={me.id} uri={me.avatar_url} size={PHOTO} />
+          {busy ? (
+            <View style={styles.busy}>
+              <ActivityIndicator color={colors.onAccent} />
+            </View>
+          ) : null}
+        </View>
+        {/* The camera badge says the photo can be changed; the button below says it in words */}
+        <View style={styles.badge} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <MaterialCommunityIcons name="camera-outline" size={20} color={colors.onAccent} />
+        </View>
+      </PressableScale>
+      <PressableScale pressEffect="opacity" onPress={() => setChoosing(true)} disabled={busy} style={styles.change} accessibilityRole="button" testID="avatar-change">
+        <Text style={styles.changeText}>{label}</Text>
+      </PressableScale>
+      <ActionSheet
+        visible={choosing}
+        title={label}
+        actions={[
+          { key: 'gallery', icon: 'image-outline', label: t('profile.fromGallery'), onPress: fromGallery },
+          { key: 'camera', icon: 'camera-outline', label: t('profile.takePhoto'), onPress: fromCamera },
+          ...(hasPhoto ? [{ key: 'remove', icon: 'delete-outline' as const, label: t('profile.removePhoto'), onPress: remove, danger: true }] : []),
+        ]}
+        footnote={t('profile.photoNote')}
+        onClose={() => setChoosing(false)}
+      />
     </View>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  wrap: { alignItems: 'center', gap: 12, marginBottom: 20 },
-  busy: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: 56, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)' },
-  buttons: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
-  button: { minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center', backgroundColor: t.colors.surfaceRaised },
-  buttonText: { ...t.type.callout, fontWeight: '600', color: t.colors.link },
-  note: { ...t.type.caption, color: t.colors.textTertiary, textAlign: 'center', paddingHorizontal: 24 },
+  wrap: { alignItems: 'center', gap: 4, paddingTop: 6 },
+  // Frame 27: a white ring round the photo, and a soft shadow under it
+  ring: { padding: RING, borderRadius: PHOTO / 2 + RING, backgroundColor: t.colors.surface, ...t.depth.raised },
+  busy: { position: 'absolute', left: RING, top: RING, width: PHOTO, height: PHOTO, borderRadius: PHOTO / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.scrim },
+  badge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: t.colors.accentStrong,
+    borderWidth: 3,
+    borderColor: t.colors.bg,
+  },
+  change: { minHeight: 44, paddingHorizontal: 12, justifyContent: 'center' },
+  changeText: { fontSize: 15, fontWeight: '500', color: t.colors.link },
 }));

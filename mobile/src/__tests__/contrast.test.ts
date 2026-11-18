@@ -133,6 +133,29 @@ describe.each([
     expect(contrast(colors.onHeroButton, colors.heroButton)).toBeGreaterThanOrEqual(AA);
   });
 
+  it("Settings: the travel numbers on the hero card, and each group's icon on its tint (UI refresh step 13)", () => {
+    for (const text of [colors.highlight, colors.onHero, colors.onHeroSecondary]) {
+      expect(contrast(text, colors.heroInset)).toBeGreaterThanOrEqual(AA);
+    }
+    // The quiet button's ring on the hero card ("Friend code"), as on the Trips tab
+    expect(contrast(colors.heroOutline, colors.hero)).toBeGreaterThanOrEqual(1.9);
+    // Icons need 3:1 against their circle; translucent tints are seen over the card
+    const seen = (tint: string, under: string) => {
+      const m = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(tint);
+      if (!m) return tint;
+      const top = `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+      return mix(under, top, Number(m[4]));
+    };
+    expect(contrast(colors.onAccentSoft, colors.accentTint)).toBeGreaterThanOrEqual(3);
+    expect(contrast(colors.success, seen(colors.successBg, colors.surface))).toBeGreaterThanOrEqual(3);
+    expect(contrast(colors.textSecondary, colors.surfaceInset)).toBeGreaterThanOrEqual(3);
+    expect(contrast(colors.danger, seen(colors.dangerBg, colors.surface))).toBeGreaterThanOrEqual(3);
+    // A username's check, as words inside the field: "Yours", "Free", "Taken", "Checking…"
+    expect(contrast(colors.success, seen(colors.successBg, colors.surface))).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.danger, seen(colors.dangerBg, colors.surface))).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.textSecondary, colors.surfaceInset)).toBeGreaterThanOrEqual(AA);
+  });
+
   it("a switch's track when off shows on a card and on the ground (3:1)", () => {
     expect(contrast(colors.switchOff, colors.surface)).toBeGreaterThanOrEqual(3);
     expect(contrast(colors.switchOff, colors.bg)).toBeGreaterThanOrEqual(3);

@@ -472,11 +472,11 @@
     "sectionAbout": "সম্পর্কে",
     "language": "ভাষা",
     "appearance": "চেহারা",
-    "haptics": "হ্যাপটিক ফিডব্যাক",
+    "haptics": "ট্যাপে কম্পন",
     "units": "দূরত্বের একক",
     "version": "সংস্করণ",
     "appearanceOptions": {
-      "system": "সিস্টেম",
+      "system": "ফোনের মতো",
       "light": "লাইট",
       "dark": "ডার্ক"
     },
@@ -488,19 +488,16 @@
       "en": "English",
       "bn": "বাংলা"
     },
-    "sectionProfile": "প্রোফাইল",
-    "sectionAccount": "অ্যাকাউন্ট",
     "sectionPrivacy": "গোপনীয়তা ও বন্ধু",
     "sectionData": "আপনার ডেটা",
     "discoverable": "ইউজারনেম দিয়ে আমাকে খুঁজতে দিন",
-    "signOutConfirmTitle": "সাইন আউট করবেন?",
-    "signOutConfirmBody": "আপনার ভ্রমণগুলো অ্যাকাউন্টে থেকে যাবে।",
-    "export": "আমার ডেটা এক্সপোর্ট করুন",
+    "signOutConfirmTitle": "সব জায়গা থেকে সাইন আউট করবেন?",
+    "signOutConfirmBody": "এই ফোন এবং যেসব ফোনে আপনি এই অ্যাকাউন্ট ব্যবহার করেন, সবখান থেকে Vromon সাইন আউট হবে। আপনার ভ্রমণ আর ভ্রমণ-মানচিত্র অ্যাকাউন্টে থেকে যাবে।",
+    "export": "আমার ডেটা ডাউনলোড করুন",
     "exportFailed": "ডেটা এক্সপোর্ট করা যায়নি",
     "deleteAccount": "অ্যাকাউন্ট মুছুন",
     "licences": "লাইসেন্স ও তথ্যসূত্র",
     "mapTheme": "মানচিত্র থিম",
-    "myFriendCode": "আমার বন্ধু কোড",
     "pushUnavailable": "পুশ নোটিফিকেশন এখনো চালু হয়নি",
     "chats": {
       "title": "চ্যাট ও গোপনীয়তা",
@@ -528,7 +525,22 @@
       "cleared_other": "{{n}}টি চ্যাট খালি হয়েছে।",
       "shareTrips": "বন্ধুদের আমার ভ্রমণ দেখান",
       "shareTripsNote": "বন্ধুরা দেখতে পায় আপনি এখন ও আগামী দুই সপ্তাহে কোথায় যাচ্ছেন, আর আপনার প্রোফাইলে আপনার ভ্রমণগুলো। বন্ধ করলে সবই লুকানো থাকে। চ্যাটে পাঠানো ভ্রমণ তবুও খোলা যায়।"
-    }
+    },
+    "chatsLine": "রিড রিসিপ্ট, ভ্রমণ শেয়ার, নোটিফিকেশন, ব্লক করা মানুষ",
+    "friendCode": "বন্ধু কোড",
+    "yourTravels": "আপনার ভ্রমণ",
+    "statOf": "/ {{total}}",
+    "statCountries_one": "দেশ",
+    "statCountries_other": "দেশ",
+    "statRegions": {
+      "divisions": "বিভাগ",
+      "regions": "অঞ্চল"
+    },
+    "statCities_one": "শহর",
+    "statCities_other": "শহর",
+    "statTrips_one": "ভ্রমণ শেষ",
+    "statTrips_other": "ভ্রমণ শেষ",
+    "signedInAs": "{{email}} দিয়ে সাইন ইন করা"
   },
   "auth": {
     "email": "ইমেইল",
@@ -574,9 +586,6 @@
     "step": "ধাপ {{n}} / {{total}}",
     "usernameTitle": "একটি ইউজারনেম বেছে নিন",
     "usernameBody": "বন্ধুরা এটি দিয়ে আপনাকে খুঁজবে। পরে বদলাতে পারবেন।",
-    "usernameHint": "৩–২০টি অক্ষর, সংখ্যা, ডট বা আন্ডারস্কোর",
-    "checking": "যাচাই হচ্ছে…",
-    "available": "পাওয়া যাচ্ছে",
     "taken": "এই ইউজারনেম আগেই নেওয়া হয়েছে",
     "problems": {
       "length": "৩–২০টি অক্ষর ব্যবহার করুন",
@@ -594,20 +603,33 @@
   },
   "profile": {
     "edit": "প্রোফাইল সম্পাদনা",
-    "displayName": "প্রদর্শিত নাম",
-    "displayNameHint": "ঐচ্ছিক। বন্ধুরা দেখতে পাবে।",
     "username": "ইউজারনেম",
-    "homeCountry": "নিজের দেশ",
+    "homeCountry": "আপনার দেশ",
     "notSet": "সেট করা নেই",
-    "email": "ইমেইল",
     "addPhoto": "ছবি যোগ করুন",
     "changePhoto": "ছবি বদলান",
     "takePhoto": "ছবি তুলুন",
-    "removePhoto": "সরান",
+    "removePhoto": "ছবি সরান",
     "photoNote": "যারা আপনার প্রোফাইল দেখে তারা আপনার ছবি দেখবে। ছবিটি ImgBB-তে রাখা হয়।",
     "photoFailedTitle": "ছবি সংরক্ষণ করা যায়নি",
     "photoFailedBody": "সংযোগ দেখে আবার চেষ্টা করুন।",
-    "cameraDenied": "ফোনের সেটিংসে Vromon-কে ক্যামেরা ব্যবহারের অনুমতি দিন।"
+    "cameraDenied": "ফোনের সেটিংসে Vromon-কে ক্যামেরা ব্যবহারের অনুমতি দিন।",
+    "homeCountryHint": "মানচিত্র আর এক্সপ্লোর আপনার দেশে খোলে।",
+    "name": "নাম",
+    "nameHint": "বন্ধুরা এই নাম দেখবে।",
+    "usernameHint": "বন্ধুরা এটা দিয়ে আপনাকে খুঁজে পাবে। ৩–২০টি অক্ষর, সংখ্যা, ডট বা আন্ডারস্কোর।",
+    "check": {
+      "mine": "আপনার",
+      "free": "খালি আছে",
+      "taken": "নেওয়া হয়েছে",
+      "checking": "যাচাই হচ্ছে…"
+    },
+    "emailFixed": "ইমেইল (এখানে বদলানো যায় না)",
+    "fromGallery": "আপনার ছবি থেকে বেছে নিন",
+    "discardTitle": "সংরক্ষণ না করে যাবেন?",
+    "discardBody": "নাম বা ইউজারনেমের পরিবর্তন এখনো সংরক্ষণ হয়নি।",
+    "keepEditing": "থাকুন",
+    "discard": "চলে যান"
   },
   "deleteAccount": {
     "title": "আপনার অ্যাকাউন্ট মুছুন",

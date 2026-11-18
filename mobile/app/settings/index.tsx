@@ -1,25 +1,30 @@
 /**
- * Vromon Mobile — Settings (13-settings-rows.jpg), opened from the profile button on the Map tab.
+ * Vromon Mobile — Settings (UI refresh step 13, frame 26), opened from the account picture on every tab.
  *
- * Profile, privacy & friends (with Chats and privacy: read receipts, notifications,
- * blocked people), preferences (synced to the account), account, data and About.
+ * Who you are first, on the hero card (SettingsHero): your photo, name, travel numbers, Edit profile and
+ * your friend code. Then the groups, an icon on every row: Preferences (synced to the account), Privacy and
+ * friends, Your data, About. Sign out is its own button at the end, with the email under it; it says what
+ * it does today: it ends every session of the account, on every phone.
  */
 
 import { useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { exportMyData } from '../../src/features/account/exportData';
+import { SettingsHero } from '../../src/features/account/SettingsHero';
 import { ME_QUERY_KEY, useMe } from '../../src/features/account/useMe';
 import { signOut } from '../../src/features/auth/actions';
 import { authEnabled } from '../../src/features/auth/session';
-import { formatFriendCode } from '../../src/features/friends/friendCode';
-import { countryName } from '../../src/features/geo/countries';
+import { DEFAULT_HOME } from '../../src/features/map/home';
+import { useVisits } from '../../src/features/map/visits';
+import { homeMarks, MapThumb } from '../../src/features/mapThemes/MapThumb';
 import { mapThemeName } from '../../src/features/mapThemes/resolve';
-
+import { useMapTheme } from '../../src/features/mapThemes/useMapTheme';
 import {
   APPEARANCES,
   DISTANCE_UNITS,
@@ -31,19 +36,19 @@ import {
 } from '../../src/features/preferences/store';
 import { resolveLanguage } from '../../src/i18n';
 import { meApi } from '../../src/services/api';
-import { Avatar } from '../../src/ui/Avatar';
+import { Button } from '../../src/ui/Button';
 import { OptionSheet } from '../../src/ui/OptionSheet';
-import { PressableScale } from '../../src/ui/PressableScale';
 import { SettingsRow, SettingsSection, SettingsSwitchRow } from '../../src/ui/SettingsRow';
-import { makeStyles } from '../../src/ui/theme';
+import { makeStyles, useTheme } from '../../src/ui/theme';
 import { confirm, notify } from '../../src/utils/dialogs';
 
 type Sheet = 'language' | 'appearance' | 'units' | null;
 
 export default function SettingsScreen() {
   const styles = useStyles();
+  const { colors } = useTheme();
   const { t } = useTranslation();
-  const scrollRef = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets();
   const [sheet, setSheet] = useState<Sheet>(null);
 
   const prefs = usePreferences();
@@ -52,6 +57,8 @@ export default function SettingsScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: me } = useMe();
+  const { data: visits = [] } = useVisits(me?.id);
+  const mapTheme = useMapTheme();
   const [exporting, setExporting] = useState(false);
 
   const setDiscoverable = async (discoverable: boolean) => {
@@ -78,56 +85,12 @@ export default function SettingsScreen() {
 
   return (
     <>
-      <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={styles.content}>
-        {me ? (
-          <PressableScale
-            style={styles.profile}
-            onPress={() => router.push('/settings/profile')}
-            accessibilityLabel={`${me.display_name ?? me.username}, ${t('profile.edit')}`}
-            testID="settings-profile"
-          >
-            <Avatar name={me.display_name ?? me.username} id={me.id} uri={me.avatar_url} size={56} />
-            <View style={styles.profileText}>
-              <Text style={styles.profileName} numberOfLines={1}>
-                {me.display_name ?? me.username}
-              </Text>
-              <Text style={styles.profileMeta} numberOfLines={1}>
-                @{me.username}
-                {me.home_country_iso2 ? ` · ${countryName(me.home_country_iso2, language)}` : ''}
-              </Text>
-            </View>
-          </PressableScale>
-        ) : null}
+      <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} testID="settings-screen">
+        {me ? <SettingsHero me={me} /> : null}
 
-        {me ? (
-          <SettingsSection title={t('settings.sectionPrivacy')}>
-            <SettingsRow
-              icon="qrcode"
-              title={t('settings.myFriendCode')}
-              value={formatFriendCode(me.friend_code)}
-              onPress={() => router.push({ pathname: '/friends/add', params: { tab: 'code' } })}
-              testID="settings-friend-code"
-            />
-            <SettingsSwitchRow
-              icon="account-search-outline"
-              title={t('settings.discoverable')}
-              value={me.discoverable}
-              onValueChange={setDiscoverable}
-              testID="settings-discoverable"
-            />
-            <SettingsRow
-              icon="chat-processing-outline"
-              title={t('settings.chats.title')}
-              onPress={() => router.push('/settings/chats')}
-              last
-              testID="settings-chats"
-            />
-          </SettingsSection>
-        ) : null}
-
-        <SettingsSection title={t('settings.sectionPreferences')}>
+        <SettingsSection title={t('settings.sectionPreferences')} tone="blue">
           <SettingsRow
-            icon="translate"
+            icon="web"
             title={t('settings.language')}
             value={t(`settings.languageNames.${language}`)}
             onPress={() => setSheet('language')}
@@ -141,46 +104,64 @@ export default function SettingsScreen() {
             testID="settings-appearance"
           />
           <SettingsRow
-            icon="palette-outline"
+            icon="map-outline"
             title={t('settings.mapTheme')}
             value={mapThemeName(prefs.mapTheme) ?? t('mapTheme.custom')}
+            // A small picture of the chosen theme, with your marks
+            accessory={
+              <MapThumb
+                home={me?.home_country_iso2 ?? DEFAULT_HOME}
+                look={mapTheme}
+                marks={homeMarks(visits, me?.home_country_iso2 ?? DEFAULT_HOME)}
+                width={34}
+                height={24}
+                ring={colors.accent}
+                hairline={colors.hairline}
+                ground={colors.surface}
+              />
+            }
             onPress={() => router.push('/map/theme')}
             testID="settings-map-theme"
           />
-          <SettingsSwitchRow
-            icon="vibrate"
-            title={t('settings.haptics')}
-            value={prefs.haptics}
-            onValueChange={prefs.setHaptics}
-            testID="settings-haptics"
-          />
           <SettingsRow
-            icon="map-marker-distance"
+            icon="ruler"
             title={t('settings.units')}
             value={t(`settings.unitOptions.${prefs.units}`)}
             onPress={() => setSheet('units')}
-            last
             testID="settings-units"
           />
+          <SettingsSwitchRow icon="vibrate" title={t('settings.haptics')} value={prefs.haptics} onValueChange={prefs.setHaptics} last testID="settings-haptics" />
         </SettingsSection>
 
-
-        {me && authEnabled ? (
-          <SettingsSection title={t('settings.sectionAccount')}>
-            {me.email ? <SettingsRow icon="email-outline" title={t('profile.email')} value={me.email} /> : null}
+        {me ? (
+          <SettingsSection title={t('settings.sectionPrivacy')} tone="green">
+            <SettingsSwitchRow
+              icon="account-search-outline"
+              title={t('settings.discoverable')}
+              value={me.discoverable}
+              onValueChange={setDiscoverable}
+              testID="settings-discoverable"
+            />
             <SettingsRow
-              icon="logout"
-              title={t('common.signOut')}
-              onPress={() => confirm(t('settings.signOutConfirmTitle'), t('settings.signOutConfirmBody'), t('common.signOut'), () => signOut())}
+              icon="message-outline"
+              title={t('settings.chats.title')}
+              subtitle={t('settings.chatsLine')}
+              onPress={() => router.push('/settings/chats')}
               last
-              testID="settings-sign-out"
+              testID="settings-chats"
             />
           </SettingsSection>
         ) : null}
 
         {me ? (
-          <SettingsSection title={t('settings.sectionData')}>
-            <SettingsRow icon="download-outline" title={t('settings.export')} value={exporting ? '…' : undefined} onPress={exporting ? undefined : runExport} />
+          <SettingsSection title={t('settings.sectionData')} tone="grey">
+            <SettingsRow
+              icon="download-outline"
+              title={t('settings.export')}
+              value={exporting ? '…' : undefined}
+              onPress={exporting ? undefined : runExport}
+              testID="settings-export"
+            />
             <SettingsRow
               icon="delete-outline"
               title={t('settings.deleteAccount')}
@@ -192,16 +173,29 @@ export default function SettingsScreen() {
           </SettingsSection>
         ) : null}
 
-        <SettingsSection title={t('settings.sectionAbout')}>
-          <SettingsRow icon="information-outline" title={t('settings.version')} value={version} />
+        <SettingsSection title={t('settings.sectionAbout')} tone="grey">
           <SettingsRow
-            icon="scale-balance"
+            icon="file-document-outline"
             title={t('settings.licences')}
             onPress={() => notify(t('settings.licences'), t('map.attribution'))}
-            last
             testID="settings-licences"
           />
+          <SettingsRow icon="information-outline" title={t('settings.version')} value={version} last testID="settings-version" />
         </SettingsSection>
+
+        {/* Sign out: its own button, apart from the rows, and it says what it does before it does it */}
+        {me && authEnabled ? (
+          <View style={styles.signOut}>
+            <Button
+              variant="outline"
+              icon="logout"
+              label={t('common.signOut')}
+              onPress={() => confirm(t('settings.signOutConfirmTitle'), t('settings.signOutConfirmBody'), t('common.signOut'), () => signOut(), true)}
+              testID="settings-sign-out"
+            />
+            {me.email ? <Text style={styles.signedInAs}>{t('settings.signedInAs', { email: me.email })}</Text> : null}
+          </View>
+        ) : null}
       </ScrollView>
 
       <OptionSheet<Language>
@@ -234,18 +228,7 @@ export default function SettingsScreen() {
 
 const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.bg },
-  content: { paddingBottom: t.spacing.xxl },
-  profile: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing.lg,
-    marginHorizontal: t.spacing.lg + 2,
-    marginBottom: t.spacing.xxl,
-    padding: t.spacing.lg,
-    borderRadius: t.radius.card,
-    backgroundColor: t.colors.surface,
-  },
-  profileText: { flex: 1, gap: 2 },
-  profileName: { ...t.type.headline, fontSize: 19, color: t.colors.textPrimary },
-  profileMeta: { ...t.type.callout, color: t.colors.textSecondary },
+  content: { paddingTop: t.spacing.sm },
+  signOut: { marginHorizontal: t.spacing.lg, marginTop: t.spacing.sm, gap: t.spacing.sm },
+  signedInAs: { ...t.type.footnote, color: t.colors.textSecondary, textAlign: 'center' },
 }));

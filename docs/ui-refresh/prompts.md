@@ -3,7 +3,8 @@
 **Written:** 2026-11-13, against `main` at `af9dddb` (clean working tree).
 **From:** the owner's nine points and 19 phone screenshots of 2026-11-13, plus two requests for the whole app (the account picture on every tab; a more polished look).
 **Area:** the Map tab, the New trip screens, the trip screen (the plan, Today, Conditions, Budget), the Trips tab, Explore, Settings. Mostly `mobile/`; steps 5, 9, 11, 12, 14 and 16–19 also touch `backend/`.
-**Mockups:** https://claude.ai/artifact/RMjDbAXaeW6DNQKAY8pBNN (40 frames: 1–21 approved 2026-11-13; 22–27, Explore and Settings, and 28–40, the trip plan, Conditions and Budget before, on and after the trip, approved 2026-11-14. See "The look" below for how to read them.)
+**Mockups:** https://claude.ai/artifact/7f9GgTspfJmCSJ49MLseTt (40 frames: 1–21 approved 2026-11-13; 22–27, Explore and Settings, and 28–40, the trip plan, Conditions and Budget before, on and after the trip, approved 2026-11-14. See "The look" below for how to read them.)
+The owner's copy for the account used from step 13 on (2026-11-18). Checked against the original, https://claude.ai/artifact/RMjDbAXaeW6DNQKAY8pBNN (which the reports for steps 0–12 link to): the 40 frames and `canvas.json` are byte for byte the same, and the 24 pictures they use are all there under the same names.
 
 ## Status
 
@@ -23,7 +24,7 @@
 | 10 | (all tabs) | The account picture, top right on every tab's front page | ✅ done 2026-11-16 | [step-10-report.md](reports/step-10-report.md) |
 | 11 | (screenshots 3, 5) | The hotel list: only places to stay | ✅ done 2026-11-16 | [step-11-report.md](reports/step-11-report.md) |
 | 12 | (asked 2026-11-14) | Explore, redesigned: "Your country" and "The world" | ✅ done 2026-11-18 | [step-12-report.md](reports/step-12-report.md) |
-| 13 | (asked 2026-11-14) | Account and settings, redesigned | not started | |
+| 13 | (asked 2026-11-14) | Account and settings, redesigned | ✅ done 2026-11-18 | [step-13-report.md](reports/step-13-report.md) |
 | 14 | (asked 2026-11-14) | The trip plan: the sheet, the day as a timeline, a stop's sheet | not started | |
 | 15 | (asked 2026-11-14) | On the trip: the plan's "Now" card and Today | not started | |
 | 16 | (asked 2026-11-14) | After the trip: the trip as it was; "This trip didn't happen" | not started | |

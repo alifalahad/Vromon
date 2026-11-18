@@ -93,6 +93,9 @@ export type ThemeColors = {
   onPhotoSecondary: string;
   /** Link text on a white button over a photo or a map ("Open the map"), in both appearances */
   linkOnWhite: string;
+  /** Settings (UI refresh step 13, frame 26): the panel of travel numbers on the hero card, and the lines between them */
+  heroInset: string;
+  heroInsetLine: string;
 };
 
 /** Names over other people's bubbles in a trip room, one per person; each 4.5:1 on `bubbleTheirs` (contrast.test.ts) */
@@ -159,6 +162,8 @@ export const darkColors: ThemeColors = {
   onPhoto: '#FFFFFF',
   onPhotoSecondary: '#E3E9F2',
   linkOnWhite: '#1D4BB8',
+  heroInset: '#1F3050',
+  heroInsetLine: '#34496B',
 };
 
 export const lightColors: ThemeColors = {
@@ -220,6 +225,8 @@ export const lightColors: ThemeColors = {
   onPhoto: '#FFFFFF',
   onPhotoSecondary: '#E3E9F2',
   linkOnWhite: '#1D4BB8',
+  heroInset: '#1A2A42',
+  heroInsetLine: '#2E405C',
 };
 
 export const radius = {

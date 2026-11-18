@@ -22,7 +22,20 @@ export type SheetAction = {
   danger?: boolean;
 };
 
-export function ActionSheet({ visible, title, actions, onClose }: { visible: boolean; title: string; actions: SheetAction[]; onClose: () => void }) {
+export function ActionSheet({
+  visible,
+  title,
+  actions,
+  footnote,
+  onClose,
+}: {
+  visible: boolean;
+  title: string;
+  actions: SheetAction[];
+  /** A line under the actions (where a photo is kept) */
+  footnote?: string;
+  onClose: () => void;
+}) {
   const ref = useRef<BottomSheetModal>(null);
   const styles = useStyles();
   const { colors } = useTheme();
@@ -79,6 +92,7 @@ export function ActionSheet({ visible, title, actions, onClose }: { visible: boo
             </PressableScale>
           ))}
         </View>
+        {footnote ? <Text style={styles.footnote}>{footnote}</Text> : null}
       </BottomSheetView>
     </BottomSheetModal>
   );
@@ -91,4 +105,5 @@ const useStyles = makeStyles((t) => ({
   title: { ...t.type.title, color: t.colors.textPrimary, marginBottom: t.spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.lg, minHeight: 56 },
   label: { ...t.type.body, fontSize: 17, color: t.colors.textPrimary, flex: 1 },
+  footnote: { ...t.type.footnote, color: t.colors.textSecondary, marginTop: t.spacing.sm },
 }));

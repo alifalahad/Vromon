@@ -6,10 +6,11 @@ import type { HapticKind } from './haptics';
 import { PressableScale } from './PressableScale';
 import { makeStyles, useTheme } from './theme';
 
-type Variant = 'primary' | 'secondary' | 'danger' | 'small' | 'smallDanger';
+type Variant = 'primary' | 'secondary' | 'outline' | 'danger' | 'small' | 'smallDanger';
 
 /**
  * Pill button. `primary` = accent fill, `secondary` = surface with link text,
+ * `outline` = a white button with a ring (Settings' Sign out, frame 26),
  * `danger` = tinted red, `small` / `smallDanger` = compact inline actions.
  */
 export function Button({
@@ -44,7 +45,9 @@ export function Button({
       ? colors.onAccent
       : variant === 'danger' || variant === 'smallDanger'
         ? colors.danger
-        : colors.onAccentSoft;
+        : variant === 'outline'
+          ? colors.textPrimary
+          : colors.onAccentSoft;
   return (
     <PressableScale
       haptic={haptic ?? (variant === 'primary' ? 'medium' : 'light')}
@@ -76,6 +79,7 @@ const useStyles = makeStyles((t) => ({
   primary: { backgroundColor: t.colors.accent, minHeight: t.sizes.button, paddingHorizontal: t.spacing.xl },
   // The blue tint shows on a white card and on the grey ground alike
   secondary: { backgroundColor: t.colors.accentTint, minHeight: t.sizes.minTouch, paddingHorizontal: t.spacing.lg },
+  outline: { backgroundColor: t.colors.surface, borderWidth: 1.5, borderColor: t.colors.hairline, minHeight: 50, paddingHorizontal: t.spacing.lg },
   danger: { backgroundColor: t.colors.dangerBg, minHeight: t.sizes.minTouch, paddingHorizontal: t.spacing.lg },
   small: { backgroundColor: t.colors.accentSoft, minHeight: 36, minWidth: 48, paddingHorizontal: t.spacing.md },
   smallDanger: { backgroundColor: t.colors.dangerBg, minHeight: 36, minWidth: 48, paddingHorizontal: t.spacing.md },

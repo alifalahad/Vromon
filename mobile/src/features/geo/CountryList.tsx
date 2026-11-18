@@ -81,8 +81,11 @@ const useStyles = makeStyles((t) => ({
     gap: t.spacing.sm,
     backgroundColor: t.colors.surface,
     borderRadius: t.radius.control,
+    // The same line round it as every text field (UI refresh step 13)
+    borderWidth: 1.5,
+    borderColor: t.colors.hairline,
     paddingHorizontal: t.spacing.md,
-    minHeight: 48,
+    minHeight: 52,
   },
   searchInput: { flex: 1, color: t.colors.textPrimary, fontSize: 16 },
   row: { height: ROW_HEIGHT, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, borderBottomWidth: 1, borderBottomColor: t.colors.divider },
