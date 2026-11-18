@@ -32,7 +32,8 @@ export function PhotoStrip({
   /** Where new photos go (your own places and trips) */
   target: PhotoTarget | null;
   canEdit: boolean;
-  title?: string;
+  /** The heading; null for none (in a row that already names it: the plan's "About this trip") */
+  title?: string | null;
 }) {
   const styles = useStyles();
   const { t } = useTranslation();
@@ -44,10 +45,12 @@ export function PhotoStrip({
 
   return (
     <View style={styles.section} testID="photo-strip">
-      <Text style={styles.title} accessibilityRole="header">
-        {title ?? t('photos.title')}
-        {list.length ? `  ·  ${list.length}` : ''}
-      </Text>
+      {title !== null ? (
+        <Text style={styles.title} accessibilityRole="header">
+          {title ?? t('photos.title')}
+          {list.length ? `  ·  ${list.length}` : ''}
+        </Text>
+      ) : null}
       {!canEdit && !list.length ? (
         <Text style={styles.empty}>{photos.isPending ? '' : photos.isError ? t('photos.loadFailed') : t('photos.none')}</Text>
       ) : (

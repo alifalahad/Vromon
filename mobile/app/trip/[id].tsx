@@ -2,10 +2,12 @@
  * Vromon Mobile — the trip screen (trip planner step 2).
  *
  * One screen for the whole trip: the day's stops on a map, and the plan in a
- * sheet you pull up: day tabs, the day ribbon, stop cards with travel legs and
- * free time, ways to change the plan, and the trip's details (route,
- * preferences, photos, feedback). The rest (edit route, budget, rebuild,
- * duplicate, delete) is in the ⋯ menu. A friend's trip opens read-only.
+ * sheet you pull up (docs/ui-refresh step 14, frames 28–30): the trip's name and
+ * where it is, the budget row, day tabs with the day's sky, the day in a line,
+ * the day as a timeline (leaving where you stay, stops with their weather, rides,
+ * free time, back, tonight), ways to change the plan, and "About this trip". The
+ * rest (budget, rebuild, duplicate, delete) is in the ⋯ menu. A friend's trip
+ * opens read-only.
  *
  * Every edit goes to the backend, which re-times the day and re-checks the trip;
  * the screen then refetches. Travel legs are still straight-line estimates.
@@ -18,7 +20,6 @@ import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from '
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, BackHandler, Text, useWindowDimensions, View } from 'react-native';
-import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AlternativesSheet, ExplanationSheet } from '../../src/components/ItemSheets';
@@ -30,9 +31,11 @@ import { tripCard } from '../../src/features/chat/share';
 import { usePreferences } from '../../src/features/preferences/store';
 import { addDays, localToday } from '../../src/features/trips/dates';
 import { DayMap, type MapBase, type MapPin } from '../../src/features/trips/plan/DayMap';
-import { DayRibbon } from '../../src/features/trips/plan/DayRibbon';
 import { MapOptions, TripTopBar, weatherLook } from '../../src/features/trips/plan/TripTopBar';
-import { DragGhost, FreeRow, LandingLine, LegRow, StopCard } from '../../src/features/trips/plan/PlanRows';
+import { DragGhost, FreeRow, LandingLine, LegRow, StopCard, type StopWeather } from '../../src/features/trips/plan/PlanRows';
+import { BudgetRow, DayLine, DayTabs, PhaseChip, RoomButton } from '../../src/features/trips/plan/PlanTop';
+import { ChangePlan } from '../../src/features/trips/plan/ChangePlan';
+import { AboutTrip } from '../../src/features/trips/plan/AboutTrip';
 import { DropStrip } from '../../src/features/trips/plan/DropStrip';
 import { ConditionChips } from '../../src/features/trips/conditions/ConditionChips';
 import { isSerious, useConditionText } from '../../src/features/trips/conditions/useConditionText';
@@ -40,24 +43,21 @@ import { GettingThere } from '../../src/features/trips/plan/GettingThere';
 import { LegSheet } from '../../src/features/trips/plan/LegSheet';
 import { StopSheet } from '../../src/features/trips/plan/StopSheet';
 import {
-  dayParts,
-  dayWindow,
+  backAt,
+  dayCounts,
   friendlyRange,
-  fromMinutes,
   initialDayIndex,
+  leaveAt,
   orderedStops,
   planRows,
   previewMove,
   dayRulesOf,
-  ribbonSegments,
   stopCoord,
   stopTitle,
-  toMinutes,
 } from '../../src/features/trips/plan/timeline';
 import { UnplacedCard } from '../../src/features/trips/new/UnplacedCard';
 import { buildPlan } from '../../src/features/trips/plan/build';
 import { takeFlash } from '../../src/features/trips/plan/flash';
-import { TripDetails } from '../../src/features/trips/plan/TripDetails';
 import { useDeferredRemoval } from '../../src/features/trips/plan/useDeferredRemoval';
 import { useStopDrag } from '../../src/features/trips/plan/useStopDrag';
 import { usePlanFormat } from '../../src/features/trips/plan/usePlanFormat';
@@ -65,7 +65,7 @@ import { daySummaryText } from '../../src/features/trips/plan/daySummary';
 import { BaseRow } from '../../src/features/trips/stays/BaseRow';
 import { baseName, picksFromStays, staysFromPicks, type StayPick } from '../../src/features/trips/stays/stays';
 import { StaysSheet } from '../../src/features/trips/stays/StaysSheet';
-import { TonightRow } from '../../src/features/trips/stays/TonightRow';
+import { stayForNight, TonightRow } from '../../src/features/trips/stays/TonightRow';
 import { DEFAULT_PLAN, slotOf, sourceOf, stayMealsOf } from '../../src/features/trips/meals/meals';
 import { MealsSheet } from '../../src/features/trips/meals/MealsSheet';
 import { PlacesToEatSheet } from '../../src/features/trips/meals/PlacesToEatSheet';
@@ -102,14 +102,6 @@ import { confirm, notify } from '../../src/utils/dialogs';
 import { issuesForItem } from '../../src/utils/itinerary';
 
 const SNACK_MS = 5000;
-const TAB_WIDTH = 96;
-const TAB_GAP = 8;
-const CHANGES: { type: AdaptationType; key: 'relax' | 'cheaper' | 'quieter' | 'fuller' }[] = [
-  { type: 'relax', key: 'relax' },
-  { type: 'reduce_budget', key: 'cheaper' },
-  { type: 'avoid_crowds', key: 'quieter' },
-  { type: 'energise', key: 'fuller' },
-];
 
 function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -188,9 +180,12 @@ export default function TripScreen() {
 
   const refresh = useCallback(async () => {
     queryClient.removeQueries({ queryKey: ['alternatives', tripId] });
-    // (the stay advisor's suggestions follow every change: step 4)
+    // (the stay advisor's suggestions follow every change: step 4; the weather at each stop's hour, and the
+    // days themselves after a rebuild, follow it too: step 14)
     await Promise.all(
-      [['itinerary', tripId], ['budget', tripId], ['trip', tripId], ['trips'], ['staySuggestions', tripId]].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      [['itinerary', tripId], ['budget', tripId], ['trip', tripId], ['trips'], ['staySuggestions', tripId], ['conditions', tripId]].map((queryKey) =>
+        queryClient.invalidateQueries({ queryKey }),
+      ),
     );
   }, [queryClient, tripId]);
 
@@ -467,13 +462,6 @@ export default function TripScreen() {
       clearTimeout(fallback);
     };
   }, [navigation]);
-  const rowsTop = useRef(0);
-  const rowY = useRef<Record<number, number>>({});
-
-  const scrollToStop = (itemId: number) => {
-    const y = rowY.current[itemId];
-    if (y != null) drag.scrollTo(rowsTop.current + y - 12);
-  };
   // A pin opens that stop's details over the map (the list can't scroll while the sheet is half open)
   const pickFromMap = (itemId: number) => {
     const row = rows.find((r) => r.kind === 'stop' && r.item.id === itemId);
@@ -481,18 +469,6 @@ export default function TripScreen() {
     haptics.selection();
     setSelectedId(itemId);
     setSheetItem(row.item);
-  };
-  // The ribbon pulls the plan up and scrolls to the stop at that time
-  const pickTime = (minutes: number) => {
-    const stops = rows.filter((r) => r.kind === 'stop');
-    const hit =
-      stops.find((r) => toMinutes(r.item.start_time) <= minutes && minutes < toMinutes(r.item.end_time)) ??
-      [...stops].sort((a, b) => Math.abs(toMinutes(a.item.start_time) - minutes) - Math.abs(toMinutes(b.item.start_time) - minutes))[0];
-    if (hit?.kind !== 'stop') return;
-    haptics.selection();
-    setSelectedId(hit.item.id);
-    sheet.current?.snapToIndex(1);
-    setTimeout(() => scrollToStop(hit.item.id), 350);
   };
   // The snackbar sits in the sheet's footer so its Undo button gets taps
   const renderFooter = useCallback(
@@ -529,7 +505,7 @@ export default function TripScreen() {
     queryClient.setQueryData<Itinerary>(['itinerary', tripId], (old) =>
       old ? { ...old, days: old.days.map((d) => changed.find((c) => c.id === d.id) ?? d), validation: res.validation } : old,
     );
-    for (const queryKey of [['budget', tripId], ['trip', tripId], ['trips'], ['staySuggestions', tripId]]) queryClient.invalidateQueries({ queryKey });
+    for (const queryKey of [['budget', tripId], ['trip', tripId], ['trips'], ['staySuggestions', tripId], ['conditions', tripId]]) queryClient.invalidateQueries({ queryKey });
     queryClient.removeQueries({ queryKey: ['alternatives', tripId] });
     queryClient.removeQueries({ queryKey: ['suggestions', tripId] });
   };
@@ -738,8 +714,25 @@ export default function TripScreen() {
   );
   const stopCount = rows.filter((r) => r.kind === 'stop').length;
   const hasLegs = rows.some((r) => r.kind === 'leg');
-  const window = day ? dayWindow(day, data.preference?.preferred_start_time, data.preference?.preferred_end_time) : null;
-  const used = budget.data && budget.data.total_budget > 0 ? budget.data.estimated_total / budget.data.total_budget : null;
+  const counts = dayCounts(rows);
+  // The day's money is Budget's "By day" for it: the same number on both screens
+  const byDay = day ? budget.data?.by_day?.find((b) => b.day_number === day.day_number) : undefined;
+  // Where the plan's times come from, under "About this trip"
+  const timesNote = rows.some((r) => r.kind === 'leg' && r.source === 'road') ? t('plan.roadsNote') : hasLegs ? t('plan.straightLine') : null;
+  // The weather in the hour each stop starts, when the forecast reaches the day
+  const weatherFor = (item: ItineraryItem): StopWeather | null => {
+    const w = dayConditions?.in_forecast ? dayConditions.items[String(item.id)] : undefined;
+    if (!w || w.code == null || !dayConditions) return null;
+    return { ...w, night: item.start_time >= dayConditions.sunset || item.start_time < dayConditions.sunrise };
+  };
+  // "Your must-do at sunset": a place the traveller must see, with when they wanted it
+  const mustDoFor = (item: ItineraryItem): string | null => {
+    const m = item.item_type === 'activity' && item.place ? data.constraints?.must_sees?.find((x) => x.place_id === item.place!.id) : undefined;
+    if (!m) return null;
+    const when = m.at ? t('mustDos.wantedAt', { time: f.time(m.at) }) : m.when ? t(`mustDos.wanted.${m.when}`) : null;
+    return when ? t('plan.mustDoWhen', { when }) : t('plan.mustDo');
+  };
+  const sheetRow = sheetItem ? rows.find((r): r is Extract<typeof r, { kind: 'stop' }> => r.kind === 'stop' && r.item.id === sheetItem.id) : undefined;
 
   // The day's rows; while a stop is dragged, a line shows where it would land and the times preview the change
   function renderRows(d: ItineraryDay) {
@@ -807,12 +800,10 @@ export default function TripScreen() {
           selected={selectedId === item.id}
           removable={mine && item.item_type === 'activity' && !busy}
           onLayoutRow={(y, h) => {
-            rowY.current[item.id] = y;
             drag.setRow(item.id, y, h);
           }}
           onCardWidth={drag.setCardWidth}
           drag={mine && !busy && !item.pinned ? gestures[item.id] : undefined}
-          grip={mine && !busy ? (item.pinned ? 'locked' : 'move') : undefined}
           dragging={isDragged}
           dimmed={dim && !isDragged}
           previewStart={previewStarts?.[item.id]}
@@ -839,6 +830,8 @@ export default function TripScreen() {
           }}
           onRemove={() => removeStop(item)}
           onEatNearby={sourceOf(item) === 'own' ? () => setEatFor(item) : undefined}
+          weather={weatherFor(item)}
+          mustDo={mustDoFor(item)}
         />,
       );
     }
@@ -1000,74 +993,25 @@ export default function TripScreen() {
           )}
 
           <View style={styles.header}>
-            <View style={styles.headerText}>
+            <View style={styles.titleRow}>
               <Text style={styles.title} accessibilityRole="header" testID="trip-title">
                 {data.destination}
               </Text>
-              <Text style={styles.subtitle}>
-                {friendlyRange(data.start_date, data.end_date, i18n.language, today)} ·{' '}
-                {t('plan.travellers', { count: data.num_travelers, n: f.n(data.num_travelers) })}
-              </Text>
-              {onTrip ? (
-                <PressableScale haptic="selection" onPress={openToday} style={styles.todayPill} accessibilityRole="button" testID="open-today">
-                  <MaterialCommunityIcons name="calendar-today" size={18} color={theme.colors.onAccent} />
-                  <Text style={styles.todayPillText}>{t('today.open')}</Text>
-                </PressableScale>
-              ) : null}
-              {room ? (
-                <PressableScale
-                  haptic="selection"
-                  onPress={() => router.push({ pathname: '/chat/[id]', params: { id: String(room.id) } })}
-                  style={styles.roomPill}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    room.unread_count
-                      ? `${t('tripRoom.open')}, ${t('chat.unread', { count: room.unread_count, n: f.n(room.unread_count) })}`
-                      : t('tripRoom.open')
-                  }
-                  testID="open-trip-room"
-                >
-                  <MaterialCommunityIcons name="forum-outline" size={18} color={theme.colors.onAccentSoft} />
-                  <Text style={styles.roomPillText}>{t('tripRoom.open')}</Text>
-                  {room.unread_count ? (
-                    <View style={styles.roomBadge}>
-                      <Text style={styles.roomBadgeText}>{f.n(room.unread_count)}</Text>
-                    </View>
-                  ) : null}
-                </PressableScale>
-              ) : null}
+              <PhaseChip start={data.start_date} end={data.end_date} today={today} />
+              {room ? <RoomButton unread={room.unread_count} onPress={() => router.push({ pathname: '/chat/[id]', params: { id: String(room.id) } })} /> : null}
             </View>
-            {budget.data && used != null && (
-              <PressableScale
-                pressEffect="opacity"
-                onPress={() => router.push({ pathname: '/trip/budget/[id]', params: { id: tripId } })}
-                accessibilityLabel={t('plan.budgetA11y', { spent: f.money(budget.data.estimated_total), total: f.money(budget.data.total_budget) })}
-                style={styles.budget}
-                testID="trip-budget"
-              >
-                <Text style={styles.budgetText} maxFontSizeMultiplier={1.4}>
-                  {f.money(budget.data.estimated_total)} <Text style={styles.budgetOf}>/ {f.money(budget.data.total_budget)}</Text>
-                </Text>
-                <View style={styles.meter}>
-                  <View
-                    style={[
-                      styles.meterFill,
-                      {
-                        width: `${Math.round(Math.min(1, used) * 100)}%`,
-                        // Amber before it goes over (within 10%, or the estimates could take it over)
-                        backgroundColor:
-                          budget.data.status === 'over' || used > 1
-                            ? theme.colors.danger
-                            : budget.data.status === 'close' || used >= 0.9
-                              ? theme.colors.warning
-                              : theme.colors.success,
-                      },
-                    ]}
-                  />
-                </View>
+            <Text style={styles.subtitle}>
+              {friendlyRange(data.start_date, data.end_date, i18n.language, today)} · {t('plan.travellers', { count: data.num_travelers, n: f.n(data.num_travelers) })}
+            </Text>
+            {onTrip ? (
+              <PressableScale haptic="selection" onPress={openToday} style={styles.todayPill} accessibilityRole="button" testID="open-today">
+                <MaterialCommunityIcons name="calendar-today" size={18} color={theme.colors.onAccent} />
+                <Text style={styles.todayPillText}>{t('today.open')}</Text>
               </PressableScale>
-            )}
+            ) : null}
           </View>
+
+          {budget.data ? <BudgetRow data={budget.data} onPress={() => router.push({ pathname: '/trip/budget/[id]', params: { id: tripId } })} /> : null}
 
           {!hasPlan ? (
             <View style={styles.empty} testID="plan-empty">
@@ -1089,7 +1033,7 @@ export default function TripScreen() {
                 <DayTabs
                   days={days}
                   index={dayIndex}
-                  locale={i18n.language}
+                  conditions={conditions.data?.days}
                   onPick={(i) => {
                     setDayChoice(i);
                     setSelectedId(null);
@@ -1110,35 +1054,16 @@ export default function TripScreen() {
                   />
                 ))}
 
-                <View style={styles.daySummary}>
-                  {(daySummaryText(day.summary, t) ?? day.theme) ? (
-                    <Text style={styles.dayTheme} testID="day-summary">
-                      {daySummaryText(day.summary, t) ?? day.theme}
-                    </Text>
-                  ) : null}
-                  <Text style={styles.dayStats} testID="day-stats">
-                    {[
-                      t('plan.stops', { count: stopCount, n: f.n(stopCount) }),
-                      day.total_cost ? t('plan.perPerson', { amount: f.money(day.total_cost) }) : null,
-                      day.total_travel_time > 0 ? t('plan.travelAbout', { time: f.duration(day.total_travel_time) }) : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </Text>
-                </View>
-
-                <TonightRow day={day} lastDay={dayIndex === days.length - 1} onChange={mine && days.length > 1 ? () => setPickingStays(true) : undefined} />
+                <DayLine
+                  title={daySummaryText(day.summary, t) ?? day.theme ?? null}
+                  places={counts.places}
+                  meals={counts.meals}
+                  money={byDay ? { amount: byDay.amount, estimate: byDay.estimate } : null}
+                  travellers={data.num_travelers}
+                  roadMinutes={day.total_travel_time}
+                />
 
                 {dayConditions && <ConditionChips day={dayConditions} onOpen={openConditions} />}
-
-                {window && stopCount > 0 && (
-                  <DayRibbon
-                    segments={ribbonSegments(day, removal.hidden)}
-                    window={window}
-                    onPickTime={pickTime}
-                    accessibilityLabel={`${t('plan.day', { n: f.n(day.day_number) })}, ${f.time(fromMinutes(window.start))}–${f.time(fromMinutes(window.end))}: ${t('plan.stops', { count: stopCount, n: f.n(stopCount) })}`}
-                  />
-                )}
 
                 {dayIndex === 0 && itinerary.data?.getting_there ? (
                   <GettingThere trip={itinerary.data.getting_there} tripId={tripId} />
@@ -1213,24 +1138,31 @@ export default function TripScreen() {
                   </View>
                 ) : null}
 
-                <View ref={attachRows} collapsable={false} onLayout={(e) => (rowsTop.current = e.nativeEvent.layout.y)} style={styles.rows} testID="plan-rows">
+                <View ref={attachRows} collapsable={false} style={styles.rows} testID="plan-rows">
                   {stopCount === 0 && <Text style={styles.muted}>{t('plan.emptyDay')}</Text>}
                   {/* Breakfast where you stay comes before leaving, dinner there after getting back */}
                   <View style={dragging ? styles.dimmed : undefined}>
                     <StayMealRow item={stayMealsOf(day).breakfast} />
-                    {stopCount > 0 && <BaseRow way="from" base={day.start_base} leg={day.start_leg} />}
+                    {stopCount > 0 && <BaseRow way="from" base={day.start_base} leg={day.start_leg} at={leaveAt(day)} />}
                   </View>
                   {renderRows(day)}
                   <View style={dragging ? styles.dimmed : undefined}>
-                    {stopCount > 0 && <BaseRow way="back" base={day.end_base} leg={day.return_leg} />}
+                    {stopCount > 0 && <BaseRow way="back" base={day.end_base} leg={day.return_leg} at={backAt(day)} />}
                     <StayMealRow item={stayMealsOf(day).dinner} />
                   </View>
                 </View>
+
+                {/* Where you sleep tonight; on the last day, where you leave from */}
+                <TonightRow
+                  day={day}
+                  lastDay={dayIndex === days.length - 1}
+                  stay={mine ? stayForNight(stays.data?.stays, day.day_number) : null}
+                  onChange={mine && days.length > 1 ? () => setPickingStays(true) : undefined}
+                />
+
                 {mine && stopCount > 0 && (
-                  <Button
-                    variant="secondary"
-                    icon="plus"
-                    label={t('plan.addStop')}
+                  <PressableScale
+                    haptic="selection"
                     disabled={busy}
                     onPress={() => {
                       const stops = orderedStops(day);
@@ -1240,48 +1172,42 @@ export default function TripScreen() {
                       const beforeDinner = !!last && slotOf(last) === 'Dinner';
                       setAddTarget({ dayId: day.id, position: beforeDinner ? stops.length - 1 : stops.length, nearItemId: lastActivity?.id });
                     }}
+                    style={[styles.addStop, busy && styles.disabled]}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: busy }}
                     testID="add-stop"
-                  />
+                  >
+                    <MaterialCommunityIcons name="plus" size={20} color={theme.colors.link} />
+                    <Text style={styles.addStopText}>{t('plan.addStop')}</Text>
+                  </PressableScale>
                 )}
-                {hasLegs && <Text style={styles.note}>{t('plan.straightLine')}</Text>}
 
                 {mine && (
-                  <View style={styles.change}>
-                    <Text style={styles.changeTitle}>{t('plan.changeAll')}</Text>
-                    <Text style={styles.note}>{t('plan.changeAllHint')}</Text>
-                    <View style={styles.chips}>
-                      {CHANGES.map((c) => (
-                        <PressableScale
-                          key={c.type}
-                          haptic="medium"
-                          disabled={busy}
-                          onPress={() => adapt.mutate(c.type)}
-                          style={[styles.chip, busy && styles.disabled]}
-                          testID={`change-${c.type}`}
-                        >
-                          <Text style={styles.chipText}>{t(`plan.${c.key}`)}</Text>
-                        </PressableScale>
-                      ))}
-                    </View>
-                    <Button
-                      variant="secondary"
-                      icon="lightbulb-on-outline"
-                      label={t('plan.newIdeas')}
-                      disabled={busy}
-                      onPress={() =>
-                        confirm(t('plan.newIdeasTitle'), t('plan.newIdeasBody', { n: f.n(day.day_number) }), t('plan.newIdeasOk'), () =>
-                          regenerateDay.mutate(day.id),
-                        )
-                      }
-                      testID="new-ideas"
-                    />
-                  </View>
+                  <ChangePlan
+                    dayNumber={day.day_number}
+                    busy={busy}
+                    onChange={(type) => adapt.mutate(type)}
+                    onNewIdeas={() =>
+                      confirm(t('plan.newIdeasTitle'), t('plan.newIdeasBody', { n: f.n(day.day_number) }), t('plan.newIdeasOk'), () => regenerateDay.mutate(day.id))
+                    }
+                  />
                 )}
               </>
             )
           )}
 
-          <TripDetails trip={data} ownerId={data.user_id ?? me.data?.id} mine={mine} hasPlan={hasPlan} went={mine || !!room} />
+          <AboutTrip
+            trip={data}
+            ownerId={data.user_id ?? me.data?.id}
+            mine={mine}
+            hasPlan={hasPlan}
+            went={mine || !!room}
+            stays={mine ? stays.data : null}
+            room={room}
+            onStays={mine && (stays.data?.nights ?? 0) > 0 ? () => setPickingStays(true) : undefined}
+            onMeals={mine && day ? () => setMealsFor('trip') : undefined}
+            note={hasPlan ? timesNote : null}
+          />
         </BottomSheetScrollView>
       </BottomSheet>
       )}
@@ -1308,6 +1234,9 @@ export default function TripScreen() {
           if (day) moveToDay(item, day, dayId);
         }}
         onSuggest={suggestPlace}
+        n={sheetRow?.n}
+        weather={sheetItem ? weatherFor(sheetItem) : null}
+        travellers={data.num_travelers}
       />
       <AddStopSheet
         tripId={tripId}
@@ -1372,59 +1301,6 @@ export default function TripScreen() {
   );
 }
 
-function DayTabs({ days, index, locale, onPick }: { days: ItineraryDay[]; index: number; locale: string; onPick: (i: number) => void }) {
-  const styles = useStyles();
-  const { t } = useTranslation();
-  const f = usePlanFormat();
-  const scrollable = days.length > 3;
-  // The chosen day stays in view (also when it's picked from elsewhere)
-  const strip = useRef<GHScrollView>(null);
-  useEffect(() => {
-    if (scrollable) strip.current?.scrollTo({ x: Math.max(0, index * (TAB_WIDTH + TAB_GAP) - TAB_WIDTH), animated: true });
-  }, [index, scrollable]);
-  const tabs = days.map((d, i) => {
-    const on = i === index;
-    const parts = d.day_date ? dayParts(d.day_date, locale) : null;
-    return (
-      <PressableScale
-        key={d.id}
-        haptic="selection"
-        onPress={() => onPick(i)}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: on }}
-        style={[styles.tab, scrollable ? styles.tabFixed : styles.tabFlex, on && styles.tabOn]}
-        testID={`day-tab-${d.day_number}`}
-      >
-        <Text style={[styles.tabTitle, on && styles.tabTextOn]} maxFontSizeMultiplier={1.4}>
-          {t('plan.day', { n: f.n(d.day_number) })}
-        </Text>
-        {parts ? (
-          <Text style={[styles.tabSub, on && styles.tabTextOn]} maxFontSizeMultiplier={1.4}>
-            {parts.weekday} {parts.day}
-          </Text>
-        ) : null}
-      </PressableScale>
-    );
-  });
-  // The gesture handler's scroll view: inside the plan sheet, a plain one loses the sideways swipe to the sheet
-  return scrollable ? (
-    <GHScrollView
-      ref={strip}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.tabs}
-      accessibilityRole="tablist"
-      testID="day-tabs"
-    >
-      {tabs}
-    </GHScrollView>
-  ) : (
-    <View style={styles.tabs} accessibilityRole="tablist">
-      {tabs}
-    </View>
-  );
-}
-
 const useStyles = makeStyles((t) => {
   const sheetBg = t.scheme === 'dark' ? t.colors.bg : t.colors.surface;
   return {
@@ -1432,7 +1308,6 @@ const useStyles = makeStyles((t) => {
     center: { flex: 1, backgroundColor: t.colors.bg, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
     errorText: { ...t.type.headline, color: t.colors.danger, textAlign: 'center' },
     muted: { ...t.type.callout, color: t.colors.textSecondary },
-    note: { ...t.type.footnote, color: t.colors.textTertiary, marginTop: t.spacing.sm },
     showPlan: {
       position: 'absolute',
       alignSelf: 'center',
@@ -1451,11 +1326,11 @@ const useStyles = makeStyles((t) => {
     sheetBody: { paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.xs, gap: t.spacing.md },
     readOnly: { backgroundColor: t.colors.accentSoft, borderRadius: 14, padding: t.spacing.md },
     readOnlyText: { ...t.type.callout, color: t.colors.textPrimary },
-    header: { flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.md, paddingHorizontal: t.spacing.xs },
-    headerText: { flex: 1, minWidth: 0, gap: 2 },
-    title: { fontFamily: t.type.title.fontFamily, fontSize: 24, fontWeight: 'normal', color: t.colors.textPrimary },
-    subtitle: { ...t.type.callout, color: t.colors.textSecondary },
-    budget: { alignItems: 'flex-end', gap: 6, paddingTop: 4, minHeight: 48, justifyContent: 'center' },
+    // Frame 29: the name in Anek 28 with where the trip is beside it, then the dates and travellers
+    header: { gap: 2, paddingHorizontal: t.spacing.xs },
+    titleRow: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md },
+    title: { ...t.type.title, flex: 1, minWidth: 0, fontSize: 28, lineHeight: 32, color: t.colors.textPrimary },
+    subtitle: { fontSize: 14, color: t.colors.textSecondary },
     todayPill: {
       alignSelf: 'flex-start',
       flexDirection: 'row',
@@ -1468,63 +1343,26 @@ const useStyles = makeStyles((t) => {
       backgroundColor: t.colors.accent,
     },
     todayPillText: { ...t.type.callout, fontSize: 14, fontWeight: '700', color: t.colors.onAccent },
-    roomPill: {
-      alignSelf: 'flex-start',
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      minHeight: 40,
-      marginTop: 8,
-      paddingHorizontal: 14,
-      borderRadius: 999,
-      backgroundColor: t.colors.accentSoft,
-    },
-    roomPillText: { ...t.type.callout, fontSize: 14, fontWeight: '700', color: t.colors.onAccentSoft },
-    roomBadge: {
-      minWidth: 20,
-      height: 20,
-      borderRadius: 10,
-      paddingHorizontal: 6,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: t.colors.accentStrong,
-    },
-    roomBadgeText: { ...t.type.caption, fontWeight: '700', color: t.colors.onAccent },
-    budgetText: { fontSize: 14, fontWeight: '700', color: t.colors.textPrimary },
-    budgetOf: { fontWeight: '400', color: t.colors.textSecondary },
-    meter: { width: 110, height: 6, borderRadius: 3, backgroundColor: t.colors.surfaceInset, overflow: 'hidden' },
-    meterFill: { height: 6, borderRadius: 3 },
     empty: { gap: t.spacing.md, paddingVertical: t.spacing.lg },
     emptyTitle: { ...t.type.title, color: t.colors.textPrimary },
-    tabs: { flexDirection: 'row', gap: TAB_GAP },
-    tab: {
-      minHeight: 52,
-      borderRadius: 14,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: t.spacing.sm,
-      backgroundColor: t.colors.surfaceInset,
-    },
-    tabFlex: { flex: 1 },
-    tabFixed: { width: TAB_WIDTH },
-    tabOn: { backgroundColor: t.colors.accent },
-    tabTitle: { fontSize: 15, fontWeight: '700', color: t.colors.textPrimary },
-    tabSub: { fontSize: 12, color: t.colors.textSecondary },
-    tabTextOn: { color: t.colors.onAccent },
-    daySummary: { gap: 2, paddingHorizontal: t.spacing.xs },
-    dayTheme: { ...t.type.headline, color: t.colors.textPrimary },
     dayStats: { ...t.type.footnote, color: t.colors.textSecondary },
     busy: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm },
     problems: { gap: 6, padding: t.spacing.md, borderRadius: 16, backgroundColor: t.colors.dangerBg },
     problemsTitle: { ...t.type.footnote, fontWeight: '700', color: t.colors.textPrimary },
     problem: { flexDirection: 'row', gap: t.spacing.sm },
     problemText: { flex: 1, ...t.type.footnote, color: t.colors.textPrimary },
-    rows: { gap: 0 },
-    change: { gap: t.spacing.sm, marginTop: t.spacing.lg },
-    changeTitle: { ...t.type.headline, color: t.colors.textPrimary },
-    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginVertical: t.spacing.xs },
-    chip: { minHeight: 44, paddingHorizontal: t.spacing.lg, borderRadius: 999, justifyContent: 'center', backgroundColor: t.colors.surfaceInset },
-    chipText: { ...t.type.callout, color: t.colors.textPrimary },
+    rows: { gap: 2 },
+    addStop: {
+      minHeight: 50,
+      borderRadius: 25,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingHorizontal: t.spacing.lg,
+      backgroundColor: t.colors.accentTint,
+    },
+    addStopText: { fontSize: 15.5, fontWeight: '500', color: t.colors.link },
     disabled: { opacity: 0.5 },
     dimmed: { opacity: 0.42 },
     hint: {

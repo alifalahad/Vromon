@@ -31,6 +31,8 @@ export function usePlanFormat() {
     time: (hhmm: string) => d(hhmm),
     /** "0.9" km */
     km: (value: number) => d(value.toFixed(1)),
+    /** A ride's distance as the timeline says it (frame 29): "16", "1.5", "1", "0.9" km */
+    distance: (value: number) => d(String(value >= 10 ? Math.round(value) : Math.round(value * 10) / 10)),
     /** 45 → "45 min", 60 → "1 h", 95 → "1 h 35 min" */
     duration: (minutes: number) => {
       const p = parts(minutes);

@@ -1,7 +1,8 @@
 /**
- * The rows of a day in the plan sheet: stop cards, travel legs and free time.
- * A stop card opens its details on tap; your own trip's sightseeing stops can
- * also be swiped left to remove (with Undo in the snackbar).
+ * The rows of a day in the plan sheet, as a timeline (docs/ui-refresh step 14, frame 29): stop cards with
+ * their time, length and weather, rides between them (a dotted line under the badges) and free time.
+ * A stop card opens its details on tap; your own trip's sightseeing stops can also be swiped left to
+ * remove (with Undo in the snackbar), and dragged when they don't keep their time.
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,11 +12,13 @@ import { Text, View } from 'react-native';
 import { GestureDetector, type GestureType } from 'react-native-gesture-handler';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, { FadeIn, LinearTransition, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
+import Svg, { Line } from 'react-native-svg';
 
 import type { ItineraryItem, TravelMode, Violation } from '../../../types';
 import { LineIcon } from '../../../ui/LineIcon';
 import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
+import { sky, useConditionText } from '../conditions/useConditionText';
 import { isPrivatePlace, isUnchecked, kindLabel } from '../../places/kinds';
 import { NotCheckedBadge } from '../../places/NotCheckedBadge';
 import { mealTitle, slotOf, sourceOf } from '../meals/meals';
@@ -23,17 +26,20 @@ import { planColors } from './colors';
 import { forYou, stopTitle, type StopKind } from './timeline';
 import { usePlanFormat, type PlanFormat } from './usePlanFormat';
 
-
 // When the order changes, the rows glide to their new places (off with "remove animations")
 const GLIDE = LinearTransition.duration(220);
 const APPEAR = FadeIn.duration(150);
+
+/** The time column's width; the badges' centres (and the rides' dotted line) are 27 dp into the card */
+export const TIME_COL = 52;
 
 type T = (k: string, o?: Record<string, unknown>) => string;
 
 export function priceText(item: ItineraryItem, t: T, f: PlanFormat): string {
   // Your own food costs what you said (nothing when you didn't); where you stay, nothing (step 3)
   if (sourceOf(item) === 'stay' || (sourceOf(item) === 'own' && !item.cost)) return t('meals.noCost');
-  if (item.cost_source === 'placeholder') return t('plan.priceUnknown');
+  // A price nobody has checked isn't shown as if known (docs/ui-refresh step 14)
+  if (item.cost_source === 'placeholder' || (item.place ?? item.restaurant)?.cost_known === false) return t('plan.priceUnknown');
   if (!item.cost) return item.item_type === 'meal' ? t('plan.priceUnknown') : t('plan.priceFree');
   const amount = item.currency === 'BDT' ? f.money(item.cost) : `${f.n(item.cost)} ${item.currency}`;
   return t('plan.perPerson', { amount });
@@ -62,6 +68,15 @@ export function categoryLabel(category: string | null | undefined, t: T): string
 
 export type MoveActions = { earlier?: () => void; later?: () => void; toDay?: () => void };
 
+/** The weather in the hour a stop starts (the conditions' items), when the forecast reaches it */
+export type StopWeather = { temp: number | null; rain: number | null; code: number | null; night?: boolean };
+
+/** The sky's icon and whether it's the sun (drawn in the frames' marigold) */
+export function weatherIcon(w: StopWeather) {
+  const s = sky(w.code, w.night);
+  return { ...s, sunny: !w.night && (s.key === 'clear' || s.key === 'partly') };
+}
+
 export function StopCard({
   item,
   n,
@@ -74,13 +89,14 @@ export function StopCard({
   onLayoutRow,
   onCardWidth,
   drag,
-  grip,
   dragging,
   dimmed,
   previewStart,
   move,
   glide = true,
   onEatNearby,
+  weather,
+  mustDo,
 }: {
   item: ItineraryItem;
   n: number;
@@ -93,10 +109,8 @@ export function StopCard({
   onLayoutRow?: (y: number, height: number) => void;
   /** The card's width (the copy that follows the finger while dragging is as wide) */
   onCardWidth?: (width: number) => void;
-  /** Press and hold to drag (your own trip, not pinned) */
+  /** Press and hold to drag (your own trip, a stop that doesn't keep its time): the card shows its grip */
   drag?: GestureType;
-  /** The grip at the card's side (docs/ui-refresh step 8): it can be moved, or it keeps its time */
-  grip?: 'move' | 'locked';
   /** This card is being dragged: its copy follows the finger and an outline keeps its place */
   dragging?: boolean;
   /** Another stop is being dragged */
@@ -109,19 +123,28 @@ export function StopCard({
   move?: MoveActions;
   /** A packed meal: "Places to eat nearby", in case of a change of mind (step 3) */
   onEatNearby?: () => void;
+  /** The weather in the hour it starts, under its time */
+  weather?: StopWeather | null;
+  /** "Your must-do at sunset": one of the traveller's must-dos, with when they wanted it */
+  mustDo?: string | null;
 }) {
   const styles = useStyles();
   const theme = useTheme();
   const colors = planColors(theme);
   const { t } = useTranslation();
   const f = usePlanFormat();
+  const conditionText = useConditionText();
   const swipe = useRef<SwipeableMethods>(null);
   // A swipe can report "opened" more than once; remove only once
   const removed = useRef(false);
   const problems = issues.filter((v) => v.severity !== 'info');
   const hard = problems.some((v) => v.severity === 'hard');
-  const tag = kind === 'visit' ? forYou(item.recommendation_reasons) : null;
+  const tag = kind === 'visit' && !mustDo ? forYou(item.recommendation_reasons) : null;
   const ring = dragging || selected ? theme.colors.accent : hard ? theme.colors.danger : problems.length ? theme.colors.warning : 'transparent';
+  // Only what's true: a must-do says so, and "keeps its time" only when it does (kept with "Keep this time")
+  const keepLine = mustDo ? (item.pinned ? `${mustDo} · ${t('plan.keepsTime')}` : mustDo) : item.pinned ? t('plan.pinned') : null;
+  const look = weather?.code != null ? weatherIcon(weather) : null;
+  const temp = weather?.temp != null ? `${f.n(Math.round(weather.temp))}°` : null;
   const actions = [
     ...(removable ? [{ name: 'activate', label: t('plan.detailsAction') }, { name: 'remove', label: t('plan.removeAction') }] : []),
     ...(move?.earlier ? [{ name: 'earlier', label: t('plan.moveEarlier') }] : []),
@@ -144,9 +167,13 @@ export function StopCard({
       style={[styles.card, { borderColor: ring }]}
       accessibilityLabel={t('plan.stopA11y', { n: f.n(n), title: cardTitle(item, t), time: f.time(item.start_time) })}
       accessibilityHint={[
+        f.duration(item.duration_minutes),
+        look ? [temp, conditionText.sky(weather?.code)].filter(Boolean).join(', ') : null,
         stopSubtitle(item, t, f),
+        keepLine,
         isUnchecked(item.place) ? t('search.notCheckedA11y') : null,
-        item.pinned ? t('plan.pinned') : drag ? t('plan.dragHint') : null,
+        ...problems.map((v) => v.message),
+        drag ? t('plan.dragHint') : null,
       ]
         .filter(Boolean)
         .join('. ')}
@@ -162,6 +189,13 @@ export function StopCard({
       <View style={styles.texts}>
         <Text style={styles.title}>{cardTitle(item, t)}</Text>
         <Text style={styles.sub}>{stopSubtitle(item, t, f)}</Text>
+        {tag ? <Text style={styles.tag}>{t('plan.forYou', { what: tag })}</Text> : null}
+        {keepLine ? (
+          <View style={styles.keepRow} testID={`stop-keeps-${item.id}`}>
+            <MaterialCommunityIcons name={item.pinned ? 'lock-outline' : 'star-outline'} size={13} color={theme.colors.textSecondary} />
+            <Text style={styles.keepText}>{keepLine}</Text>
+          </View>
+        ) : null}
         {isUnchecked(item.place) ? <NotCheckedBadge testID={`stop-unchecked-${item.id}`} /> : null}
         {onEatNearby ? (
           <PressableScale
@@ -177,27 +211,20 @@ export function StopCard({
             <Text style={styles.eatNearbyText}>{t('meals.eatNearby')}</Text>
           </PressableScale>
         ) : null}
-        {tag ? <Text style={styles.tag}>{t('plan.forYou', { what: tag })}</Text> : null}
-        {item.pinned ? (
-          <View style={styles.pinnedRow}>
-            <MaterialCommunityIcons name="lock-outline" size={14} color={theme.colors.textSecondary} />
-            <Text style={styles.pinnedText}>{t('plan.pinned')}</Text>
-          </View>
-        ) : null}
-        {problems.map((v, i) => (
-          <View key={i} style={styles.issue}>
-            <MaterialCommunityIcons name="alert-outline" size={16} color={v.severity === 'hard' ? theme.colors.danger : theme.colors.warning} />
-            <Text style={styles.issueText}>{v.message}</Text>
-          </View>
-        ))}
+        {problems.map((v, i) => {
+          const tone = v.severity === 'hard' ? theme.colors.danger : theme.colors.warning;
+          return (
+            <View key={i} style={styles.issue}>
+              <MaterialCommunityIcons name="alert-outline" size={15} color={tone} />
+              <Text style={[styles.issueText, { color: tone }]}>{v.message}</Text>
+            </View>
+          );
+        })}
       </View>
-      {grip ? (
+      {/* Only on a stop that can be moved */}
+      {drag ? (
         <View style={styles.grip} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID={`stop-grip-${item.id}`}>
-          {grip === 'move' ? (
-            <LineIcon name="grip" size={20} color={theme.colors.textTertiary} />
-          ) : (
-            <MaterialCommunityIcons name="lock-outline" size={18} color={theme.colors.textTertiary} />
-          )}
+          <LineIcon name="grip" size={20} color={theme.colors.textTertiary} />
         </View>
       ) : null}
     </PressableScale>
@@ -209,7 +236,7 @@ export function StopCard({
       style={[styles.row, dimmed && styles.dimmed]}
       onLayout={(e) => onLayoutRow?.(e.nativeEvent.layout.y, e.nativeEvent.layout.height)}
     >
-      <View style={[styles.timeCol, dragging && styles.hidden]}>
+      <View style={[styles.timeCol, dragging && styles.hidden]} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
         {/* One line, shrunk to fit: Bangla digits with large text wrapped "০৯:০" / "০" (step 8) */}
         <Text
           style={[styles.time, shownStart !== item.start_time && { color: theme.colors.link }]}
@@ -219,9 +246,19 @@ export function StopCard({
         >
           {f.time(shownStart)}
         </Text>
-        <Text style={styles.duration} maxFontSizeMultiplier={1.3}>
+        <Text style={styles.duration} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit>
           {f.shortDuration(item.duration_minutes)}
         </Text>
+        {look ? (
+          <View style={styles.weather} testID={`stop-weather-${item.id}`}>
+            <MaterialCommunityIcons name={look.icon} size={13} color={look.sunny ? colors.sun : theme.colors.textSecondary} />
+            {temp ? (
+              <Text style={styles.duration} maxFontSizeMultiplier={1.3} numberOfLines={1}>
+                {temp}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
       </View>
       <View style={styles.cardWrap} onLayout={(e) => onCardWidth?.(e.nativeEvent.layout.width)}>
         {drag ? (
@@ -277,6 +314,15 @@ export const MODE_ICON: Record<TravelMode, React.ComponentProps<typeof MaterialC
   car: 'car',
 };
 
+/** The rides' dotted line, under the badges (frame 29) */
+function DottedLine({ color, height = 30 }: { color: string; height?: number }) {
+  return (
+    <Svg width={2} height={height} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Line x1={1} y1={0} x2={1} y2={height} stroke={color} strokeWidth={2} strokeDasharray="2 3" />
+    </Svg>
+  );
+}
+
 export function LegRow({
   minutes,
   km,
@@ -302,31 +348,39 @@ export function LegRow({
   dimmed?: boolean;
 }) {
   const styles = useStyles();
-  const { colors } = useTheme();
+  const theme = useTheme();
+  const { colors } = theme;
   const { t } = useTranslation();
   const f = usePlanFormat();
   const time = f.duration(minutes);
-  const kmText = f.km(km);
+  const kmText = f.distance(km);
   const text = crossing
     ? t('plan.legBoat', { from: crossing.from_ghat, to: crossing.to_ghat, time })
     : mode ? t('plan.legMode', { mode: t(`plan.modes.${mode}`), time, km: kmText }) : t('plan.legAbout', { time, km: kmText });
   const price = mode && !crossing ? (fare ? t('plan.legFare', { amount: f.money(fare) }) : t('plan.legFree')) : null;
   const legNote = [crossing ? t('plan.legBoatNote') : null, note].filter(Boolean).join(' ');
-  const a11y = [crossing || mode ? text : t('plan.legA11y', { time, km: kmText }), price, legNote].filter(Boolean).join(', ');
+  const a11y = [
+    crossing ? text : mode ? t('plan.legModeA11y', { mode: t(`plan.modes.${mode}`), time, km: kmText }) : t('plan.legA11y', { time, km: kmText }),
+    price,
+    legNote,
+  ]
+    .filter(Boolean)
+    .join(', ');
   const body = (
     <View style={styles.leg}>
+      <DottedLine color={planColors(theme).dotted} />
       <MaterialCommunityIcons name={crossing ? 'ferry' : mode ? MODE_ICON[mode] : 'map-marker-path'} size={18} color={crossing || mode ? colors.link : colors.textSecondary} />
       <View style={styles.flex}>
         <Text style={styles.legText}>{text}</Text>
         {legNote ? <Text style={styles.legNote}>{legNote}</Text> : null}
       </View>
-      {price ? <Text style={styles.legText}>{price}</Text> : null}
+      {price ? <Text style={styles.legPrice}>{price}</Text> : null}
       {onPress ? <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textTertiary} /> : null}
     </View>
   );
   return (
     <Animated.View layout={GLIDE} entering={APPEAR} style={[styles.legRow, dimmed && styles.dimmed]}>
-      <View style={styles.timeCol} />
+      <View style={styles.timeColEmpty} />
       {onPress ? (
         <PressableScale
           pressEffect="opacity"
@@ -349,38 +403,46 @@ export function LegRow({
   );
 }
 
+/** Free time (frame 29): a dashed row, "Free time · 45 min", and "Add", which adds a stop there */
 export function FreeRow({ start, minutes, onAdd, dimmed }: { start: string; minutes: number; onAdd?: () => void; dimmed?: boolean }) {
   const styles = useStyles();
+  const theme = useTheme();
   const { t } = useTranslation();
-  const { colors } = useTheme();
   const f = usePlanFormat();
-  return (
-    <Animated.View layout={GLIDE} entering={APPEAR} style={[styles.row, dimmed && styles.dimmed]}>
-      <View style={styles.timeCol}>
-        <Text
-          style={[styles.time, styles.freeTime]}
-          maxFontSizeMultiplier={1.3}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          accessibilityLabel={`${t('plan.freeTime')}, ${f.time(start)}, ${f.duration(minutes)}`}
-        >
-          {f.time(start)}
-        </Text>
-        <Text style={styles.duration} maxFontSizeMultiplier={1.3}>
-          {f.shortDuration(minutes)}
-        </Text>
-      </View>
-      <View style={styles.free}>
-        <View style={styles.freeText}>
-          <Text style={styles.freeTitle}>{t('plan.freeTime')}</Text>
-          <Text style={styles.sub}>{t('plan.freeTimeHint')}</Text>
+  const text = t('plan.freeFor', { time: f.duration(minutes) });
+  const inside = (
+    <>
+      <Text style={styles.freeText}>{text}</Text>
+      {onAdd ? (
+        <View style={styles.freeAdd}>
+          <MaterialCommunityIcons name="plus" size={16} color={theme.colors.link} />
+          <Text style={styles.freeAddText}>{t('plan.freeAdd')}</Text>
         </View>
-        {onAdd ? (
-          <PressableScale onPress={onAdd} accessibilityLabel={t('plan.addStopHere')} style={styles.freeAdd} testID="free-add">
-            <MaterialCommunityIcons name="plus" size={22} color={colors.link} />
-          </PressableScale>
-        ) : null}
-      </View>
+      ) : null}
+    </>
+  );
+  return (
+    <Animated.View layout={GLIDE} entering={APPEAR} style={[styles.freeRow, dimmed && styles.dimmed]}>
+      <Text style={styles.sideTime} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit importantForAccessibility="no" accessibilityElementsHidden>
+        {f.time(start)}
+      </Text>
+      {onAdd ? (
+        <PressableScale
+          pressEffect="opacity"
+          haptic="selection"
+          onPress={onAdd}
+          style={[styles.free, { borderColor: planColors(theme).dash }]}
+          accessibilityRole="button"
+          accessibilityLabel={t('plan.freeA11y', { from: f.time(start), time: f.duration(minutes) })}
+          testID="free-add"
+        >
+          {inside}
+        </PressableScale>
+      ) : (
+        <View style={[styles.free, { borderColor: planColors(theme).dash }]} accessible accessibilityLabel={`${t('plan.freeTime')}, ${f.time(start)}, ${f.duration(minutes)}`}>
+          {inside}
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -415,20 +477,20 @@ export function DragGhost({
   const place = useAnimatedStyle(() => ({ left: x.get(), top: y.get(), width: width.get(), transform: [{ scale: still ? 1 : 1.03 }] }));
   return (
     <Animated.View pointerEvents="none" style={[styles.ghost, place]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID="drag-ghost">
-      <View style={[styles.ghostBadge, { backgroundColor: kind === 'meal' ? colors.meal : colors.visit }]}>
+      <View style={[styles.badge, { backgroundColor: kind === 'meal' ? colors.meal : colors.visit }]}>
         <Text style={[styles.badgeText, { color: kind === 'meal' ? colors.onMeal : colors.onVisit }]} maxFontSizeMultiplier={1.3}>
           {f.n(n)}
         </Text>
       </View>
       <View style={styles.texts}>
-        <Text style={styles.ghostTitle} numberOfLines={2}>
+        <Text style={styles.title} numberOfLines={2}>
           {cardTitle(item, t)}
         </Text>
-        <Text style={styles.ghostSub} numberOfLines={1}>
+        <Text style={styles.sub} numberOfLines={1}>
           {stopSubtitle(item, t, f)}
         </Text>
       </View>
-      <View style={styles.ghostGrip}>
+      <View style={styles.grip}>
         <LineIcon name="grip" size={20} color={theme.colors.accent} />
       </View>
     </Animated.View>
@@ -457,7 +519,8 @@ export function LandingLine({ time }: { time?: string }) {
 }
 
 const useStyles = makeStyles((t) => ({
-  row: { flexDirection: 'row', gap: t.spacing.sm + 2, marginVertical: 3 },
+  // Frame 29: the time column, 12 dp, then the card; rows 4 dp apart
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 2 },
   // The rest of the day while a stop is dragged (frames 13 and 14)
   dimmed: { opacity: 0.42 },
   hidden: { opacity: 0 },
@@ -472,16 +535,16 @@ const useStyles = makeStyles((t) => ({
     borderStyle: 'dashed',
     borderColor: t.colors.textTertiary,
   },
-  grip: { width: 24, alignSelf: 'center', alignItems: 'center', marginRight: -4 },
+  grip: { width: 32, height: 44, alignItems: 'center', justifyContent: 'center' },
   ghost: {
     position: 'absolute',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: t.spacing.md,
-    minHeight: 68,
-    paddingLeft: t.spacing.md,
-    paddingRight: 6,
-    paddingVertical: t.spacing.sm,
+    gap: 12,
+    minHeight: 64,
+    paddingLeft: 10,
+    paddingRight: 2,
+    paddingVertical: 6,
     borderRadius: 18,
     borderWidth: 2,
     borderColor: t.colors.accent,
@@ -493,42 +556,44 @@ const useStyles = makeStyles((t) => ({
     elevation: 20,
     zIndex: 40,
   },
-  ghostBadge: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  ghostTitle: { fontSize: 15.5, fontWeight: '700', color: t.colors.textPrimary },
-  ghostSub: { fontSize: 13, color: t.colors.textSecondary },
-  ghostGrip: { width: 36, height: 44, alignItems: 'center', justifyContent: 'center' },
-  landing: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm + 2, minHeight: 24, marginVertical: 2 },
-  landingTimeCol: { width: 52, alignItems: 'flex-end' },
+  landing: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 24, marginVertical: 2 },
+  landingTimeCol: { width: TIME_COL, alignItems: 'flex-end' },
   landingTime: { fontSize: 14, fontWeight: '700', color: t.colors.link },
   landingLine: { flex: 1, height: 14, justifyContent: 'center' },
   landingBar: { height: 4, borderRadius: 2, backgroundColor: t.colors.accent },
   landingDot: { position: 'absolute', left: 0, top: 0, width: 14, height: 14, borderRadius: 7, borderWidth: 3, borderColor: t.colors.accent, backgroundColor: t.colors.surface },
-  pinnedRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  pinnedText: { fontSize: 12, color: t.colors.textSecondary },
-  eatNearby: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 36, marginTop: 2 },
-  eatNearbyText: { ...t.type.callout, fontWeight: '600', color: t.colors.link },
-  timeCol: { width: 52, alignItems: 'flex-end', paddingTop: t.spacing.md },
+  keepRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  keepText: { flexShrink: 1, fontSize: 12, color: t.colors.textSecondary },
+  eatNearby: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 36 },
+  eatNearbyText: { fontSize: 13, fontWeight: '600', color: t.colors.link },
+  timeCol: { width: TIME_COL, alignItems: 'flex-end', gap: 1 },
+  timeColEmpty: { width: TIME_COL },
   time: { fontSize: 15, fontWeight: '700', color: t.colors.textPrimary },
-  freeTime: { color: t.colors.textSecondary },
-  duration: { fontSize: 12, color: t.colors.textTertiary },
+  duration: { fontSize: 12, color: t.colors.textSecondary },
+  weather: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   cardWrap: { flex: 1, minWidth: 0 },
+  // 2 dp of the padding is the ring (selected, or a problem), clear otherwise
   card: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: t.spacing.md,
-    padding: t.spacing.md,
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 64,
+    paddingTop: 6,
+    paddingBottom: 6,
+    paddingLeft: 10,
+    paddingRight: 2,
     borderRadius: 18,
     borderWidth: 2,
     backgroundColor: t.scheme === 'dark' ? t.colors.surface : t.colors.bg,
   },
-  badge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
-  badgeText: { fontSize: 14, fontWeight: '800' },
-  texts: { flex: 1, minWidth: 0, gap: 2 },
-  title: { fontSize: 16, fontWeight: '600', color: t.colors.textPrimary },
-  sub: { fontSize: 14, color: t.colors.textSecondary },
-  tag: { fontSize: 13, color: t.colors.link },
-  issue: { flexDirection: 'row', gap: 6, marginTop: 4 },
-  issueText: { flex: 1, fontSize: 13, lineHeight: 18, color: t.colors.textPrimary },
+  badge: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
+  badgeText: { fontSize: 14, fontWeight: '700' },
+  texts: { flex: 1, minWidth: 0, gap: 2, paddingVertical: 2 },
+  title: { fontSize: 15.5, fontWeight: '700', color: t.colors.textPrimary },
+  sub: { fontSize: 13, color: t.colors.textSecondary },
+  tag: { fontSize: 12, fontWeight: '500', color: t.colors.link },
+  issue: { flexDirection: 'row', gap: 5, marginTop: 2 },
+  issueText: { flex: 1, fontSize: 12.5, lineHeight: 17, fontWeight: '500' },
   swipeAction: {
     width: 104,
     marginLeft: t.spacing.sm,
@@ -539,34 +604,28 @@ const useStyles = makeStyles((t) => ({
     gap: 2,
   },
   swipeText: { fontSize: 13, fontWeight: '700', color: t.colors.danger },
-  legRow: { flexDirection: 'row', gap: t.spacing.sm + 2, minHeight: 44, alignItems: 'center' },
-  leg: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing.sm,
-    marginLeft: 14,
-    paddingLeft: 14,
-    minHeight: 44,
-    borderLeftWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: t.colors.border,
-  },
-  legText: { fontSize: 13, fontWeight: '600', color: t.colors.textSecondary },
+  legRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+  leg: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44, paddingLeft: 26, paddingRight: 6, paddingVertical: 4 },
+  legText: { fontSize: 13, color: t.colors.textSecondary },
+  legPrice: { fontSize: 13, color: t.colors.textPrimary },
   legNote: { fontSize: 12, color: t.colors.warning, marginTop: 1 },
   flex: { flex: 1 },
+  freeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 2 },
+  sideTime: { width: TIME_COL, textAlign: 'right', fontSize: 13, color: t.colors.textSecondary },
   free: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: t.spacing.sm,
-    borderRadius: 18,
+    gap: 8,
+    minHeight: 44,
+    paddingLeft: 14,
+    paddingRight: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: t.colors.border,
-    padding: t.spacing.md,
   },
-  freeText: { flex: 1, gap: 2 },
-  freeAdd: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.accentSoft },
-  freeTitle: { fontSize: 15, fontWeight: '600', color: t.colors.textPrimary },
+  freeText: { flex: 1, fontSize: 13.5, color: t.colors.textSecondary },
+  freeAdd: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  freeAddText: { fontSize: 13.5, fontWeight: '500', color: t.colors.link },
 }));

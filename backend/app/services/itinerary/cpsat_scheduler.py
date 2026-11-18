@@ -51,6 +51,8 @@ from typing import TYPE_CHECKING, Optional
 
 from ortools.sat.python import cp_model
 
+from app.services.itinerary.trip_rules import STEP, before_five, on_five, on_five_between
+
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
     from app.models.models import Itinerary, Trip
@@ -219,6 +221,17 @@ class SolverResult:
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _start_var(model: cp_model.CpModel, lo: int, hi: int, name: str) -> cp_model.IntVar:
+    """
+    A start time in [lo, hi] on the whole 5 minutes (docs/ui-refresh D23: 10:40, not 10:39). A range with
+    no 5-minute mark in it (an exact time the traveller typed) keeps its own values.
+    """
+    first = on_five(lo)
+    if first <= hi:
+        return model.NewIntVarFromDomain(cp_model.Domain.FromValues(list(range(first, hi + 1, STEP))), name)
+    return model.NewIntVar(lo, hi, name)
+
+
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     r = 6371.0
     p1, p2 = math.radians(lat1), math.radians(lat2)
@@ -382,7 +395,7 @@ def solve(
             if window is None:
                 continue
             xv = model.NewBoolVar(f"x_{c.place_id}_{d}")
-            sv = model.NewIntVar(window[0], window[1], f"s_{c.place_id}_{d}")
+            sv = _start_var(model, window[0], window[1], f"s_{c.place_id}_{d}")
             intervals.append(model.NewOptionalFixedSizeIntervalVar(sv, c.duration_min, xv, f"iv_{c.place_id}_{d}"))
             x[c.place_id, d], start[c.place_id, d] = xv, sv
             nodes.append((idx, c))
@@ -423,18 +436,19 @@ def solve(
         # (optional, with a large bonus: only left out when a busy time or a must-see leaves no room)
         lunch_len = problem.lunch_minutes(d)
         lunch_lo = max(LUNCH_EARLIEST, act_start)
-        lunch_hi = min(max(LUNCH_LATEST, lunch_lo), day_end - lunch_len)
+        lunch_hi = min(max(LUNCH_LATEST, lunch_lo), before_five(day_end - lunch_len))
         if lunch_lo <= lunch_hi:
-            lv = model.NewIntVar(lunch_lo, lunch_hi, f"lunch_{d}")
+            lv = _start_var(model, lunch_lo, lunch_hi, f"lunch_{d}")
             lp = model.NewBoolVar(f"lunch_on_{d}")
             intervals.append(model.NewOptionalFixedSizeIntervalVar(lv, lunch_len, lp, f"lunch_iv_{d}"))
             lunch_vars[d], lunch_on[d] = lv, lp
             objective_terms.append(MEAL_BONUS * lp)
         # Back where you sleep by the end of the day (D3): dinner ends early enough for the way back
-        dinner_hi = day_end - MEAL_MINUTES - problem.dinner_back(d)
+        # (its latest start on the 5 minutes, so the range keeps a 5-minute mark: D23)
+        dinner_hi = before_five(day_end - MEAL_MINUTES - problem.dinner_back(d))
         dinner_lo = max(min(DINNER_EARLIEST, dinner_hi), act_start)
         if problem.dinner_in_day(d) and dinner_lo <= dinner_hi:
-            dv = model.NewIntVar(dinner_lo, dinner_hi, f"dinner_{d}")
+            dv = _start_var(model, dinner_lo, dinner_hi, f"dinner_{d}")
             dp = model.NewBoolVar(f"dinner_on_{d}")
             intervals.append(model.NewOptionalFixedSizeIntervalVar(dv, MEAL_MINUTES, dp, f"dinner_iv_{d}"))
             dinner_vars[d], dinner_on[d] = dv, dp
@@ -794,7 +808,8 @@ class CpSatItineraryService:
                 c = context["candidates"].get(last.place_id) if last else None
                 back = round(ROADS.travel((c.lat, c.lon), point_of(end)).minutes) if c and c.lat is not None and end is not None and point_of(end) else 0
                 latest = rules.window(d)[1] - meal_plan.OWN_MINUTES - back
-                items.append(meal("Dinner", max(done, min(max(done, meal_plan.OWN_EARLIEST["Dinner"]), latest))))
+                at = max(done, min(max(done, meal_plan.OWN_EARLIEST["Dinner"]), latest))
+                items.append(meal("Dinner", on_five_between(at, done, max(latest, at))))
 
             activity_items = []
             for v in visits:

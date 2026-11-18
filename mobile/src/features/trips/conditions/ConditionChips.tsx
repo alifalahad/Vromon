@@ -52,7 +52,8 @@ export function ConditionChips({ day, onOpen }: { day: ConditionsDay; onOpen: ()
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row} testID="condition-chips">
       {active.length > 0
-        ? chip('warnings', 'alert-outline', t('conditions.warnings', { count: active.length, n: f.n(active.length) }), serious ? 'danger' : 'warning')
+        ? // The same words as the Conditions screen it opens (docs/ui-refresh step 14)
+          chip('warnings', 'alert-outline', t('conditions.toKnow', { count: active.length, n: f.n(active.length) }), serious ? 'danger' : 'warning')
         : day.in_forecast && chip('warnings', 'check', t('conditions.noWarnings'), 'good')}
       {chip('sunset', 'weather-sunset-down', t('conditions.sunsetAt', { time: f.time(day.sunset) }))}
       {day.sea && chip('sea', 'waves', t(`conditions.seaShort.${day.sea.level}`), day.sea.level === 'rough' ? 'warning' : undefined)}

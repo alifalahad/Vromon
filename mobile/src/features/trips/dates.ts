@@ -45,6 +45,20 @@ export function tripPhase(start: string, end: string, today: string): TripPhase 
 }
 
 /**
+ * Where a trip is, for the chip beside its name (docs/ui-refresh step 14, "The trip's three phases"):
+ * "In N days", "Tomorrow", "Day X of Y", "Finished". The same rule as tripPhase (and the server's
+ * trip_phase): nothing else compares a trip's dates with today.
+ */
+export type PlanPhase = { kind: 'before'; days: number } | { kind: 'on'; day: number; of: number } | { kind: 'after' };
+
+export function planPhase(start: string, end: string, today: string): PlanPhase {
+  const phase = tripPhase(start, end, today);
+  if (phase === 'past') return { kind: 'after' };
+  if (phase === 'upcoming') return { kind: 'before', days: durationDays(today, start) - 1 };
+  return { kind: 'on', day: durationDays(start, today), of: durationDays(start, end) };
+}
+
+/**
  * The Trips tab's sections, in display order. Upcoming: soonest first.
  * Ongoing: ending soonest first. Past: most recent first. Empty sections are left out.
  */

@@ -105,7 +105,13 @@ name: 15 Rate a trip - one tap, then things one by one
     timeout: 15000
 - assertVisible: "Very good"
 
-# Things one by one: mark all good, then one bad
+# Things one by one: mark all good, then one bad. The card grows after the tap and it's the last
+# thing in the plan (under "About this trip" since UI refresh step 14): scroll to its button
+- scrollUntilVisible:
+    element:
+      id: trip-review-one-by-one
+    direction: DOWN
+    timeout: 15000
 - tapOn:
     id: trip-review-one-by-one
 - extendedWaitUntil:
@@ -124,9 +130,10 @@ name: 15 Rate a trip - one tap, then things one by one
       id: review-saved
     timeout: 15000
 - back
-- extendedWaitUntil:
-    visible:
+- scrollUntilVisible:
+    element:
       id: trip-review-one-by-one
+    direction: DOWN
     timeout: 15000
 
 # Leave nothing behind: delete the trip

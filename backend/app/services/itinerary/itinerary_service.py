@@ -35,7 +35,8 @@ from app.services import meals
 from app.services.routing import ROADS, point_of
 from app.services.conditions.service import outdoor_place, planning_weather, wet_during
 from app.services.itinerary.trip_rules import (
-    LUNCH_RANGE, LUNCH_STRETCH, Block, MustSee, Placement, TripRules, load_rules, meal_starts, place_timed, travel_min,
+    LUNCH_RANGE, LUNCH_STRETCH, Block, MustSee, Placement, TripRules, before_five, load_rules, meal_starts, on_five,
+    on_five_between, place_timed, travel_min,
 )
 
 logger = logging.getLogger("vromon.itinerary")
@@ -342,7 +343,8 @@ class ItineraryService:
             rests = {m: self._pick_meal(db, trip.destination, m, seed, starts[m], max_cost=share) for m in rests}
         # "Finish by" means back where you sleep (D3): dinner ends early enough for the way back
         if starts.get("Dinner") is not None and rests.get("Dinner") is not None and end_base is not None:
-            latest = day_end - MEAL_SLOTS["Dinner"][2] - travel_min(rests["Dinner"], end_base)
+            # (on the 5 minutes: the last mark that still gets you back in time)
+            latest = before_five(day_end - MEAL_SLOTS["Dinner"][2] - travel_min(rests["Dinner"], end_base))
             if starts["Dinner"] > latest >= rules.activity_start(day_number):
                 starts["Dinner"] = latest
                 if not restaurant_open(rests["Dinner"], latest, MEAL_SLOTS["Dinner"][2]):
@@ -417,7 +419,7 @@ class ItineraryService:
         for block in sorted(blocks, key=lambda b: b.start) + [end_block]:
             gap_end = min(block.start, day_end)
             while True:
-                lunch_at = max(cursor, LUNCH_RANGE[0])
+                lunch_at = on_five(max(cursor, LUNCH_RANGE[0]))
                 lunch_fits = lunch_moves and lunch_at <= LUNCH_STRETCH[1] and lunch_at + lunch_len <= gap_end
                 if lunch_fits and cursor >= LUNCH_RANGE[0] and not nice_only:
                     if own_lunch and not nice_tried and not _nice_for_lunch(last_point) and activity_count < max_activities:
@@ -439,7 +441,8 @@ class ItineraryService:
                     open_min = _time_to_minutes(place.opening_time)
                     close_min = _time_to_minutes(place.closing_time)
                     visit_min = int(place.average_visit_duration * 60)
-                    arrive_min = max(cursor + travel_min(last_point, place), open_min)
+                    # On the whole 5 minutes (D23), before it's checked against closing and the day's end
+                    arrive_min = on_five(max(cursor + travel_min(last_point, place), open_min))
                     finish_min = arrive_min + visit_min
                     limit = min(close_min, gap_end - (travel_min(place, block.point) if block.point is not None else 0))
                     if nice_only:
@@ -497,6 +500,7 @@ class ItineraryService:
             back = travel_min(last.place, end_base) if last is not None and end_base is not None else 0
             latest = day_end - meals.OWN_MINUTES - back
             at = max(done, min(max(done, meals.OWN_EARLIEST["Dinner"]), latest))
+            at = on_five_between(at, done, max(latest, at))
             items.append(meals.own_item("Dinner", at, own_cost, at=last.place if last is not None else None))
 
         # Order and travel legs (between consecutive activities; the first leg from the stay, and the way back)

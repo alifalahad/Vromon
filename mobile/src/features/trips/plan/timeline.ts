@@ -1,9 +1,9 @@
 /**
- * The trip screen's day plan, as pure data (unit-tested): stop rows, travel legs
- * and free time in visiting order, the day ribbon's segments, and friendly dates.
+ * The trip screen's day plan, as pure data (unit-tested): stop rows, travel legs and free time in
+ * visiting order, when you leave where you stay and when you're back, and friendly dates.
  *
- * Travel legs come from the itinerary's straight-line estimates
- * (travel_time_to_next / distance_to_next); real road routes are step 4.
+ * Times are on whole 5 minutes (docs/ui-refresh D23): the server plans them so, and the drag preview
+ * here does the same, so what's shown while dragging is what the server answers.
  */
 
 import type { ItineraryDay, ItineraryItem, TravelMode, Trip } from '../../../types';
@@ -30,14 +30,22 @@ export type PlanRow =
     }
   | { kind: 'free'; key: string; start: string; minutes: number };
 
-export type RibbonSegment = { start: number; end: number; kind: StopKind | 'travel' };
-
 /** Gaps shorter than this are not shown as free time. */
 export const FREE_TIME_MIN = 30;
 
 export function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(':').map(Number);
   return h * 60 + (m || 0);
+}
+
+/** The next whole 5 minutes: 639 (10:39) → 640 (10:40); the server's on_five. */
+export function onFive(minutes: number): number {
+  return Math.ceil(Math.round(minutes) / 5) * 5;
+}
+
+/** The last whole 5 minutes at or before: the server's before_five. */
+export function beforeFive(minutes: number): number {
+  return Math.floor(Math.round(minutes) / 5) * 5;
 }
 
 export function fromMinutes(total: number): string {
@@ -92,8 +100,9 @@ export function planRows(day: ItineraryDay, hidden: readonly number[] = []): Pla
       if (wait >= FREE_TIME_MIN) rows.push({ kind: 'free', key: `f${item.id}`, start: item.end_time, minutes: wait });
       return;
     }
+    // The ride, then any free time at the next place before it starts (frame 29: "16:15 Free time · 45 min")
     const gap = toMinutes(next.start_time) - toMinutes(item.end_time) - travel;
-    if (gap >= FREE_TIME_MIN) rows.push({ kind: 'free', key: `f${item.id}`, start: item.end_time, minutes: gap });
+    const free = gap >= FREE_TIME_MIN ? ({ kind: 'free', key: `f${item.id}`, start: fromMinutes(toMinutes(item.end_time) + travel), minutes: gap } as const) : null;
     if (travel > 0) {
       rows.push({
         kind: 'leg',
@@ -107,38 +116,33 @@ export function planRows(day: ItineraryDay, hidden: readonly number[] = []): Pla
         crossing: from.travel_crossing ?? null,
       });
     }
+    if (free) rows.push(free);
   });
   return rows;
 }
 
-/** The ribbon's time window: whole hours around the plan and the preferred day hours. */
-export function dayWindow(day: ItineraryDay, prefStart?: string, prefEnd?: string): { start: number; end: number } {
-  const items = orderedStops(day);
-  const starts = items.map((i) => toMinutes(i.start_time));
-  const ends = items.map((i) => toMinutes(i.end_time) + Math.max(0, i.travel_time_to_next || 0));
-  if (prefStart) starts.push(toMinutes(prefStart));
-  if (prefEnd) ends.push(toMinutes(prefEnd));
-  const start = starts.length ? Math.floor(Math.min(...starts) / 60) * 60 : 8 * 60;
-  const end = ends.length ? Math.ceil(Math.max(...ends) / 60) * 60 : 20 * 60;
-  return { start, end: Math.max(end, start + 60) };
+/**
+ * When you leave where you stay for the day's first stop, and when you're back after the last one, on the
+ * 5 minutes as the plan says them (frame 29: "08:50 From Hotel Beach Way", "20:10 Back at …"). Leaving is
+ * the mark before (you're not late), back the mark after. Null when the day has no stop or no way there.
+ */
+export function leaveAt(day: Pick<ItineraryDay, 'items' | 'start_leg'>): number | null {
+  const first = orderedStops(day as ItineraryDay)[0];
+  if (!first || !day.start_leg) return null;
+  return beforeFive(toMinutes(first.start_time) - day.start_leg.minutes);
 }
 
-/** Visits, meals and travel, in minutes since midnight. */
-export function ribbonSegments(day: ItineraryDay, hidden: readonly number[] = []): RibbonSegment[] {
-  const segs: RibbonSegment[] = [];
-  let carried = 0; // the way on from a stop, after a packed meal eaten there
-  orderedStops(day, hidden).forEach((item, i, all) => {
-    const start = toMinutes(item.start_time);
-    const end = toMinutes(item.end_time);
-    segs.push({ start, end, kind: stopKind(item) });
-    const next = all[i + 1];
-    const travel = carried || (item.travel_time_to_next > 0 ? Math.round(item.travel_time_to_next) : 0);
-    carried = 0;
-    if (!next || !travel) return;
-    if (sourceOf(next) === 'own') carried = travel;
-    else segs.push({ start: end, end: end + travel, kind: 'travel' });
-  });
-  return segs;
+export function backAt(day: Pick<ItineraryDay, 'items' | 'return_leg'>): number | null {
+  const stops = orderedStops(day as ItineraryDay);
+  if (!stops.length || !day.return_leg) return null;
+  const done = Math.max(...stops.map((i) => toMinutes(i.end_time)));
+  return onFive(done + day.return_leg.minutes);
+}
+
+/** The day's places and meals, as its line counts them ("4 places, 2 meals"): stops only, not meals where you stay. */
+export function dayCounts(rows: readonly PlanRow[]): { places: number; meals: number } {
+  const stops = rows.filter((r): r is Extract<PlanRow, { kind: 'stop' }> => r.kind === 'stop');
+  return { places: stops.filter((r) => r.stopKind === 'visit').length, meals: stops.filter((r) => r.stopKind === 'meal').length };
 }
 
 /** "Breakfast at Jhaubon Restaurant" → "Breakfast · Jhaubon Restaurant"; places keep their name. */
@@ -159,6 +163,13 @@ export function forYou(reasons: readonly string[]): string | null {
 export function dayParts(iso: string, locale: string): { weekday: string; day: string } {
   const d = parseDay(iso);
   return { weekday: d.toLocaleDateString(locale, { weekday: 'short' }), day: d.toLocaleDateString(locale, { day: 'numeric' }) };
+}
+
+/** "Sat 21 Nov": weekday first in every language (the stop sheet, frame 30) */
+export function dayDate(iso: string, locale: string): string {
+  const d = parseDay(iso);
+  const part = (o: Intl.DateTimeFormatOptions) => d.toLocaleDateString(locale, o);
+  return `${part({ weekday: 'short' })} ${part({ day: 'numeric' })} ${part({ month: 'short' })}`;
 }
 
 /**
@@ -247,7 +258,7 @@ export function retime(items: readonly ItineraryItem[], dayStart: number, fromIn
     const travel = coord && prevActivity ? Math.round((haversineKm(prevActivity, coord) / KMH) * 60) : 0;
     let start = Math.max(cursor, travel ? prevEnd + travel : cursor, openingMin(item));
     if (item.item_type === 'meal') start = Math.max(start, (sourceOf(item) === 'own' ? OWN_EARLIEST : MEAL_EARLIEST)[slotOf(item) ?? ''] ?? 0);
-    start = afterBusy(start, item.duration_minutes, busy);
+    start = startAfter(start, item.duration_minutes, busy);
     if (item.pinned) start = Math.max(start, toMinutes(item.start_time));
     cursor = start + item.duration_minutes;
     if (coord) {
@@ -268,6 +279,16 @@ export function afterBusy(start: number, duration: number, busy: readonly Busy[]
     if (s < b1 && b0 < s + duration) s = b1;
   }
   return s;
+}
+
+/** The first start on the 5 minutes at or after `earliest` that doesn't overlap a busy time (the server's start_after). */
+export function startAfter(earliest: number, duration: number, busy: readonly Busy[]): number {
+  let s = onFive(earliest);
+  for (;;) {
+    const moved = afterBusy(s, duration, busy);
+    if (moved === s) return s;
+    s = onFive(moved);
+  }
 }
 
 /** What re-timing a day needs from the trip: when the day starts (the arrival on day 1) and its busy times. */

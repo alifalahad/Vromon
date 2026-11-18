@@ -11,7 +11,7 @@ import { Alert } from 'react-native';
 
 import TripReviewScreen from '../../app/trip/review/[id]';
 import { usePreferences } from '../features/preferences/store';
-import { TripDetails } from '../features/trips/plan/TripDetails';
+import { AboutTrip } from '../features/trips/plan/AboutTrip';
 import { RateTripReminder } from '../features/trips/review/RateTripReminder';
 import { canRate, changes, draftOf, markAll, reminderTrip, sections, toggle } from '../features/trips/review/review';
 import { TripReviewCard } from '../features/trips/review/TripReviewCard';
@@ -196,18 +196,18 @@ describe('the rules', () => {
 describe('"How was your trip?" on the plan', () => {
   it("shows from the trip's first day only, for whoever went", async () => {
     api.review.mockResolvedValue(REVIEW());
-    const view = await wrap(<TripDetails trip={trip({ start_date: '2026-12-06', end_date: '2026-12-08' })} ownerId="me" mine hasPlan />);
+    const view = await wrap(<AboutTrip trip={trip({ start_date: '2026-12-06', end_date: '2026-12-08' })} ownerId="me" mine hasPlan />);
     await act(async () => {});
     expect(screen.queryByTestId('trip-review-card')).toBeNull(); // starts tomorrow
     await view.unmount();
-    await wrap(<TripDetails trip={trip()} ownerId="me" mine hasPlan />);
+    await wrap(<AboutTrip trip={trip()} ownerId="me" mine hasPlan />);
     expect(await screen.findByTestId('trip-review-card')).toHaveTextContent(/How was your trip\?/);
     expect(api.review).toHaveBeenCalledWith(5, '2026-12-05');
   });
 
   it("a friend reading the trip (not in its room) doesn't get it", async () => {
     api.review.mockResolvedValue(REVIEW());
-    await wrap(<TripDetails trip={trip()} ownerId="her" mine={false} hasPlan went={false} />);
+    await wrap(<AboutTrip trip={trip()} ownerId="her" mine={false} hasPlan went={false} />);
     await act(async () => {});
     expect(screen.queryByTestId('trip-review-card')).toBeNull();
     expect(api.review).not.toHaveBeenCalled();

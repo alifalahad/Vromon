@@ -156,6 +156,31 @@ describe.each([
     expect(contrast(colors.textSecondary, colors.surfaceInset)).toBeGreaterThanOrEqual(AA);
   });
 
+  it('the plan (UI refresh step 14): the phase chip, the timeline, the Tonight card and the sun', () => {
+    const dark = colors === darkColors;
+    const plan = planColors({ scheme: dark ? 'dark' : 'light', colors });
+    const sheet = dark ? colors.bg : colors.surface;
+    const seen = (tint: string, under: string) => {
+      const m = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(tint);
+      if (!m) return tint;
+      const top = `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+      return mix(under, top, Number(m[4]));
+    };
+    // The phase chip: "In 6 days" amber on its tint, "Day 2 of 3" blue on the blue tint, "Finished" grey
+    expect(contrast(colors.warning, seen(colors.warningBg, sheet))).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.onAccentSoft, colors.accentTint)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.textSecondary, colors.surfaceInset)).toBeGreaterThanOrEqual(AA);
+    // The stops' numbers on their badges
+    expect(contrast(plan.onVisit, plan.visit)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(plan.onMeal, plan.meal)).toBeGreaterThanOrEqual(AA);
+    // The Tonight card and Add a stop, on the blue tint: the words, the second line and "Change"
+    for (const text of [colors.textPrimary, colors.textSecondary, colors.link]) expect(contrast(text, colors.accentTint)).toBeGreaterThanOrEqual(AA);
+    // The bed on its square (an icon: 3:1), and the sun on a day tab and in the time column
+    expect(contrast(colors.onHero, dark ? colors.accentStrong : colors.hero)).toBeGreaterThanOrEqual(3);
+    expect(contrast(plan.sun, colors.surfaceInset)).toBeGreaterThanOrEqual(3);
+    expect(contrast(plan.sun, sheet)).toBeGreaterThanOrEqual(3);
+  });
+
   it("a switch's track when off shows on a card and on the ground (3:1)", () => {
     expect(contrast(colors.switchOff, colors.surface)).toBeGreaterThanOrEqual(3);
     expect(contrast(colors.switchOff, colors.bg)).toBeGreaterThanOrEqual(3);

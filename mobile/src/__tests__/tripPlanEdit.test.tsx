@@ -219,7 +219,7 @@ describe('rearranging on the trip screen', () => {
 
       await act(async () => fireEvent.press(screen.getByTestId('stay-more')));
       await act(async () => fireEvent.press(screen.getByTestId('stay-more')));
-      expect(screen.getByTestId('stay-value')).toHaveTextContent('3 h');
+      expect(screen.getByTestId('stay-value')).toHaveTextContent('3 h there');
       await act(async () => jest.advanceTimersByTime(800));
       expect(api.updateItem).toHaveBeenCalledTimes(2);
       expect(api.updateItem).toHaveBeenLastCalledWith(5, 2, { duration_minutes: 180 });

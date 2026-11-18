@@ -213,7 +213,7 @@ describe('live conditions (trip planner step 6)', () => {
     expect(screen.getByTestId('trip-weather-warning')).toBeTruthy();
     // The chips say what the button doesn't
     expect(screen.queryByText('32° / 25°')).toBeNull();
-    expect(screen.getByText('2 warnings')).toBeTruthy();
+    expect(screen.getByText('2 things to know')).toBeTruthy();
     expect(screen.getByText('Sunset 17:25')).toBeTruthy();
     expect(screen.getByText('Rough sea')).toBeTruthy();
     expect(screen.getByText('Storms likely 10:00–12:00')).toBeTruthy();
@@ -225,6 +225,23 @@ describe('live conditions (trip planner step 6)', () => {
     mockPush.mockClear();
     await act(async () => fireEvent.press(screen.getByTestId('trip-weather')));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/trip/conditions/[id]', params: { id: 5, day: 1 } });
+  });
+
+  it("a stop's weather at the hour it starts, on its card; asked again when the plan changes (UI refresh step 14)", async () => {
+    setUp();
+    api.dayRoute.mockResolvedValue({ day_id: 11, provider: 'ors', legs: [] });
+    api.conditions.mockResolvedValue(COND);
+    api.reorderDay.mockResolvedValue({ success: true, message: 'ok', day: DAY, validation: ITIN.validation });
+    await renderWithQuery(<TripScreen />);
+    expect(await screen.findByTestId('stop-weather-2', { includeHiddenElements: true })).toHaveTextContent(/29°/);
+    expect(screen.getByTestId('stop-2').props.accessibilityHint).toMatch(/29°, Partly cloudy/);
+    // A stop without the hour's weather has none (never a guess)
+    expect(screen.queryByTestId('stop-weather-3', { includeHiddenElements: true })).toBeNull();
+    const asked = api.conditions.mock.calls.length;
+    await act(async () => fireEvent(screen.getByTestId('stop-2'), 'accessibilityAction', { nativeEvent: { actionName: 'later' } }));
+    await waitFor(() => expect(api.reorderDay).toHaveBeenCalled());
+    // New times, new hours: the weather is asked for again
+    await waitFor(() => expect(api.conditions.mock.calls.length).toBeGreaterThan(asked));
   });
 
   it('the conditions screen: hours, sun, sea, warnings with their source, and what was checked', async () => {

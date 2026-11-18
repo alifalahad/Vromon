@@ -1,6 +1,7 @@
 /**
- * Day 1 starts with getting there: the recommended way from where the trip starts, with its
- * time and fare per person. Tap for every way there, leg by leg (the Getting there screen).
+ * Day 1 starts with getting there (docs/ui-refresh step 14, frame 29): "Getting there: Dhaka → Cox's Bazar",
+ * "Bus · about 9 h 30 · ≈ ৳1,205 each": the recommended way from where the trip starts, with its time and
+ * fare. Tap for every way there, leg by leg (the Getting there screen).
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,8 +23,8 @@ export function GettingThere({ trip, tripId }: { trip: Trip; tripId?: number }) 
   const f = usePlanFormat();
   const router = useRouter();
   const fare = t(trip.fare_per === 'vehicle' ? 'plan.gettingFareVehicle' : 'plan.gettingFarePerson', { amount: f.money(trip.fare) });
-  const title = t('plan.gettingFrom', { from: trip.from, mode: t(`trips.modes.${trip.mode}`).toLowerCase() });
-  const line = `${t('plan.gettingTime', { time: f.duration(trip.minutes), km: f.n(trip.km) })} · ${fare}`;
+  const title = t('plan.gettingThereTo', { from: trip.from, to: trip.to });
+  const line = t('plan.gettingLine', { mode: t(`trips.modes.${trip.mode}`), time: f.duration(trip.minutes), fare });
   return (
     <PressableScale
       pressEffect="opacity"
@@ -31,7 +32,8 @@ export function GettingThere({ trip, tripId }: { trip: Trip; tripId?: number }) 
       disabled={!tripId}
       onPress={() => tripId && router.push({ pathname: '/trip/journey/[id]', params: { id: String(tripId) } })}
       accessibilityRole="button"
-      accessibilityLabel={`${title}. ${line}. ${t('plan.gettingAll')}`}
+      accessibilityLabel={`${title}. ${line}, ${f.distance(trip.km)} km`}
+      accessibilityHint={tripId ? t('plan.gettingAll') : undefined}
       testID="getting-there"
     >
       <View style={styles.icon}>
@@ -40,18 +42,27 @@ export function GettingThere({ trip, tripId }: { trip: Trip; tripId?: number }) 
       <View style={styles.text}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.line}>{line}</Text>
-        <Text style={styles.note}>{t('plan.gettingAll')}</Text>
       </View>
-      {tripId ? <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textTertiary} /> : null}
+      {tripId ? <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textTertiary} /> : null}
     </PressableScale>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  card: { flexDirection: 'row', gap: t.spacing.md, padding: t.spacing.md, borderRadius: 20, backgroundColor: t.colors.surfaceInset, alignItems: 'center' },
-  icon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.accentSoft },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 64,
+    paddingVertical: 8,
+    paddingLeft: 12,
+    paddingRight: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+  },
+  icon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.accentTint },
   text: { flex: 1, gap: 2 },
-  title: { ...t.type.callout, fontWeight: '700', color: t.colors.textPrimary },
-  line: { ...t.type.footnote, color: t.colors.textSecondary },
-  note: { ...t.type.caption, color: t.colors.textTertiary },
+  title: { fontSize: 14.5, fontWeight: '700', color: t.colors.textPrimary },
+  line: { fontSize: 13, color: t.colors.textSecondary },
 }));

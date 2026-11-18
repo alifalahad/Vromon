@@ -180,10 +180,12 @@ describe('travel legs (trip planner step 5)', () => {
     setUp();
     api.dayRoute.mockResolvedValue({ day_id: 11, provider: 'ors', legs: [] });
     await renderWithQuery(<TripScreen />);
-    expect(await screen.findByText('CNG · about 9 min · 2.4 km')).toBeTruthy();
+    // The frame's ride: how, how long, how far, and the fare; "about" is said to TalkBack
+    expect(await screen.findByText('CNG · 9 min · 2.4 km')).toBeTruthy();
     expect(screen.getByText('≈ ৳110')).toBeTruthy();
-    expect(screen.getByText('Getting there from Dhaka by bus')).toBeTruthy();
-    expect(screen.getByText('About 10 h 30 min · 395 km · ≈ ৳1,200 each')).toBeTruthy();
+    expect(screen.getByTestId('leg-row').props.accessibilityLabel).toBe('CNG, about 9 min, 2.4 kilometres, ≈ ৳110');
+    expect(screen.getByText("Getting there: Dhaka → Cox's Bazar")).toBeTruthy();
+    expect(screen.getByText('Bus · about 10 h 30 min · ≈ ৳1,200 each')).toBeTruthy();
     expect(api.dayRoute).toHaveBeenCalledWith(5, 11);
   });
 

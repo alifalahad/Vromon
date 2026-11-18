@@ -25,7 +25,7 @@ The owner's copy for the account used from step 13 on (2026-11-18). Checked agai
 | 11 | (screenshots 3, 5) | The hotel list: only places to stay | ✅ done 2026-11-16 | [step-11-report.md](reports/step-11-report.md) |
 | 12 | (asked 2026-11-14) | Explore, redesigned: "Your country" and "The world" | ✅ done 2026-11-18 | [step-12-report.md](reports/step-12-report.md) |
 | 13 | (asked 2026-11-14) | Account and settings, redesigned | ✅ done 2026-11-18 | [step-13-report.md](reports/step-13-report.md) |
-| 14 | (asked 2026-11-14) | The trip plan: the sheet, the day as a timeline, a stop's sheet | not started | |
+| 14 | (asked 2026-11-14) | The trip plan: the sheet, the day as a timeline, a stop's sheet | ✅ done 2026-11-18 | [step-14-report.md](reports/step-14-report.md) |
 | 15 | (asked 2026-11-14) | On the trip: the plan's "Now" card and Today | not started | |
 | 16 | (asked 2026-11-14) | After the trip: the trip as it was; "This trip didn't happen" | not started | |
 | 17 | (asked 2026-11-14) | Conditions, before, on and after the trip | not started | |

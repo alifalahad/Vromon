@@ -278,7 +278,7 @@ describe('a private stop', () => {
   it('shows "Not checked" and its kind on its card', async () => {
     await render(<StopCard item={PRIVATE} n={3} kind="visit" issues={[]} selected={false} removable onPress={jest.fn()} onRemove={jest.fn()} />);
     const card = screen.getByTestId('stop-30');
-    expect(card).toHaveTextContent(/College · Price unknown/);
+    expect(card).toHaveTextContent(/College · Price not known/);
     expect(screen.getByTestId('stop-unchecked-30')).toHaveTextContent('Not checked');
     expect(card.props.accessibilityHint).toMatch(/Not checked by Vromon/);
   });
@@ -320,7 +320,7 @@ describe('a private stop', () => {
       place: { ...PRIVATE.place!, name: 'New Azmiri Kacchi Kitchen', source: 'restaurant', kind: 'restaurant', checked: true },
     };
     await render(<StopCard item={restaurant} n={6} kind="visit" issues={[]} selected={false} removable onPress={jest.fn()} onRemove={jest.fn()} />);
-    expect(screen.getByTestId('stop-30')).toHaveTextContent(/Restaurant · Price unknown/);
+    expect(screen.getByTestId('stop-30')).toHaveTextContent(/Restaurant · Price not known/);
     expect(screen.queryByTestId('stop-unchecked-30')).toBeNull();
     await render(
       <BottomSheetModalProvider>

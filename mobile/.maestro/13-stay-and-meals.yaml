@@ -109,10 +109,8 @@ name: 13 Stays and meals - with family, a packed lunch, the plan shows them
       id: trip-title
     timeout: 30000
 
-# The plan: tonight at the aunt's, breakfast there, a packed lunch
-- assertVisible:
-    id: stays-tonight
-    text: ".*Aunt house.*"
+# The plan: a packed lunch, and the day ends with tonight at the aunt's (since UI refresh step 14,
+# "Tonight" is a card at the end of the day, below the half-open sheet)
 - swipe:
     start: "50%,56%"
     end: "50%,12%"
@@ -120,6 +118,12 @@ name: 13 Stays and meals - with family, a packed lunch, the plan shows them
 - scrollUntilVisible:
     element:
       text: ".*(Packed lunch|your own).*"
+    direction: DOWN
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      id: stays-tonight
+      text: ".*Aunt house.*"
     direction: DOWN
     timeout: 20000
 

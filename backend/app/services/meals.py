@@ -244,15 +244,18 @@ def place_stay_meals(items: list, plan: dict, start_base, end_base, breakfast: b
     Breakfast before leaving the stay and dinner after getting back, for the meals the plan has
     "where you stay". `items` is the day's other items (timed). Returns the new meal items.
     """
+    # On the whole 5 minutes (D23), like the plan shows leaving and getting back: breakfast ends by the
+    # mark before you leave, dinner starts at the mark after you're back
+    from app.services.itinerary.trip_rules import before_five, on_five
     out = []
     if breakfast and plan.get("Breakfast") == "stay":
         leave = leaving_at(items, start_base)
         if leave is not None:
-            out.append(stay_item("Breakfast", max(0, leave - STAY_MINUTES), start_base))
+            out.append(stay_item("Breakfast", max(0, before_five(leave) - STAY_MINUTES), start_base))
     if dinner and plan.get("Dinner") == "stay":
         back = back_at(items, end_base)
         if back is not None:
-            out.append(stay_item("Dinner", min(max(back, STAY_DINNER_EARLIEST), 24 * 60 - 1 - STAY_MINUTES), end_base))
+            out.append(stay_item("Dinner", min(on_five(max(back, STAY_DINNER_EARLIEST)), before_five(24 * 60 - 1 - STAY_MINUTES)), end_base))
     return out
 
 

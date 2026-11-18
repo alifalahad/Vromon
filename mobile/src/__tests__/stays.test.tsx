@@ -186,26 +186,27 @@ const DAY: ItineraryDay = {
 };
 
 describe("the plan's first and last rows", () => {
-  it('"From" the stay, and "Back to" it with the time and fare', async () => {
+  it('"From" the stay when you leave, and "Back at" it when you\'re back, with the ride and its fare (frame 29)', async () => {
     await render(
       <>
-        <BaseRow way="from" base={DAY.start_base} leg={DAY.start_leg} />
-        <BaseRow way="back" base={DAY.end_base} leg={DAY.return_leg} />
+        <BaseRow way="from" base={DAY.start_base} leg={DAY.start_leg} at={8 * 60 + 50} />
+        <BaseRow way="back" base={DAY.end_base} leg={DAY.return_leg} at={20 * 60 + 10} />
       </>,
     );
-    expect(screen.getByTestId('base-from')).toHaveTextContent(/From Hotel Castle Salam · 15 min$/);
-    expect(screen.getByTestId('base-back')).toHaveTextContent(/Back to Uncle's house · 25 min · ৳80$/);
+    expect(screen.getByTestId('base-from')).toHaveTextContent(/^08:50.*From Hotel Castle Salam · 15 min by CNG$/);
+    expect(screen.getByTestId('base-back')).toHaveTextContent(/^20:10.*Back at Uncle's house · 25 min by CNG · ≈ ৳80$/);
+    expect(screen.getByTestId('base-back').props.accessibilityLabel).toBe("20:10, Back at Uncle's house, 25 min by CNG, ≈ ৳80");
   });
 
   it("someone else's home: only \"with family or friends\", no time or fare", async () => {
     await render(<BaseRow way="back" base={HIDDEN_HOME} leg={null} />);
-    expect(screen.getByTestId('base-back')).toHaveTextContent(/Back to With family or friends$/);
+    expect(screen.getByTestId('base-back')).toHaveTextContent(/Back at With family or friends$/);
     expect(screen.getByTestId('base-back')).not.toHaveTextContent(/min|৳/);
   });
 
   it('a stand-in at the town centre says it is a rough guess', async () => {
     await render(<BaseRow way="from" base={{ kind: 'undecided', name: null, latitude: 22.8, longitude: 89.5, hotel_id: null, estimate: true }} leg={DAY.start_leg} />);
-    expect(screen.getByTestId('base-from')).toHaveTextContent(/From your stay \(not chosen yet\) · 15 min · rough guess$/);
+    expect(screen.getByTestId('base-from')).toHaveTextContent(/From your stay \(not chosen yet\) · 15 min by CNG · rough guess$/);
   });
 
   it('no stay, no row', async () => {

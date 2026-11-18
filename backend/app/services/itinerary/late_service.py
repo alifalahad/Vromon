@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from app.services.itinerary.editing_service import (
-    after_busy, busy_of, day_window, is_must_visit, recompute_day, sorted_items, travel_minutes,
+    busy_of, day_window, is_must_visit, recompute_day, sorted_items, start_after, travel_minutes,
 )
 from app.services import meals
 from app.services.itinerary.trip_rules import m2t, t2m
@@ -71,7 +71,7 @@ def push_back(trip: "Trip", day: "Itinerary", now: int, minutes: int) -> dict:
         if _visit(j) and prev is not None:
             # Travel starts when the previous visit ends (a meal in between happens on the way)
             earliest = max(earliest, prev_end + travel_minutes(prev, j, prev.travel_mode))
-        start = after_busy(max(old, earliest), j.duration_minutes, busy)
+        start = start_after(max(old, earliest), j.duration_minutes, busy)
         end = start + j.duration_minutes
 
         # Where it must end by: the day, its closing time, and the next stop that can't move

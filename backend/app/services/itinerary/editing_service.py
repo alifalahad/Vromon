@@ -29,7 +29,9 @@ from app.services.itinerary.itinerary_service import (
     _time_to_minutes,
     _travel_minutes,
 )
-from app.services.itinerary.trip_rules import Block, MustSee, TripRules, in_window, load_rules, place_timed, rules_for
+from app.services.itinerary.trip_rules import (
+    Block, MustSee, TripRules, in_window, load_rules, on_five, place_timed, rules_for,
+)
 from app.services.conditions.service import planning_weather
 from app.services import meals
 
@@ -169,7 +171,7 @@ def fit_in_slot(
     travel_in, km_in = (0.0, 0.0)
     if prev_activity is not None:
         travel_in, km_in = _travel_minutes(prev_activity.place, place)
-    start = max(slot_start + int(round(travel_in)), _time_to_minutes(place.opening_time))
+    start = on_five(max(slot_start + int(round(travel_in)), _time_to_minutes(place.opening_time)))
     end = start + duration
     latest_end = min(slot_end, _time_to_minutes(place.closing_time))
     if next_activity is not None:
@@ -416,7 +418,7 @@ def apply_order(
         start = max(earliest, _opening_min(item))
         if item.item_type == "meal":
             start = max(start, meal_earliest(item))
-        start = after_busy(start, item.duration_minutes, busy)
+        start = start_after(start, item.duration_minutes, busy)
         if item.pinned:
             kept = _time_to_minutes(item.start_time)
             if start > kept:
@@ -437,6 +439,19 @@ def after_busy(start: int, duration: int, busy: list[tuple[int, int]]) -> int:
         if start < b1 and b0 < start + duration:
             start = b1
     return start
+
+
+def start_after(earliest: int, duration: int, busy: list[tuple[int, int]]) -> int:
+    """
+    The first start on the whole 5 minutes (D23) at or after `earliest` that doesn't overlap a busy time.
+    A busy time can end off the 5 minutes, so it's rounded again after one is skipped.
+    """
+    start = on_five(earliest)
+    while True:
+        moved = after_busy(start, duration, busy)
+        if moved == start:
+            return start
+        start = on_five(moved)
 
 
 def first_difference(old: list[ItineraryItem], new: list[ItineraryItem]) -> int:
@@ -752,7 +767,10 @@ def _pushed(ordered: list[ItineraryItem], idx: int, leg_mode: Optional[str], bus
         if j.item_type == "activity" and j.place is not None and prev is not None:
             # Travel starts when the previous visit ends (a meal in between happens on the way)
             earliest = max(earliest, prev_end + travel_minutes(prev, j, prev_mode))
-        start = after_busy(max(old, earliest), j.duration_minutes, busy)
+        # A stop that can stay keeps its time; one that must move goes onto the 5 minutes (D23)
+        start = max(old, earliest)
+        if start != old or after_busy(old, j.duration_minutes, busy) != old:
+            start = start_after(start, j.duration_minutes, busy)
         if start != old:
             moved[j.id] = start
         cursor = start + j.duration_minutes

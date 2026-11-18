@@ -142,9 +142,9 @@ def test_where_you_stay_breakfast_is_before_leaving_and_dinner_after_the_way_bac
         b = m["Breakfast"]
         assert b["title"] == "Breakfast where you stay" and b["cost"] == 0 and b["restaurant_id"] is None
         assert items[0] == b
-        # it ends when you leave: the first stop less the way there from the stay
+        # it ends when you leave (the first stop less the way there from the stay), on the 5 minutes before (D23)
         leave = _m(others[0]["start_time"]) - (d["start_leg"]["minutes"] if d["start_leg"] else 0)
-        assert _m(b["end_time"]) == leave
+        assert _m(b["end_time"]) == leave // 5 * 5
         if d["day_number"] < len(days):
             dinner = m["Dinner"]
             assert dinner["title"] == "Dinner where you stay" and dinner["cost"] == 0 and items[-1] == dinner

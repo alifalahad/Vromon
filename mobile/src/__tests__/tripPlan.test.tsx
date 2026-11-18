@@ -4,12 +4,10 @@ import React from 'react';
 
 import TripScreen from '../../app/trip/[id]';
 import {
-  dayWindow,
   forYou,
   friendlyRange,
   initialDayIndex,
   planRows,
-  ribbonSegments,
   shortDuration,
   stopCoord,
   stopTitle,
@@ -201,16 +199,31 @@ const ITIN = (days: ItineraryDay[]): Itinerary => ({
   days,
   validation: days.length ? { trip_id: 5, valid: true, hard_violation_count: 0, soft_violation_count: 0, violations: [] } : null,
 });
-const BUDGET = { total_budget: 25000, estimated_total: 9500 };
+// The budget as the server sends it (step 7): the plan's total, its range, what's left, and each day
+const BUDGET = {
+  total_budget: 25000,
+  estimated_total: 9500,
+  total: 9500,
+  low: 9000,
+  high: 10500,
+  left: 15500,
+  status: 'ok',
+  parts: [],
+  by_day: [
+    { day_number: 1, date: '2026-10-19', amount: 3920, food: 560, tickets: 1000, local: 2360, estimate: true },
+    { day_number: 2, date: '2026-10-20', amount: 0, food: 0, tickets: 0, local: 0, estimate: false },
+  ],
+};
 
 describe('plan timeline', () => {
   it('numbers stops and adds travel legs and free time in order', () => {
     const rows = planRows(DAY1);
-    expect(rows.map((r) => r.kind)).toEqual(['stop', 'stop', 'free', 'leg', 'stop']);
+    // The ride, then the free time at the next place (frame 29)
+    expect(rows.map((r) => r.kind)).toEqual(['stop', 'stop', 'leg', 'free', 'stop']);
     expect(rows[0]).toMatchObject({ kind: 'stop', n: 1, stopKind: 'meal' });
-    // 12:32 + 2 min travel → 15:45: 3 h 11 min free
-    expect(rows[2]).toMatchObject({ kind: 'free', start: '12:32', minutes: 191 });
-    expect(rows[3]).toMatchObject({ kind: 'leg', minutes: 2, km: 0.9 });
+    expect(rows[2]).toMatchObject({ kind: 'leg', minutes: 2, km: 0.9 });
+    // 12:32 + 2 min travel = 12:34 → 15:45: 3 h 11 min free
+    expect(rows[3]).toMatchObject({ kind: 'free', start: '12:34', minutes: 191 });
     expect(rows[4]).toMatchObject({ kind: 'stop', n: 3 });
   });
 
@@ -218,13 +231,6 @@ describe('plan timeline', () => {
     const rows = planRows(DAY1, [2]);
     expect(rows.filter((r) => r.kind === 'stop').map((r) => r.kind === 'stop' && r.n)).toEqual([1, 2]);
     expect(rows.some((r) => r.kind === 'leg')).toBe(false);
-    expect(ribbonSegments(DAY1, [2]).map((s) => s.kind)).toEqual(['meal', 'visit']);
-  });
-
-  it('fits the ribbon to whole hours around the plan and the preferred day', () => {
-    expect(dayWindow(DAY1)).toEqual({ start: 9 * 60, end: 18 * 60 });
-    expect(dayWindow(DAY1, '08:30', '20:00')).toEqual({ start: 8 * 60, end: 20 * 60 });
-    expect(ribbonSegments(DAY1)).toContainEqual({ start: 12 * 60 + 32, end: 12 * 60 + 34, kind: 'travel' });
   });
 
   it('writes friendly titles, tags and dates', () => {
@@ -251,14 +257,31 @@ describe('trip screen', () => {
     await renderWithQuery(<TripScreen />);
 
     expect(await screen.findByTestId('trip-title')).toHaveTextContent("Cox's Bazar");
+    // A week before it starts (the clock is 12 Oct)
+    expect(screen.getByTestId('trip-phase')).toHaveTextContent('In 7 days');
     expect(screen.getByText(/2 travellers/)).toBeTruthy();
     expect(screen.getByText('Breakfast · Jhaubon Restaurant')).toBeTruthy();
     expect(screen.getByText('Bangladeshi Seafood · ৳280 each')).toBeTruthy();
     expect(screen.getByText('For you: beach, photography')).toBeTruthy();
-    expect(screen.getByText('Free time')).toBeTruthy();
+    // Free time after the ride, with Add (your own trip)
+    expect(screen.getByTestId('free-add')).toHaveTextContent(/^Free time · 3 h 11 min.*Add$/);
     expect(screen.getByText('About 2 min · 0.9 km')).toBeTruthy();
     expect(screen.getByText('Travel times are straight-line estimates, not road routes.')).toBeTruthy();
-    expect(await screen.findByTestId('trip-budget')).toHaveTextContent('৳9,500 / ৳25,000');
+    // The budget row: the plan's estimate against the budget, and what's left (frame 28)
+    expect(await screen.findByTestId('trip-budget')).toHaveTextContent(/≈ ৳9,500 of ৳25,000৳15,500 left/);
+    // The day in a line: its places and meals, Budget's money for the day, the time on the road
+    expect(screen.getByTestId('day-stats')).toHaveTextContent('2 places, 1 meal · ≈ ৳3,920 for 2 · 7 min on the road');
+    // No ribbon any more: the day is a timeline, in order (frame 29)
+    expect(screen.queryByTestId('day-ribbon')).toBeNull();
+    const order: string[] = [];
+    const walk = (n: unknown) => {
+      if (!n || typeof n === 'string') return;
+      const node = n as { props?: { testID?: string }; children?: unknown[] };
+      if (node.props?.testID && /^(stop-\d+|leg-row|free-add)$/.test(node.props.testID)) order.push(node.props.testID);
+      (node.children ?? []).forEach(walk);
+    };
+    walk(screen.getByTestId('plan-rows'));
+    expect(order.filter((x, i) => order.indexOf(x) === i)).toEqual(['stop-1', 'stop-2', 'leg-row', 'free-add', 'stop-3']);
     // No developer words
     expect(screen.queryByText(/Valid|constraints|Match \d+%|straight-line\)/)).toBeNull();
 
@@ -341,8 +364,9 @@ describe('trip screen', () => {
     await renderWithQuery(<TripScreen />);
 
     expect(await screen.findByTestId('stays-tonight')).toHaveTextContent(/Tonight: Hotel Sea CrownChange$/);
-    expect(screen.getByTestId('base-from')).toHaveTextContent(/From Hotel Sea Crown · 10 min$/);
-    expect(screen.getByTestId('base-back')).toHaveTextContent(/Back to Hotel Sea Crown · 20 min · ৳120$/);
+    // When you leave (09:00 − 10 min) and when you're back (17:45 + 20 min), on the 5 minutes
+    expect(screen.getByTestId('base-from')).toHaveTextContent(/^08:50.*From Hotel Sea Crown · 10 min by CNG$/);
+    expect(screen.getByTestId('base-back')).toHaveTextContent(/^18:05.*Back at Hotel Sea Crown · 20 min by CNG · ≈ ৳120$/);
     // the stay on the map: one pin when the day starts and ends there
     expect(screen.getByTestId('map-base-start')).toBeTruthy();
     expect(screen.queryByTestId('map-base-end')).toBeNull();
@@ -387,8 +411,8 @@ describe('trip screen', () => {
     api.setDayMeals.mockResolvedValue({ trip_id: 5, meals: day.meal_plan, days: [day], validation: null, budget: { before: 9500, after: 9500, change: 0 } });
     await renderWithQuery(<TripScreen />);
 
-    // Breakfast at home before "From …", dinner after "Back to …"; the packed lunch is a stop card
-    expect(await screen.findByTestId('stay-meal-41')).toHaveTextContent(/09:07–09:52 · Breakfast where you stay · No cost$/);
+    // Breakfast at home before "From …", dinner after "Back at …"; the packed lunch is a stop card
+    expect(await screen.findByTestId('stay-meal-41')).toHaveTextContent(/^09:07.*Breakfast where you stay · 30 min · No cost$/);
     expect(screen.getByTestId('stay-meal-43')).toHaveTextContent(/Dinner where you stay/);
     const rows = screen.getByTestId('plan-rows');
     const ids = (node: unknown): string[] => {
@@ -481,6 +505,16 @@ describe('trip screen', () => {
     expect(screen.queryByTestId('trip-menu')).toBeNull();
     expect(screen.queryByTestId('change-relax')).toBeNull();
     expect(screen.getByTestId('stop-2').props.accessibilityActions).toBeUndefined();
+    // Nothing to change: no Add a stop, no Add in free time, no "Not quite right?", no grips
+    for (const id of ['add-stop', 'free-add', 'change-plan', 'new-ideas', 'leg-row']) expect(screen.queryByTestId(id)).toBeNull();
+    expect(screen.queryByTestId('stop-grip-2', { includeHiddenElements: true })).toBeNull();
+    // About this trip, to read
+    expect(screen.getByTestId('trip-route')).toBeTruthy();
+    expect(screen.queryByTestId('about-together')).toBeNull();
+    // A stop's sheet: the facts, nothing to change
+    await fireEvent.press(screen.getByTestId('stop-2'));
+    expect(await screen.findByTestId('stop-sheet')).toBeTruthy();
+    for (const id of ['stay-more', 'stop-pin', 'stop-swap', 'stop-remove', 'stop-move-day']) expect(screen.queryByTestId(id)).toBeNull();
   });
 
   it('builds a missing plan with the optimiser, falling back to the quick planner', async () => {

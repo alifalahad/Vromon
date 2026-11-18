@@ -41,10 +41,38 @@ LUNCH_PREFERRED = 12 * 60 + 30
 LUNCH_STRETCH = (11 * 60 + 30, 14 * 60 + 30)   # …or, when a must-see or busy time is in the way, here
 DINNER_EARLIEST = 19 * 60
 SPEED_KMH = 30.0                           # the straight-line estimate every planner uses
-STEP = 5                                   # minutes between the start times tried
+STEP = 5                                   # minutes between the start times tried; starts are on them (D23)
 
 WHENS = ("morning", "afternoon", "sunset", "evening")
 PACE_STOPS = {"Relaxed": 3, "Balanced": 4, "Packed": 6, "Active": 5}
+
+
+def on_five(minutes: float) -> int:
+    """
+    A start on the next whole 5 minutes: 10:39 → 10:40, 10:40 stays (docs/ui-refresh D23). Every planner
+    and every edit that chooses a start goes through this (or a range of such starts, as the optimiser
+    does), so a plan reads like one a person wrote. Lengths aren't rounded, and an exact time the traveller
+    typed (a must-see "at 10:37", an arrival) is kept as it is.
+    """
+    return -(-int(round(minutes)) // STEP) * STEP
+
+
+def before_five(minutes: float) -> int:
+    """The last whole 5 minutes at or before: for a time that must not be passed (10:44 → 10:40)."""
+    return (int(round(minutes)) // STEP) * STEP
+
+
+def on_five_between(minutes: float, lo: float, hi: float) -> int:
+    """
+    `minutes` on the 5 minutes, kept within [lo, hi]: rounded up when that still fits, else down, else
+    (no 5-minute mark in the range) as it is.
+    """
+    up, down = on_five(minutes), before_five(minutes)
+    if up <= hi:
+        return up
+    if down >= lo:
+        return down
+    return int(round(minutes))
 
 
 def t2m(t: str) -> int:
@@ -296,7 +324,7 @@ def free_start(
         return True
 
     # Round times (every 5 minutes); an exact time that isn't on the grid stays as it is
-    first = -(-lo // STEP) * STEP
+    first = on_five(lo)
     starts = list(range(first, hi + 1, STEP)) or ([lo] if lo <= hi else [])
     target = lo if prefer is None else prefer
     for s in sorted(starts, key=lambda x: (abs(x - target), x)):

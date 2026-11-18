@@ -10,7 +10,7 @@ import { DEFAULT_PLAN, isDefault, mealTitle, offerStayMeals, planSummary, samePl
 import { StayMealRow } from '../features/trips/meals/StayMealRow';
 import { defaultNewTrip, toPayload, update } from '../features/trips/new/newTrip';
 import { cardTitle, stopSubtitle } from '../features/trips/plan/PlanRows';
-import { orderedStops, planRows, previewMove, retime, ribbonSegments } from '../features/trips/plan/timeline';
+import { orderedStops, planRows, previewMove, retime } from '../features/trips/plan/timeline';
 import i18n from '../i18n';
 import type { ItineraryDay, ItineraryItem, MealPlan } from '../types';
 
@@ -121,7 +121,9 @@ describe('the plan rows', () => {
 
   it('breakfast where you stay: its times, the meal, no cost', async () => {
     await render(<StayMealRow item={BREAKFAST_HOME} />);
-    expect(screen.getByTestId('stay-meal-1')).toHaveTextContent(/08:10–08:55 · Breakfast where you stay · No cost$/);
+    // Its time in the time column, then the meal (frame 29's timeline)
+    expect(screen.getByTestId('stay-meal-1')).toHaveTextContent(/^08:10.*Breakfast where you stay · 45 min · No cost$/);
+    expect(screen.getByTestId('stay-meal-1').props.accessibilityLabel).toBe('08:10–08:55, Breakfast where you stay, No cost');
   });
 });
 
@@ -133,9 +135,5 @@ describe('the way on after a packed meal', () => {
     expect(rows.map((r) => r.kind)).toEqual(['stop', 'free', 'stop', 'leg', 'stop']);
     const leg = rows[3];
     expect(leg.kind === 'leg' && leg.itemId).toBe(2);
-    // and on the ribbon: the travel follows the lunch
-    const segs = ribbonSegments({ ...DAY, items: [park, LUNCH_OWN, MUSEUM] });
-    expect(segs.map((s) => s.kind)).toEqual(['visit', 'meal', 'travel', 'visit']);
-    expect(segs[2].start).toBe(12 * 60 + 30);
   });
 });
