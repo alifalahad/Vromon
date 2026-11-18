@@ -70,13 +70,26 @@ class TripDestination(BaseModel):
     name: str
 
 
+class PlanPlace(TripDestination):
+    """A place Vromon can plan (an active destination) and the district it lies in."""
+    district_slug: str
+
+
+class DistrictPlaces(BaseModel):
+    """One page of a district's hotels or places to eat; `total` is the district's count."""
+    items: List[ServicePlaceOut]
+    total: int
+    offset: int
+
+
 class DistrictDetail(DistrictCard):
     geometry: Optional[dict] = None
     neighbors: List[NamedUnit]
     subdistricts: List[NamedUnit]
     foods: List[FoodOut]
     attractions: List[ExploreAttraction]
-    hotels: List[ServicePlaceOut]
+    hotels: List[ServicePlaceOut]             # the first page: those with a published room rate first
+    restaurants: List[ServicePlaceOut]        # the first page of its places to eat
     trip_destinations: List[TripDestination]
 
 
@@ -136,6 +149,7 @@ class BangladeshOut(BaseModel):
     country: CountryCard
     divisions: List[DivisionOut]
     gi_foods: List[FoodOut]
+    destinations: List[PlanPlace] = []         # the places Vromon can plan, each in its district
     sources: List[str]
 
 

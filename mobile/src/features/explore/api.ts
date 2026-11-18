@@ -4,7 +4,7 @@
  * photos only with an approved licence, each with its credit.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 
 import api from '../../services/api';
@@ -97,7 +97,10 @@ export type CityCard = {
   photo: ExplorePhoto | null;
 };
 
-export type Bangladesh = { country: CountryCard; divisions: Division[]; gi_foods: GiFood[]; sources: string[] };
+/** A place Vromon can plan (a trip destination) and the district it lies in */
+export type PlanPlace = { id: number; name: string; district_slug: string };
+
+export type Bangladesh = { country: CountryCard; divisions: Division[]; gi_foods: GiFood[]; destinations: PlanPlace[]; sources: string[] };
 
 export type Continent = {
   name: string;
@@ -141,9 +144,14 @@ export type DistrictDetail = DistrictCard & {
   subdistricts: Named[];
   foods: GiFood[];
   attractions: Attraction[];
+  /** The first page of each; the rest come from `useDistrictPlaces` */
   hotels: Hotel[];
+  restaurants: Hotel[];
   trip_destinations: { id: number; name: string }[];
 };
+
+export type PlaceKind = 'accommodation' | 'food';
+export type DistrictPlaces = { items: Hotel[]; total: number; offset: number };
 
 export type CountryDetail = CountryCard & { regions: number; cities: CityCard[]; label_lat: number | null; label_lon: number | null };
 
@@ -167,6 +175,8 @@ export const exploreApi = {
   country: (iso2: string) => api.get<CountryDetail>(`/explore/countries/${iso2}`).then((r) => r.data),
   cities: (params: { continent?: string; country?: string; limit?: number }) =>
     api.get<CityCard[]>('/explore/cities', { params }).then((r) => r.data),
+  districtPlaces: (slug: string, kind: PlaceKind, offset: number) =>
+    api.get<DistrictPlaces>(`/explore/districts/${slug}/places`, { params: { kind, offset, limit: 20 } }).then((r) => r.data),
   districtMaps: (slug: string) => api.get<DistrictMaps>(`/explore/districts/${slug}/maps`).then((r) => r.data),
   search: (q: string) => api.get<SearchResult>('/explore/search', { params: { q } }).then((r) => r.data),
 };
@@ -174,7 +184,7 @@ export const exploreApi = {
 // The catalog changes with imports, not by the minute. Queries are kept on the phone between
 // launches: bump V when the responses change shape so phones fetch them again
 const STALE = 30 * 60 * 1000;
-const V = 'explore-2';
+const V = 'explore-3';
 
 export const useBangladesh = () => useQuery({ queryKey: [V, 'bd'], queryFn: exploreApi.bangladesh, staleTime: STALE });
 export const useDistrict = (slug: string) =>
@@ -188,6 +198,16 @@ export const useCountry = (iso2: string) =>
   useQuery({ queryKey: [V, 'country', iso2], queryFn: () => exploreApi.country(iso2), enabled: !!iso2, staleTime: STALE });
 export const useCities = (params: { continent?: string; country?: string; limit?: number }) =>
   useQuery({ queryKey: [V, 'cities', params], queryFn: () => exploreApi.cities(params), staleTime: STALE });
+/** A district's hotels or places to eat after the first page (which comes with the district). */
+export const useDistrictPlaces = (slug: string, kind: PlaceKind, first: number, enabled: boolean) =>
+  useInfiniteQuery({
+    queryKey: [V, 'districtPlaces', slug, kind],
+    queryFn: ({ pageParam }) => exploreApi.districtPlaces(slug, kind, pageParam),
+    initialPageParam: first,
+    getNextPageParam: (last) => (last.offset + last.items.length < last.total ? last.offset + last.items.length : undefined),
+    enabled: enabled && !!slug,
+    staleTime: STALE,
+  });
 export const useExploreSearch = (q: string) =>
   useQuery({ queryKey: [V, 'search', q], queryFn: () => exploreApi.search(q), enabled: q.trim().length >= 2, staleTime: STALE });
 

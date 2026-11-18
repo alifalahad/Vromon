@@ -3,7 +3,9 @@ Vromon API v1 — Explore (public, read-only).
 
 GET /explore/bangladesh                 Bangladesh's facts, its divisions with their districts, GI foods
 GET /explore/districts/{slug}           one district: outline, neighbours, upazilas, GI foods and products,
-                                        attractions, hotels with their published room rates
+                                        attractions, the first page of its hotels (with their published room
+                                        rates) and of its places to eat
+GET /explore/districts/{slug}/places    the next pages: ?kind=accommodation|food&offset=&limit=
 GET /explore/districts/{slug}/map       the district's published map render (data platform, Phases 3 and 7)
                                         as a JPEG: ?lang=en|bn, ?size=card (1080 px wide) | full (2160 px)
 GET /explore/continents                 continents with their countries' counts and largest countries
@@ -40,7 +42,8 @@ from app.models.models import City, Country, Destination, Region
 from app.schemas.catalog import FoodOut, PhotoOut
 from app.schemas.explore import (
     BangladeshOut, CityCard, ContinentOut, CountryCard, CountryDetail, CountryFactsOut, DistrictCard, DistrictCounts,
-    DistrictDetail, DistrictMapOut, DivisionOut, ExploreAttraction, ExplorePhoto, NamedUnit, SearchOut, TripDestination,
+    DistrictDetail, DistrictMapOut, DistrictPlaces, DivisionOut, ExploreAttraction, ExplorePhoto, NamedUnit, PlanPlace,
+    SearchOut, TripDestination,
 )
 from app.api.v1.endpoints.catalog import _room_prices, _service_places
 
@@ -183,7 +186,41 @@ def bangladesh(response: Response, db: Session = Depends(get_db)):
                  for u in units if u.level == "division"]
     country = _country_cards(db, [db.get(Country, "BD")])[0]
     response.headers["Cache-Control"] = CACHE
-    return BangladeshOut(country=country, divisions=divisions, gi_foods=_foods(db), sources=SOURCES)
+    return BangladeshOut(country=country, divisions=divisions, gi_foods=_foods(db), destinations=_plan_places(db),
+                         sources=SOURCES)
+
+
+def _plan_places(db: Session) -> list[PlanPlace]:
+    """The places Vromon can plan (active destinations in Bangladesh), each with the district it lies in: the
+    district whose outline holds it. A place in no outline (a point off a simplified coast) goes to the
+    nearest district whose box holds it; one in no box is left out."""
+    dests = db.scalars(select(Destination).where(Destination.is_active.is_(True), Destination.country_iso2 == "BD")
+                       .order_by(Destination.name)).all()
+    boxes = db.execute(select(AdminUnit.id, AdminUnit.slug, AdminUnit.centroid_lon, AdminUnit.centroid_lat,
+                              AdminBoundary.min_lon, AdminBoundary.min_lat, AdminBoundary.max_lon, AdminBoundary.max_lat)
+                       .join(AdminBoundary, AdminBoundary.admin_unit_id == AdminUnit.id)
+                       .where(AdminUnit.level == "district", AdminUnit.status == "published",
+                              AdminUnit.country_iso2 == "BD", AdminBoundary.is_current.is_(True))).all()
+    shapes: dict = {}
+
+    def shape(uid):
+        if uid not in shapes:
+            g = db.scalar(select(AdminBoundary.geometry_geojson).where(AdminBoundary.admin_unit_id == uid,
+                                                                       AdminBoundary.is_current.is_(True)))
+            shapes[uid] = json.loads(g) if g else None
+        return shapes[uid]
+
+    out = []
+    for x in dests:
+        if x.latitude is None or x.longitude is None:
+            continue
+        near = [b for b in boxes if b.min_lon <= x.longitude <= b.max_lon and b.min_lat <= x.latitude <= b.max_lat]
+        hit = next((b for b in near if _inside(shape(b.id), x.longitude, x.latitude)), None)
+        if hit is None and near:
+            hit = min(near, key=lambda b: ((b.centroid_lon or 0) - x.longitude) ** 2 + ((b.centroid_lat or 0) - x.latitude) ** 2)
+        if hit is not None:
+            out.append(PlanPlace(id=x.id, name=x.name, district_slug=hit.slug))
+    return out
 
 
 @router.get("/districts/{slug}", response_model=DistrictDetail)
@@ -213,20 +250,44 @@ def district(slug: str, response: Response, db: Session = Depends(get_db)):
     attractions = [ExploreAttraction(slug=a.slug, name_en=a.canonical_name_en, name_bn=a.canonical_name_bn,
                                      category=a.category_code, latitude=a.latitude, longitude=a.longitude,
                                      short_description_en=a.short_description_en, photo=photos.get(a.id))
-                   for a in sights[:40]]
-    hotels = _service_places(db, "accommodation", slug, None, None, None, 400)
-    # Those with a published room rate first, cheapest first; then the officially rated
-    hotels = sorted(hotels, key=lambda h: (h.price is None, h.price.from_amount if h.price and h.price.currency == "BDT"
-                                           else float("inf"), -(h.official_star_rating or 0)))[:12]
-
-    dests = [TripDestination(id=x.id, name=x.name) for x in db.scalars(select(Destination).where(
-        Destination.is_active.is_(True), Destination.country_iso2 == "BD"))
-        if card.bbox and card.bbox[0] <= x.longitude <= card.bbox[2] and card.bbox[1] <= x.latitude <= card.bbox[3]
-        and _inside(json.loads(g) if g else None, x.longitude, x.latitude)]
+                   for a in sights]
+    dests = [TripDestination(id=p.id, name=p.name) for p in _plan_places(db) if p.district_slug == slug]
     response.headers["Cache-Control"] = CACHE
     return DistrictDetail(**card.model_dump(), geometry=json.loads(g) if g else None, neighbors=named(neighbors),
                           subdistricts=named(subs), foods=_foods(db, d.id, food_only=False), attractions=attractions,
-                          hotels=hotels, trip_destinations=dests)
+                          hotels=_district_places(db, slug, "accommodation", 0, PLACES_PAGE).items,
+                          restaurants=_district_places(db, slug, "food", 0, PLACES_PAGE).items, trip_destinations=dests)
+
+
+PLACES_PAGE = 10
+
+
+def _district_places(db: Session, slug: str, kind: str, offset: int, limit: int) -> DistrictPlaces:
+    """A page of the district's hotels or places to eat. Hotels with a published room rate come first,
+    cheapest first, then the officially rated; places to eat as the catalog orders them (most confident
+    listings first). `total` is the same number as the district's count."""
+    if kind == "food":
+        # Up to 2,000 in a city district: paged by the database
+        total = db.scalar(select(func.count()).select_from(ServicePlace).join(
+            AdminUnit, AdminUnit.id == ServicePlace.district_id).where(
+            AdminUnit.slug == slug, ServicePlace.kind == kind, ServicePlace.status == "published")) or 0
+        return DistrictPlaces(items=_service_places(db, kind, slug, None, None, None, limit, offset), total=total,
+                              offset=offset)
+    # A few hundred at most; the room rates decide the order
+    rows = _service_places(db, kind, slug, None, None, None, 5000)
+    rows = sorted(rows, key=lambda h: (h.price is None, h.price.from_amount if h.price and h.price.currency == "BDT"
+                                       else float("inf"), -(h.official_star_rating or 0)))
+    return DistrictPlaces(items=rows[offset:offset + limit], total=len(rows), offset=offset)
+
+
+@router.get("/districts/{slug}/places", response_model=DistrictPlaces)
+def district_places(slug: str, response: Response, kind: str = Query(..., pattern="^(accommodation|food)$"),
+                    offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100), db: Session = Depends(get_db)):
+    if db.scalar(select(AdminUnit.id).where(AdminUnit.slug == slug, AdminUnit.level == "district",
+                                            AdminUnit.status == "published")) is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    response.headers["Cache-Control"] = CACHE
+    return _district_places(db, slug, kind, offset, limit)
 
 
 def _inside(geometry: Optional[dict], lon: float, lat: float) -> bool:

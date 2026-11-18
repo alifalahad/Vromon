@@ -24,6 +24,8 @@ jest.mock('../ui/haptics', () => ({
 }));
 const mockMe: { data: { id: string; display_name: string; avatar_url?: string | null } } = { data: { id: 'me', display_name: 'Ana Rahman' } };
 jest.mock('../features/account/useMe', () => ({ ME_QUERY_KEY: ['me'], useMe: () => mockMe }));
+// Explore shows your marks (step 12): none here
+jest.mock('../features/map/visits', () => ({ ...jest.requireActual('../features/map/visits'), useVisits: () => ({ data: [] }) }));
 jest.mock('../features/explore/api', () => {
   const none = () => ({ data: undefined, isLoading: false });
   return {

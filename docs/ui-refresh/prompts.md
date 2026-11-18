@@ -22,7 +22,7 @@
 | 9 | 9 | Trips tab and trip stats, rebuilt | ✅ done 2026-11-16 | [step-9-report.md](reports/step-9-report.md) |
 | 10 | (all tabs) | The account picture, top right on every tab's front page | ✅ done 2026-11-16 | [step-10-report.md](reports/step-10-report.md) |
 | 11 | (screenshots 3, 5) | The hotel list: only places to stay | ✅ done 2026-11-16 | [step-11-report.md](reports/step-11-report.md) |
-| 12 | (asked 2026-11-14) | Explore, redesigned: "Your country" and "The world" | not started | |
+| 12 | (asked 2026-11-14) | Explore, redesigned: "Your country" and "The world" | ✅ done 2026-11-18 | [step-12-report.md](reports/step-12-report.md) |
 | 13 | (asked 2026-11-14) | Account and settings, redesigned | not started | |
 | 14 | (asked 2026-11-14) | The trip plan: the sheet, the day as a timeline, a stop's sheet | not started | |
 | 15 | (asked 2026-11-14) | On the trip: the plan's "Now" card and Today | not started | |

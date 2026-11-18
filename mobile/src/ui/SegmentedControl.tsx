@@ -1,6 +1,8 @@
 /**
  * Segmented control (03-theme-midnight.jpg: Map | Friends): an inset track with
  * a raised thumb that slides to the selected segment. Selection haptic.
+ * `compact`: Explore's "Your country | The world" (UI refresh step 12, frame 22), smaller words, the one
+ * not chosen in the second text colour.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -19,12 +21,16 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   style,
+  compact = false,
+  accessibilityLabel,
   testID,
 }: {
   options: readonly { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
   style?: StyleProp<ViewStyle>;
+  compact?: boolean;
+  accessibilityLabel?: string;
   testID?: string;
 }) {
   const styles = useStyles();
@@ -46,12 +52,13 @@ export function SegmentedControl<T extends string>({
 
   return (
     <View
-      style={[styles.track, style]}
+      style={[styles.track, compact && styles.trackCompact, style]}
       onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}
       accessibilityRole="tablist"
+      accessibilityLabel={accessibilityLabel}
       testID={testID}
     >
-      {segment > 0 ? <Animated.View style={[styles.thumb, { width: segment }, thumb]} /> : null}
+      {segment > 0 ? <Animated.View style={[styles.thumb, compact && styles.thumbCompact, { width: segment }, thumb]} /> : null}
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -68,7 +75,7 @@ export function SegmentedControl<T extends string>({
             testID={testID ? `${testID}-${o.value}` : undefined}
           >
             {/* Shrunk to fit one line: with large text "থাকার জায়গায়" was cut to "থাকার …", and two lines broke "Restaur-ant" (step 8) */}
-            <Text style={[styles.label, on && styles.labelOn]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            <Text style={[styles.label, compact && styles.labelCompact, on && styles.labelOn]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
               {o.label}
             </Text>
           </PressableScale>
@@ -83,5 +90,8 @@ const useStyles = makeStyles((t) => ({
   thumb: { position: 'absolute', top: PAD, bottom: PAD, left: PAD, borderRadius: 10, backgroundColor: t.colors.segmentThumb },
   item: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 40, paddingHorizontal: 4 },
   label: { ...t.type.body, fontSize: 17, color: t.colors.textPrimary, textAlign: 'center' },
-  labelOn: { fontWeight: '700' },
+  labelOn: { fontWeight: '700', color: t.colors.textPrimary },
+  trackCompact: { borderRadius: 16, backgroundColor: t.colors.segmentTrack },
+  thumbCompact: { borderRadius: 12, ...t.depth.card },
+  labelCompact: { fontSize: 14.5, fontWeight: '500', color: t.colors.textSecondary },
 }));

@@ -336,7 +336,7 @@ def foods(district: Optional[str] = None, food_only: bool = True, db: Session = 
 
 
 def _service_places(db: Session, kind: str, district: Optional[str], category: Optional[str], q: Optional[str],
-                    stars: Optional[int], limit: int) -> List[ServicePlaceOut]:
+                    stars: Optional[int], limit: int, offset: int = 0) -> List[ServicePlaceOut]:
     stmt = select(ServicePlace).where(ServicePlace.kind == kind, ServicePlace.status == "published")
     if district:
         did = db.scalar(select(AdminUnit.id).where(AdminUnit.slug == district))
@@ -352,7 +352,8 @@ def _service_places(db: Session, kind: str, district: Optional[str], category: O
                               ServicePlace.name_bn.like(f"%{q.strip()}%")))
     # Officially rated first, then the most confident listings
     rows = db.scalars(stmt.order_by(ServicePlace.official_star_rating.desc().nullslast(),
-                                    ServicePlace.listing_confidence.desc().nullslast()).limit(limit)).all()
+                                    ServicePlace.listing_confidence.desc().nullslast(), ServicePlace.id)
+                       .offset(offset).limit(limit)).all()
     slugs = _slugs(db, {p.district_id for p in rows})
     names = dict(db.execute(select(DataSource.source_id, DataSource.source_name)).all())
     prices = _room_prices(db, [p.id for p in rows]) if kind == "accommodation" else {}

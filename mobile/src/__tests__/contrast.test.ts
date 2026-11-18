@@ -119,6 +119,20 @@ describe.each([
     expect(contrast(colors.link, colors.surface)).toBeGreaterThanOrEqual(AA);
   });
 
+  it('Explore: the switch, a mark as a chip and on a card, the words over a photo (UI refresh step 12)', () => {
+    expect(contrast(colors.textPrimary, colors.segmentThumb)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.textSecondary, colors.segmentTrack)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.onMarkTint, colors.markTint)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.onMarkTint, colors.surface)).toBeGreaterThanOrEqual(AA);
+    // At the foot of a photo the shade is at least 78% (the frames' gradient): over a white photo
+    const over = (top: string, a: number) =>
+      `#${[1, 3, 5].map((i) => Math.round(parseInt(top.slice(i, i + 2), 16) * a + 255 * (1 - a)).toString(16).padStart(2, '0')).join('')}`;
+    expect(contrast(colors.onPhoto, over(colors.photoShade, 0.78))).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.onPhotoSecondary, over(colors.photoShade, 0.78))).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.linkOnWhite, colors.heroButton)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.onHeroButton, colors.heroButton)).toBeGreaterThanOrEqual(AA);
+  });
+
   it("a switch's track when off shows on a card and on the ground (3:1)", () => {
     expect(contrast(colors.switchOff, colors.surface)).toBeGreaterThanOrEqual(3);
     expect(contrast(colors.switchOff, colors.bg)).toBeGreaterThanOrEqual(3);

@@ -170,3 +170,71 @@ def test_district_map_is_the_published_render_as_jpeg(client, world, tmp_path, m
         with _ApiTestSession() as db:
             db.execute(delete(MapExport).where(MapExport.district_id == world["d1"]))
             db.commit()
+
+
+def test_places_to_plan_are_joined_to_their_district(client, world):
+    """Explore's "Ready to plan" (docs/ui-refresh step 12): each destination with the district whose outline holds it."""
+    from app.models.models import Destination
+    with _ApiTestSession() as db:
+        inside = Destination(name="X Sundarbans Gate", country="Bangladesh", country_iso2="BD", latitude=22.25,
+                             longitude=90.25, is_active=True)
+        hidden = Destination(name="X Closed Place", country="Bangladesh", country_iso2="BD", latitude=22.3,
+                             longitude=90.3, is_active=False)
+        db.add_all([inside, hidden])
+        db.commit()
+        ids = (inside.id, hidden.id)
+    try:
+        body = client.get("/api/v1/explore/bangladesh").json()
+        places = {p["name"]: p for p in body["destinations"]}
+        assert places["X Sundarbans Gate"] == {"id": ids[0], "name": "X Sundarbans Gate", "district_slug": "x-district-satkhira"}
+        assert "X Closed Place" not in places
+        detail = client.get("/api/v1/explore/districts/x-district-satkhira").json()
+        assert {"id": ids[0], "name": "X Sundarbans Gate"} in detail["trip_destinations"]
+        # Bagerhat has no outline here, so nothing lies in it
+        assert client.get("/api/v1/explore/districts/x-district-bagerhat").json()["trip_destinations"] == []
+    finally:
+        with _ApiTestSession() as db:
+            db.execute(delete(Destination).where(Destination.id.in_(ids)))
+            db.commit()
+
+
+def test_a_districts_hotels_and_places_to_eat_page_by_page(client, world):
+    """The district's page lists as many as its counts say: the first page with the district, then the rest."""
+    from app.models.catalog import PriceObservation, ServicePlace
+    with _ApiTestSession() as db:
+        rows = [ServicePlace(slug=f"x-hotel-{i:02d}", kind="accommodation", category="hotel", name_en=f"Hotel {i:02d}",
+                             district_id=world["d2"], listing_confidence=0.9 - i / 100, status="published", field_status={})
+                for i in range(12)]
+        rows += [ServicePlace(slug=f"x-food-{i:02d}", kind="food", category="restaurant", name_en=f"Food {i:02d}",
+                              district_id=world["d2"], listing_confidence=0.9 - i / 100, status="published", field_status={})
+                 for i in range(25)]
+        rows.append(ServicePlace(slug="x-food-hidden", kind="food", name_en="Hidden", district_id=world["d2"],
+                                 status="needs_review", field_status={}))
+        db.add_all(rows)
+        db.flush()
+        db.add(PriceObservation(price_kind="rack_rate", service_place_id=rows[11].id, item_key="room|twin",
+                                item_label="Twin", unit="per night", amount_min=3200, currency="BDT",
+                                observed_on=date(2026, 11, 5), source_id="hotel_websites",
+                                last_checked_at=datetime(2026, 11, 5, 6), status="published"))
+        db.commit()
+    try:
+        d = client.get("/api/v1/explore/districts/x-district-satkhira").json()
+        assert d["counts"]["hotels"] == 12 and d["counts"]["restaurants"] == 25
+        assert len(d["hotels"]) == 10 and len(d["restaurants"]) == 10
+        assert d["hotels"][0]["slug"] == "x-hotel-11" and d["hotels"][0]["price"]["from_amount"] == 3200   # priced first
+        url = "/api/v1/explore/districts/x-district-satkhira/places"
+        seen = [p["slug"] for p in d["restaurants"]]
+        page = client.get(url, params={"kind": "food", "offset": 10, "limit": 20}).json()
+        assert page["total"] == 25 and page["offset"] == 10 and len(page["items"]) == 15
+        seen += [p["slug"] for p in page["items"]]
+        assert sorted(seen) == [f"x-food-{i:02d}" for i in range(25)] and len(set(seen)) == 25   # each once, none hidden
+        hotels = client.get(url, params={"kind": "accommodation", "offset": 10}).json()
+        assert hotels["total"] == 12 and [h["slug"] for h in hotels["items"]] == ["x-hotel-09", "x-hotel-10"]
+        assert client.get(url, params={"kind": "shop"}).status_code == 422
+        assert client.get("/api/v1/explore/districts/x-division-khulna/places", params={"kind": "food"}).status_code == 404
+    finally:
+        with _ApiTestSession() as db:
+            ids = [r.id for r in db.query(ServicePlace).filter(ServicePlace.slug.like("x-hotel-%") | ServicePlace.slug.like("x-food-%"))]
+            db.execute(delete(PriceObservation).where(PriceObservation.service_place_id.in_(ids)))
+            db.execute(delete(ServicePlace).where(ServicePlace.id.in_(ids)))
+            db.commit()

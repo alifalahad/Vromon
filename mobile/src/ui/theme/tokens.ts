@@ -82,6 +82,17 @@ export type ThemeColors = {
   globeSky: string;
   globeGlow: string;
   globeShadow: string;
+  /** Explore (UI refresh step 12, frames 22–25): the "Your country | The world" switch's track */
+  segmentTrack: string;
+  /** A place you've marked, as a chip ("Visited", "Lived"): the warm tint and its text; the text also on a card */
+  markTint: string;
+  onMarkTint: string;
+  /** Over a photo (Explore's cards and a district's picture): the shade at its foot, the text and second lines on it */
+  photoShade: string;
+  onPhoto: string;
+  onPhotoSecondary: string;
+  /** Link text on a white button over a photo or a map ("Open the map"), in both appearances */
+  linkOnWhite: string;
 };
 
 /** Names over other people's bubbles in a trip room, one per person; each 4.5:1 on `bubbleTheirs` (contrast.test.ts) */
@@ -141,6 +152,13 @@ export const darkColors: ThemeColors = {
   globeSky: '#070C15',
   globeGlow: '#4F7FD9',
   globeShadow: 'rgba(0, 0, 0, 0)',
+  segmentTrack: '#1C2634',
+  markTint: '#3D2A10',
+  onMarkTint: '#FFC97A',
+  photoShade: '#0F1B2D',
+  onPhoto: '#FFFFFF',
+  onPhotoSecondary: '#E3E9F2',
+  linkOnWhite: '#1D4BB8',
 };
 
 export const lightColors: ThemeColors = {
@@ -195,6 +213,13 @@ export const lightColors: ThemeColors = {
   globeSky: '#E9F1FA',
   globeGlow: '#FFFFFF',
   globeShadow: 'rgba(15, 27, 45, 0.16)',
+  segmentTrack: '#E6EAF1',
+  markTint: '#FFF1D9',
+  onMarkTint: '#7A4300',
+  photoShade: '#0F1B2D',
+  onPhoto: '#FFFFFF',
+  onPhotoSecondary: '#E3E9F2',
+  linkOnWhite: '#1D4BB8',
 };
 
 export const radius = {
