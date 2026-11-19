@@ -3,8 +3,9 @@
  * hero colour with the weather now; when to leave for the next stop ("Leave by 12:40", from your location if
  * you turned it on, else from the plan, plus the usual traffic), with Directions and "Running late?" (push
  * the rest of the day back, with a preview of what moves or is dropped, and Undo); "The rest of today", where
- * a stop with a warning says so and opens Conditions; the way back; the three switches. The evening before
- * the trip it shows the first day ("Starts tomorrow"); "Full plan" opens the trip screen.
+ * a stop with a warning says so and opens Conditions; the way back; what you spent today with "Add" (step 19);
+ * the three switches. The evening before the trip it shows the first day ("Starts tomorrow"); "Full plan" opens
+ * the trip screen.
  *
  * "Now" and "Leave by" come from the same state (today.ts's `nowView`), as on the plan's Now card.
  */
@@ -33,6 +34,8 @@ import { allowNotifications } from '../../../src/features/trips/today/reminders'
 import { useTodaySettings } from '../../../src/features/trips/today/settings';
 import { baseName, stayIcon } from '../../../src/features/trips/stays/stays';
 import { NowCard } from '../../../src/features/trips/today/NowCard';
+import { AddSpentSheet } from '../../../src/features/trips/budget/AddSpentSheet';
+import { dayPlan } from '../../../src/features/trips/budget/spent';
 import {
   backAt,
   dayFor,
@@ -52,6 +55,7 @@ import { useTripReminders } from '../../../src/features/trips/today/useTripRemin
 import { tripsApi } from '../../../src/services/api';
 import type { Itinerary, ItineraryDay, LatePlan, LateUndo, TravelMode } from '../../../src/types';
 import { haptics } from '../../../src/ui/haptics';
+import { LineIcon } from '../../../src/ui/LineIcon';
 import { PressableScale } from '../../../src/ui/PressableScale';
 import { Snackbar } from '../../../src/ui/Snackbar';
 import { makeStyles, useTheme } from '../../../src/ui/theme';
@@ -98,6 +102,11 @@ export default function TodayScreen() {
   const mine = !!trip.data && !!me.data && (!trip.data.user_id || trip.data.user_id === me.data.id);
   useTripReminders(tripId, mine ? itinerary.data : undefined, mine ? conditions.data : undefined, today);
   const { here, status: hereStatus } = useHere(settings.useLocation);
+  // What you spent today (docs/ui-refresh step 19): the budget's numbers, and the sheet to note one
+  const budget = useQuery({ queryKey: ['budget', tripId], queryFn: () => tripsApi.budget(tripId), enabled: !!tripId && mine });
+  const [adding, setAdding] = useState(false);
+  const spentToday = budget.data?.spent?.today ?? 0;
+  const todayPlan = budget.data ? dayPlan(budget.data, today) : null;
 
   const days = itinerary.data?.days ?? [];
   // Today's day; before the trip, its first day (as it will be)
@@ -516,6 +525,41 @@ export default function TodayScreen() {
           </>
         ) : null}
 
+        {/* What you spent today (frame 32), with "Add"; the plan for today when nothing is noted */}
+        {mine && isToday && phase.kind === 'on' && !trip.data.not_taken && budget.data ? (
+          <View style={styles.spentRow} testID="today-spent">
+            <View style={styles.backIcon}>
+              <LineIcon name="wallet" size={22} color={theme.colors.textSecondary} />
+            </View>
+            <PressableScale
+              pressEffect="opacity"
+              haptic="selection"
+              onPress={() => router.push({ pathname: '/trip/budget/[id]', params: { id: tripId } })}
+              style={styles.flex}
+              accessibilityRole="button"
+              testID="today-spent-open"
+            >
+              <Text style={styles.backTitle}>
+                {spentToday > 0 ? t('spent.todayRow', { amount: f.money(spentToday) }) : t('spent.nothingToday')}
+              </Text>
+              {todayPlan ? (
+                <Text style={styles.restSub}>{t('spent.todayPlan', { amount: `${todayPlan.estimate ? '≈\u00A0' : ''}${f.money(todayPlan.amount)}` })}</Text>
+              ) : null}
+            </PressableScale>
+            <PressableScale
+              haptic="selection"
+              onPress={() => setAdding(true)}
+              style={styles.spentAdd}
+              accessibilityRole="button"
+              accessibilityLabel={t('spent.todayAddA11y')}
+              testID="today-spent-add"
+            >
+              <LineIcon name="plus" size={17} color={theme.colors.onAccentSoft} strokeWidth={2.4} />
+              <Text style={styles.spentAddText}>{t('spent.add')}</Text>
+            </PressableScale>
+          </View>
+        ) : null}
+
         {/* Switches, in one card */}
         {mine ? (
           <View style={styles.switches}>
@@ -552,6 +596,22 @@ export default function TodayScreen() {
 
         <Text style={styles.footnote}>{t('today.footnote')}</Text>
       </ScrollView>
+      {mine ? (
+        <AddSpentSheet
+          visible={adding}
+          tripId={tripId}
+          start={trip.data.start_date}
+          end={trip.data.end_date}
+          travellers={trip.data.num_travelers}
+          today={today}
+          editing={null}
+          onClose={() => setAdding(false)}
+          onDone={({ message }) => {
+            setAdding(false);
+            setSnack({ message });
+          }}
+        />
+      ) : null}
       <Snackbar message={snack?.message ?? null} actionLabel={snack?.undo ? t('plan.undo') : undefined} onAction={undoLate} testID="today-snackbar" />
     </View>
   );
@@ -687,6 +747,19 @@ const useStyles = makeStyles((t) => {
     warnText: { flex: 1, fontSize: 13, fontWeight: '500', color: t.colors.warning },
     nextPill: { minHeight: 24, paddingHorizontal: 9, borderRadius: 12, justifyContent: 'center', backgroundColor: t.colors.accentTint },
     nextPillText: { fontSize: 12, fontWeight: '700', color: t.colors.onAccentSoft },
+    // Frame 32: what you spent today, its wallet in a grey square and "Add" on the blue tint
+    spentRow: { ...card, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, paddingVertical: 8, paddingLeft: 12, paddingRight: 10 },
+    spentAdd: {
+      minHeight: 44,
+      paddingLeft: 12,
+      paddingRight: 16,
+      borderRadius: 22,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      backgroundColor: t.colors.accentTint,
+    },
+    spentAddText: { fontSize: 14.5, fontWeight: '500', color: t.colors.onAccentSoft },
     switches: { ...card },
     toggle: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 58, paddingVertical: 10, paddingLeft: 16, paddingRight: 14 },
     toggleTitle: { fontSize: 15, fontWeight: '500', color: t.colors.textPrimary },

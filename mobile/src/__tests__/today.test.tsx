@@ -33,7 +33,16 @@ let mockUuid = 0;
 jest.mock('expo-crypto', () => ({ randomUUID: () => `client-${++mockUuid}` }));
 jest.mock('../services/api', () => ({
   ApiError: class ApiError extends Error {},
-  tripsApi: { get: jest.fn(), getItinerary: jest.fn(), conditions: jest.fn(), late: jest.fn(), applyLate: jest.fn(), undoLate: jest.fn() },
+  tripsApi: {
+    get: jest.fn(),
+    getItinerary: jest.fn(),
+    conditions: jest.fn(),
+    late: jest.fn(),
+    applyLate: jest.fn(),
+    undoLate: jest.fn(),
+    budget: jest.fn(),
+    expenseSuggestions: jest.fn(),
+  },
   chatApi: { list: jest.fn(() => Promise.resolve([])), send: jest.fn(() => new Promise(() => {})) },
 }));
 
@@ -389,6 +398,36 @@ describe('Today screen', () => {
     await waitFor(() => expect(Notifications.scheduleNotificationAsync).toHaveBeenCalled());
     (Notifications.getPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'undetermined', canAskAgain: true });
     jest.useRealTimers();
+  });
+});
+
+describe('Today: what you spent today (docs/ui-refresh step 19, frame 32)', () => {
+  const budget = (spent: object | null) => ({
+    total: 20540,
+    total_budget: 25000,
+    parts: [],
+    by_day: [{ day_number: 1, date: '2026-10-19', amount: 3640, food: 1800, tickets: 200, local: 1640, estimate: true }],
+    spent,
+  });
+
+  it('what is noted today against the plan for today, and "Add" opens the sheet on today', async () => {
+    setUp();
+    api.budget.mockResolvedValue(budget({ total: 3760, by_part: {}, by_day: [{ date: '2026-10-19', amount: 1150 }], today: 1150, count: 3 }));
+    api.expenseSuggestions.mockResolvedValue([]);
+    await renderWithQuery(<TodayScreen />);
+    expect(await screen.findByTestId('today-spent')).toHaveTextContent(/Spent today: ৳1,150The plan for today is ≈ ৳3,640Add$/);
+    await fireEvent.press(screen.getByTestId('today-spent-add'));
+    await waitFor(() => expect(api.expenseSuggestions).toHaveBeenCalledWith(5, '2026-10-19'));
+    expect(screen.getByTestId('spent-day')).toHaveTextContent(/^Today, /);
+    await fireEvent.press(screen.getByTestId('today-spent-open'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/trip/budget/[id]', params: { id: 5 } });
+  });
+
+  it('nothing noted: the plan for today stays, never "৳0 spent"', async () => {
+    setUp();
+    api.budget.mockResolvedValue(budget(null));
+    await renderWithQuery(<TodayScreen />);
+    expect(await screen.findByTestId('today-spent')).toHaveTextContent(/Nothing noted today yetThe plan for today is ≈ ৳3,640Add$/);
   });
 });
 

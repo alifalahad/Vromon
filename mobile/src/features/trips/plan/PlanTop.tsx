@@ -13,6 +13,7 @@ import { Text, View } from 'react-native';
 import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 
 import type { BudgetBreakdown, ConditionsDay, ItineraryDay } from '../../../types';
+import { LineIcon } from '../../../ui/LineIcon';
 import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
 import { SkyIcon } from '../conditions/SkyIcon';
@@ -88,9 +89,11 @@ export function RoomButton({ unread, onPress }: { unread: number; onPress: () =>
 /**
  * The budget row (frame 28): "≈ ৳20,540 of ৳25,000", the meter, "৳4,460 left". The same numbers as the
  * Budget screen (total, left, status). Close to the budget it's amber and says "Only … left"; over it,
- * red and "… over": never colour alone.
+ * red and "… over": never colour alone. What you spent (step 19): on the trip with notes (frame 31), "৳10,160
+ * spent of ৳25,000" and what's left; after it (frame 33), "It cost ৳19,870 of ৳25,000" and under or over your
+ * budget in words, or the plan's estimate, said to be the plan's, when nothing was noted.
  */
-export function BudgetRow({ data, onPress }: { data: BudgetBreakdown; onPress: () => void }) {
+export function BudgetRow({ data, onPress, phase }: { data: BudgetBreakdown; onPress: () => void; phase?: PlanPhase['kind'] | null }) {
   const styles = useStyles();
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -99,15 +102,61 @@ export function BudgetRow({ data, onPress }: { data: BudgetBreakdown; onPress: (
   const total = data.total ?? data.estimated_total ?? 0;
   const remaining = data.left ?? data.total_budget - total;
   const estimate = data.low !== data.high || (data.parts ?? []).some((p) => p.estimate);
-  const spent = `${estimate ? '≈ ' : ''}${f.money(total)}`;
-  const share = data.total_budget > 0 ? total / data.total_budget : null;
-  const status = data.status === 'over' || remaining < 0 ? 'over' : (data.status ?? 'ok');
-  const left =
+  const noted = (data.spent?.count ?? 0) > 0;
+  const of = data.total_budget > 0 ? ` ${t('plan.budgetOf', { total: f.money(data.total_budget) })}` : '';
+
+  // After the trip (frame 33): what it cost, or the plan's estimate, under or over your budget; no meter
+  if (phase === 'after') {
+    const cost = noted ? (data.spent?.total ?? 0) : total;
+    const guess = !noted && estimate ? '≈\u00A0' : '';
+    const under = Math.round(data.total_budget - cost);
+    const main = noted ? t('spent.rowCost', { amount: f.money(cost) }) : t('spent.rowByPlan', { amount: `${guess}${f.money(cost)}` });
+    const status =
+      under > 0
+        ? t('spent.under', { amount: `${guess}${f.money(under)}` })
+        : under < 0
+          ? t('spent.overBudget', { amount: `${guess}${f.money(-under)}` })
+          : t('spent.onBudget');
+    return (
+      <PressableScale
+        pressEffect="opacity"
+        haptic="selection"
+        onPress={onPress}
+        style={styles.budget}
+        accessibilityRole="button"
+        accessibilityLabel={t('spent.rowA11y', { spent: main, total: f.money(data.total_budget), left: status })}
+        testID="trip-budget"
+      >
+        <LineIcon name="wallet" size={22} color={colors.textSecondary} />
+        <View style={styles.budgetBodyTight}>
+          <Text style={styles.budgetText} maxFontSizeMultiplier={1.4}>
+            <Text style={styles.budgetSpent}>{main}</Text>
+            {of}
+          </Text>
+          {data.total_budget > 0 ? (
+            <Text style={[styles.budgetStatus, { color: under >= 0 ? colors.success : colors.danger }]} maxFontSizeMultiplier={1.4} testID="trip-budget-left">
+              {status}
+            </Text>
+          ) : null}
+        </View>
+        <LineIcon name="chevronRight" size={20} color={colors.textTertiary} strokeWidth={2} />
+      </PressableScale>
+    );
+  }
+
+  // On the trip with notes (frame 31): what's spent so far; otherwise the plan against the budget (frame 28)
+  const spentSoFar = phase === 'on' && noted;
+  const amount = spentSoFar ? (data.spent?.total ?? 0) : total;
+  const left = spentSoFar ? data.total_budget - amount : remaining;
+  const spent = spentSoFar ? t('spent.rowSpent', { amount: f.money(amount) }) : `${estimate ? '≈ ' : ''}${f.money(total)}`;
+  const share = data.total_budget > 0 ? amount / data.total_budget : null;
+  const status = left < 0 || (!spentSoFar && data.status === 'over') ? 'over' : spentSoFar ? 'ok' : (data.status ?? 'ok');
+  const leftText =
     status === 'over'
-      ? t('plan.budgetOver', { amount: f.money(Math.abs(remaining)) })
+      ? t('plan.budgetOver', { amount: f.money(Math.abs(left)) })
       : status === 'close'
-        ? t('plan.budgetClose', { amount: f.money(remaining) })
-        : t('plan.budgetLeft', { amount: f.money(remaining) });
+        ? t('plan.budgetClose', { amount: f.money(left) })
+        : t('plan.budgetLeft', { amount: f.money(left) });
   const tone = status === 'over' ? colors.danger : status === 'close' ? colors.warning : colors.accent;
   return (
     <PressableScale
@@ -116,19 +165,19 @@ export function BudgetRow({ data, onPress }: { data: BudgetBreakdown; onPress: (
       onPress={onPress}
       style={styles.budget}
       accessibilityRole="button"
-      accessibilityLabel={t('plan.budgetRowA11y', { spent, total: f.money(data.total_budget), left })}
+      accessibilityLabel={t('plan.budgetRowA11y', { spent, total: f.money(data.total_budget), left: leftText })}
       testID="trip-budget"
     >
-      <MaterialCommunityIcons name="wallet-outline" size={22} color={colors.textSecondary} />
+      <LineIcon name="wallet" size={22} color={colors.textSecondary} />
       <View style={styles.budgetBody}>
         <View style={styles.budgetLine}>
           <Text style={styles.budgetText} maxFontSizeMultiplier={1.4}>
             <Text style={styles.budgetSpent}>{spent}</Text>
-            {data.total_budget > 0 ? ` ${t('plan.budgetOf', { total: f.money(data.total_budget) })}` : ''}
+            {of}
           </Text>
           {data.total_budget > 0 ? (
             <Text style={[styles.budgetLeft, status !== 'ok' && { color: tone, fontWeight: '700' }]} maxFontSizeMultiplier={1.4} testID="trip-budget-left">
-              {left}
+              {leftText}
             </Text>
           ) : null}
         </View>
@@ -138,7 +187,7 @@ export function BudgetRow({ data, onPress }: { data: BudgetBreakdown; onPress: (
           </View>
         ) : null}
       </View>
-      <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textTertiary} />
+      <LineIcon name="chevronRight" size={20} color={colors.textTertiary} strokeWidth={2} />
     </PressableScale>
   );
 }
@@ -249,13 +298,15 @@ export function DayTabs({
 
 /**
  * The day in a line (frame 28): its summary, then "4 places, 2 meals · ≈ ৳2,780 for 2 · 2 h on the road".
- * The money is the day's food, tickets and rides for the group: Budget's "By day", the same number.
+ * The money is the day's food, tickets and rides for the group: Budget's "By day", the same number. For a day
+ * that's over with something noted, what was spent instead (frame 33: "৳2,610 spent that day").
  */
 export function DayLine({
   title,
   places,
   meals,
   money,
+  spent,
   travellers,
   roadMinutes,
 }: {
@@ -264,6 +315,8 @@ export function DayLine({
   meals: number;
   /** Budget's "By day" for this day (null until the budget is loaded) */
   money: { amount: number; estimate: boolean } | null;
+  /** What you noted that day, for a day that's over (step 19, frame 33); without notes the plan's money stays */
+  spent?: number | null;
   travellers: number;
   roadMinutes: number;
 }) {
@@ -275,9 +328,11 @@ export function DayLine({
     .join(', ');
   const line = [
     counts || null,
-    money && money.amount > 0
-      ? t('plan.dayMoney', { amount: `${money.estimate ? '≈ ' : ''}${f.money(money.amount)}`, count: travellers, n: f.n(travellers) })
-      : null,
+    spent && spent > 0
+      ? t('spent.thatDay', { amount: f.money(spent) })
+      : money && money.amount > 0
+        ? t('plan.dayMoney', { amount: `${money.estimate ? '≈ ' : ''}${f.money(money.amount)}`, count: travellers, n: f.n(travellers) })
+        : null,
     roadMinutes > 0 ? t('plan.onTheRoad', { time: f.duration(roadMinutes) }) : null,
   ]
     .filter(Boolean)
@@ -331,11 +386,13 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.scheme === 'dark' ? t.colors.surface : t.colors.bg,
   },
   budgetBody: { flex: 1, gap: 7 },
+  budgetBodyTight: { flex: 1, gap: 2, paddingVertical: 2 },
+  budgetStatus: { fontSize: 13, fontWeight: '500' },
   budgetLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', columnGap: 8 },
   budgetText: { fontSize: 14.5, color: t.colors.textSecondary },
   budgetSpent: { fontWeight: '700', color: t.colors.textPrimary },
   budgetLeft: { fontSize: 13, color: t.colors.textSecondary },
-  meter: { height: 6, borderRadius: 3, backgroundColor: t.colors.accentTint, overflow: 'hidden' },
+  meter: { height: 6, borderRadius: 3, backgroundColor: t.colors.accentTrack, overflow: 'hidden' },
   meterFill: { height: 6, borderRadius: 3 },
   tabs: { flexDirection: 'row', gap: TAB_GAP },
   tab: {

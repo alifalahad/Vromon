@@ -120,6 +120,16 @@ export type ThemeColors = {
   heroBarTrack: string;
   heroGood: string;
   heroDanger: string;
+  /** What you spent (UI refresh step 19, frames 38 and 40): each part's lighter track behind its bar (a darker step in
+   * dark), and the grey of what wasn't in the plan (shopping, other) */
+  partGettingThereTrack: string;
+  partStayTrack: string;
+  partFoodTrack: string;
+  partTicketsTrack: string;
+  partLocalTrack: string;
+  partUnplanned: string;
+  /** A blue meter's track on a card (frames 28, 31 and 38: the budget row, Budget's "Today") */
+  accentTrack: string;
 };
 
 /** Names over other people's bubbles in a trip room, one per person; each 4.5:1 on `bubbleTheirs` (contrast.test.ts) */
@@ -206,6 +216,14 @@ export const darkColors: ThemeColors = {
   heroBarTrack: 'rgba(111, 160, 255, 0.26)',
   heroGood: '#7BD8A5',
   heroDanger: '#FF9F96',
+  // Each part's colour at 28% on the card: 1.5:1 against the card, its bar 3:1 or more against it
+  partGettingThereTrack: '#243A60',
+  partStayTrack: '#4D342E',
+  partFoodTrack: '#174344',
+  partTicketsTrack: '#47391D',
+  partLocalTrack: '#4B3045',
+  partUnplanned: '#8794A7',
+  accentTrack: '#243A60',
 };
 
 export const lightColors: ThemeColors = {
@@ -286,6 +304,13 @@ export const lightColors: ThemeColors = {
   heroBarTrack: 'rgba(111, 160, 255, 0.26)',
   heroGood: '#7BD8A5',
   heroDanger: '#FF9F96',
+  partGettingThereTrack: '#D9E3F8',
+  partStayTrack: '#FBE0D3',
+  partFoodTrack: '#D2EFEA',
+  partTicketsTrack: '#FBECC8',
+  partLocalTrack: '#F8DDE7',
+  partUnplanned: '#8B96A8',
+  accentTrack: '#D9E3F8',
 };
 
 export const radius = {

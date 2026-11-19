@@ -16,6 +16,7 @@ from sqlalchemy import (
     Integer, String, Float, Boolean, DateTime, Date,
     Text, ForeignKey, Index, Numeric, JSON, Uuid, UniqueConstraint, CheckConstraint, text, true as sa_true, false as sa_false,
 )
+from sqlalchemy import event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -650,6 +651,10 @@ class Trip(Base):
     reviews: Mapped[List["TripReview"]] = relationship(
         "TripReview", back_populates="trip", cascade="all, delete-orphan"
     )
+    # What the owner noted they spent (docs/ui-refresh step 19), private to them
+    expenses: Mapped[List["TripExpense"]] = relationship(
+        "TripExpense", back_populates="trip", cascade="all, delete-orphan"
+    )
 
     @property
     def num_days(self) -> int:
@@ -1033,6 +1038,59 @@ class ReviewItem(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     review: Mapped["TripReview"] = relationship("TripReview", back_populates="items")
+
+
+# ---------------------------------------------------------------------------
+# What you spent (docs/ui-refresh step 19, D18)
+# ---------------------------------------------------------------------------
+
+EXPENSE_PARTS = ("getting_there", "stay", "food", "tickets", "local", "shopping", "other")
+
+
+class TripExpense(Base):
+    """
+    What the traveller noted they spent: an amount for the whole group, in the trip's currency, on a day from
+    the day before the trip to the day after it, for one of seven parts, with a short note. A note made from
+    the plan keeps what it pays for: the stop (`item_id`), or a ride (`ride`): "to" that stop, "back" to where
+    you sleep that day, or "move" to the next stay that day. A removed stop empties `item_id`; the note stays.
+    Private to the trip's owner, who is the only one who notes.
+    """
+
+    __tablename__ = "trip_expenses"
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_trip_expenses_amount"),
+        CheckConstraint(f"part IN ({', '.join(repr(p) for p in EXPENSE_PARTS)})", name="ck_trip_expenses_part"),
+        CheckConstraint("ride IS NULL OR ride IN ('to', 'back', 'move')", name="ck_trip_expenses_ride"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    trip_id: Mapped[int] = mapped_column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+    amount: Mapped[float] = mapped_column(Float, nullable=False)
+    part: Mapped[str] = mapped_column(String(16), nullable=False)
+    note: Mapped[str] = mapped_column(String(80), nullable=False, default="", server_default="")
+    item_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("itinerary_items.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    ride: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    trip: Mapped["Trip"] = relationship("Trip", back_populates="expenses")
+
+
+@event.listens_for(ItineraryItem, "after_delete")
+def _unlink_expenses(_mapper, connection, target: ItineraryItem) -> None:
+    """A removed stop leaves the notes that paid for it: their link is emptied (SQLite doesn't do ON DELETE SET NULL
+    here, and a new stop could get the old id). Bulk deletes call `unlink_expenses` themselves."""
+    unlink_expenses(connection, [target.id])
+
+
+def unlink_expenses(connection, item_ids) -> None:
+    """Empty the link of the notes that paid for these stops (`item_ids`: ids, or a select of them)."""
+    table = TripExpense.__table__
+    connection.execute(table.update().where(table.c.item_id.in_(item_ids)).values(item_id=None))
 
 
 # ---------------------------------------------------------------------------

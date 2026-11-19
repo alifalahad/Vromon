@@ -27,6 +27,9 @@ import type {
   DayRoute,
   Destination,
   EditResult,
+  Expense,
+  ExpenseIn,
+  ExpenseSuggestion,
   Feedback,
   Friend,
   FriendFootprint,
@@ -232,7 +235,17 @@ export const tripsApi = {
     api.post<EditResult>(`/trips/${tripId}/days/${dayId}/regenerate`).then((r) => r.data),
 
   getItinerary: (id: number) => api.get<Itinerary>(`/trips/${id}/itinerary`).then((r) => r.data),
-  budget: (id: number) => api.get<BudgetBreakdown>(`/trips/${id}/budget`).then((r) => r.data),
+  /** With what you spent on your own trip; `today` is the phone's date (what's still to come) */
+  budget: (id: number) => api.get<BudgetBreakdown>(`/trips/${id}/budget`, { params: { today: localToday() } }).then((r) => r.data),
+  /** What you spent (docs/ui-refresh step 19): your own trip's notes, the newest day first */
+  expenses: (id: number) => api.get<Expense[]>(`/trips/${id}/expenses`).then((r) => r.data),
+  addExpense: (id: number, body: ExpenseIn) => api.post<Expense>(`/trips/${id}/expenses`, body).then((r) => r.data),
+  changeExpense: (id: number, expenseId: number, body: Partial<ExpenseIn>) =>
+    api.patch<Expense>(`/trips/${id}/expenses/${expenseId}`, body).then((r) => r.data),
+  deleteExpense: (id: number, expenseId: number) => api.delete(`/trips/${id}/expenses/${expenseId}`).then(() => undefined),
+  /** The day's plan as things to pay for, not noted yet */
+  expenseSuggestions: (id: number, day: string) =>
+    api.get<ExpenseSuggestion[]>(`/trips/${id}/expenses/suggestions`, { params: { day } }).then((r) => r.data),
   /** Running late: what pushing the rest of the day back would do (preview), or do it */
   late: (tripId: number, dayId: number, now: string, minutes: number) =>
     api.post<LatePlan>(`/trips/${tripId}/days/${dayId}/late`, { now, minutes, apply: false }).then((r) => r.data),

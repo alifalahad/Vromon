@@ -25,11 +25,16 @@ jest.mock('@gorhom/bottom-sheet', () => {
       return React.createElement(React.Fragment, null, this.props.children, Footer ? React.createElement(Footer, {}) : null);
     }
   }
-  // Like the real sheet, dismissing a modal calls its onDismiss
+  // Like the real sheet, dismissing a modal calls its onDismiss; and it draws its footer too ("What did you
+  // spend?" keeps Save there: UI refresh step 19)
   class BottomSheetModal extends mock.BottomSheetModal {
     dismiss() {
       super.dismiss();
       this.props.onDismiss?.();
+    }
+    render() {
+      const Footer = this.props.footerComponent;
+      return React.createElement(React.Fragment, null, super.render(), Footer ? React.createElement(Footer, {}) : null);
     }
   }
   return { __esModule: true, ...mock, default: BottomSheet, BottomSheetModal, BottomSheetFooter: ({ children }) => children };

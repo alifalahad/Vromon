@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import React from 'react';
 
 import BudgetScreen from '../../app/trip/budget/[id]';
+import { addDays, localToday } from '../features/trips/dates';
 import { daySummaryText } from '../features/trips/plan/daySummary';
 import i18n from '../i18n';
 import { tripsApi } from '../services/api';
@@ -10,6 +11,7 @@ import type { BudgetBreakdown, Trip } from '../types';
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: '5' }),
+  useRouter: () => ({ push: jest.fn() }),
   Stack: { Screen: () => null },
 }));
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
@@ -21,7 +23,17 @@ const mockMe = { data: { id: 'me' } };
 jest.mock('../features/account/useMe', () => ({ ME_QUERY_KEY: ['me'], useMe: () => mockMe }));
 jest.mock('../services/api', () => ({
   ApiError: class ApiError extends Error {},
-  tripsApi: { get: jest.fn(), budget: jest.fn(), saveBudget: jest.fn(), aiBudget: jest.fn(), update: jest.fn(), notNowStaySuggestion: jest.fn(), dismissStaySuggestion: jest.fn() },
+  tripsApi: {
+    get: jest.fn(),
+    budget: jest.fn(),
+    saveBudget: jest.fn(),
+    aiBudget: jest.fn(),
+    update: jest.fn(),
+    notNowStaySuggestion: jest.fn(),
+    dismissStaySuggestion: jest.fn(),
+    expenses: jest.fn(),
+    expenseSuggestions: jest.fn(),
+  },
 }));
 
 const api = tripsApi as unknown as Record<string, jest.Mock>;
@@ -37,7 +49,16 @@ beforeEach(() => {
   mockMe.data = { id: 'me' };
 });
 
-const TRIP = { id: 5, user_id: 'me', num_days: 3, num_travelers: 2, destination: "Cox's Bazar" } as Trip;
+// A month ahead: Budget before the trip (on it and after it, see tripSpent.test.tsx)
+const TRIP = {
+  id: 5,
+  user_id: 'me',
+  num_days: 3,
+  num_travelers: 2,
+  destination: "Cox's Bazar",
+  start_date: addDays(localToday(), 30),
+  end_date: addDays(localToday(), 32),
+} as Trip;
 
 // A better hotel in the same town for the whole stay (the stay advisor, trip upgrades step 4)
 const ADVICE = {

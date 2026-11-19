@@ -115,13 +115,14 @@ def day_legs(day: "Itinerary", hotel, travellers: int) -> list[dict]:
     acts = _activities(day)
     start, end = start_of(hotel, day.day_number), end_of(hotel, day.day_number)
     legs = []
+    # `to_item`: the stop a leg goes to; `back`: the way back to where the traveller sleeps (step 19 names them)
     if start is not None and point_of(start) is not None and acts:
-        legs.append(_leg(start, acts[0].place, None, travellers))
+        legs.append({**_leg(start, acts[0].place, None, travellers), "to_item": acts[0].id})
     for a, b in zip(acts, acts[1:]):
-        legs.append({**_leg(a.place, b.place, a.travel_mode, travellers), "item_id": a.id})
+        legs.append({**_leg(a.place, b.place, a.travel_mode, travellers), "item_id": a.id, "to_item": b.id})
     if end is not None and point_of(end) is not None and acts:
         _item, last = last_point(day)
-        legs.append(_leg(last or acts[-1].place, end, None, travellers))
+        legs.append({**_leg(last or acts[-1].place, end, None, travellers), "back": True})
     return legs
 
 

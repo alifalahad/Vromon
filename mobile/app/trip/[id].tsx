@@ -57,6 +57,7 @@ import {
   type Point,
 } from '../../src/features/trips/today/today';
 import { BudgetRow, DayLine, DayTabs, PhaseChip, RoomButton } from '../../src/features/trips/plan/PlanTop';
+import { spentOn } from '../../src/features/trips/budget/spent';
 import { ChangePlan } from '../../src/features/trips/plan/ChangePlan';
 import { AboutTrip } from '../../src/features/trips/plan/AboutTrip';
 import { DropStrip } from '../../src/features/trips/plan/DropStrip';
@@ -1192,7 +1193,9 @@ export default function TripScreen() {
           {/* After the trip (frame 33): "Your trip" with your rating, above the budget */}
           {recap ? <TripRecap tripId={tripId} numbers={recapNumbers(data, days)} /> : null}
 
-          {budget.data ? <BudgetRow data={budget.data} onPress={() => router.push({ pathname: '/trip/budget/[id]', params: { id: tripId } })} /> : null}
+          {budget.data ? (
+            <BudgetRow data={budget.data} phase={phase?.kind} onPress={() => router.push({ pathname: '/trip/budget/[id]', params: { id: tripId } })} />
+          ) : null}
 
           {/* "Put this trip on your map?" while it's unanswered, and with something to mark */}
           {after && mine && !notTaken && !data.visited_prompt && mapPlaces.length > 0 ? (
@@ -1289,6 +1292,8 @@ export default function TripScreen() {
                       places={counts.places}
                       meals={counts.meals}
                       money={byDay ? { amount: byDay.amount, estimate: byDay.estimate } : null}
+                      // A day that's over: what you noted that day (frame 33), when you noted anything
+                      spent={budget.data && day.day_date && day.day_date < today ? spentOn(budget.data, day.day_date) : null}
                       travellers={data.num_travelers}
                       // After the trip the road is in "Your trip" (frame 33: the day's places and meals, and its money)
                       roadMinutes={after ? 0 : day.total_travel_time}

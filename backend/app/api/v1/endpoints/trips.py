@@ -25,8 +25,9 @@ from app.core.auth import get_current_user
 from app.db import get_db
 from app.models.models import (
     Destination, Photo, User,
-    Trip, TripPreference, TripConstraint,
+    Trip, TripPreference, TripConstraint, TripExpense,
     Itinerary, ItineraryItem, Feedback, Place, Restaurant, Hotel,
+    unlink_expenses,
 )
 from app.schemas.schemas import (
     TripCreate, TripUpdate, TripCopyIn, TripOut, TripSummaryOut,
@@ -42,6 +43,7 @@ from app.services.trip_stops import initial_stops, mark_trip_visited, nearest_ci
 from app.services import meals as meals_service
 from app.services import place_search
 from app.services import reviews as reviews_service
+from app.services import expenses as expenses_service
 from app.services.stats.trips import viewer_today
 from app.services import stay_advisor
 from app.services import stays as stays_service
@@ -1272,7 +1274,8 @@ def adapt_trip(trip_id: int, payload: AdaptRequest, db: Session = Depends(get_db
 # ---------------------------------------------------------------------------
 
 @router.get("/{trip_id}/budget")
-def budget_breakdown(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def budget_breakdown(trip_id: int, today: Optional[date] = None, db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)):
     """
     Cost breakdown computed from the saved itinerary and seed price data.
 
@@ -1289,10 +1292,23 @@ def budget_breakdown(trip_id: int, db: Session = Depends(get_db), user: User = D
     tickets, local travel), `total` with its range `low`–`high`, `left`, `status`
     (ok / close / over), `by_day` and `saves` (see services/budget). `estimated_total`
     is that total; `known_total` stays the activities, meals and hotel from data.
+
+    What you spent (docs/ui-refresh step 19), for the owner only: `spent` (total, by_part, by_day,
+    today, count), `to_come` and `projected` (see services/expenses); all null with no notes, and for
+    a friend. `today` is the phone's local date.
     """
     trip = _load_trip(db, trip_id, user, friends_may_read=True)
-    out = _budget(db, trip, user, advice=True)
+    out = _with_spent(db, trip, user, _budget(db, trip, user, advice=True), today)
     db.commit()  # the stay advisor keeps what it worked out
+    return out
+
+
+def _with_spent(db: Session, trip: Trip, user: User, out: dict, today: Optional[date]) -> dict:
+    """The owner's notes on top of the budget (step 19); nothing of them for anyone else."""
+    if trip.user_id == user.id:
+        out.update(expenses_service.summary(out, expenses_service.notes_of(db, trip), viewer_today(today)))
+    else:
+        out.update(spent=None, to_come=None, projected=None)
     return out
 
 
@@ -1337,10 +1353,101 @@ def apply_saving(trip_id: int, payload: SaveRequest, db: Session = Depends(get_d
     return {
         "message": message,
         "undo": undo,
-        "budget": _budget(db, trip, advice=True),
+        "budget": _with_spent(db, trip, user, _budget(db, trip, advice=True), None),
         "days": [_day_out(db, d) for d in days],
         "validation": constraint_validator.validate(trip, days).to_dict(),
     }
+
+
+# ---------------------------------------------------------------------------
+# What you spent (docs/ui-refresh step 19, D18): the owner's notes. Spending is
+# private: a friend who can read the trip gets 404 here.
+# ---------------------------------------------------------------------------
+
+ExpensePart = Literal["getting_there", "stay", "food", "tickets", "local", "shopping", "other"]
+ExpenseRide = Literal["to", "back", "move"]
+
+
+class ExpenseIn(BaseModel):
+    day: date
+    amount: float = Field(gt=0, description="For the whole group, in the trip's currency")
+    part: ExpensePart
+    note: str = Field("", max_length=expenses_service.NOTE_MAX)
+    item_id: Optional[int] = Field(None, description="The stop it pays for (or the stop a ride goes to)")
+    ride: Optional[ExpenseRide] = None
+
+
+class ExpenseChange(BaseModel):
+    day: Optional[date] = None
+    amount: Optional[float] = Field(None, gt=0)
+    part: Optional[ExpensePart] = None
+    note: Optional[str] = Field(None, max_length=expenses_service.NOTE_MAX)
+    item_id: Optional[int] = None
+    ride: Optional[ExpenseRide] = None
+
+
+def _expense(db: Session, trip: Trip, expense_id: int):
+    e = db.get(TripExpense, expense_id)
+    if e is None or e.trip_id != trip.id:
+        raise HTTPException(status_code=404, detail="Not found")
+    return e
+
+
+@router.get("/{trip_id}/expenses")
+def list_expenses(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """What you noted you spent on this trip, the newest day first."""
+    trip = _load_trip(db, trip_id, user)
+    return [expenses_service.out(e) for e in expenses_service.notes_of(db, trip)]
+
+
+@router.get("/{trip_id}/expenses/suggestions")
+def expense_suggestions(trip_id: int, day: date, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    The day's plan as things to pay for that have no note yet: each meal and paid stop (its price × the
+    travellers) and each ride (its fare × the vehicles needed, as the budget counts it), with what it is,
+    its part and the stop or ride it belongs to. Nothing whose price isn't known; none for a day off the plan.
+    """
+    trip = _load_trip(db, trip_id, user)
+    return expenses_service.suggestions(trip, _hotel(db, trip), day, expenses_service.notes_of(db, trip))
+
+
+@router.post("/{trip_id}/expenses", status_code=201)
+def add_expense(trip_id: int, payload: ExpenseIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Note what you spent: an amount for the whole group on a day from the day before the trip to the day after it."""
+    trip = _load_trip(db, trip_id, user)
+    try:
+        e = expenses_service.add(db, trip, user, payload.day, payload.amount, payload.part, payload.note,
+                                 payload.item_id, payload.ride)
+    except expenses_service.ExpenseError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status, detail=exc.message)
+    db.commit()
+    return expenses_service.out(e)
+
+
+@router.patch("/{trip_id}/expenses/{expense_id}")
+def change_expense(trip_id: int, expense_id: int, payload: ExpenseChange, db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
+    """Change a note: its day, amount, part, note, or what it pays for (`item_id` and `ride`; null for nothing)."""
+    trip = _load_trip(db, trip_id, user)
+    e = _expense(db, trip, expense_id)
+    fields = {k: getattr(payload, k) for k in payload.model_fields_set}
+    if any(fields.get(k, True) is None for k in ("day", "amount", "part", "note")):
+        raise HTTPException(status_code=422, detail="The day, amount, part and note can't be empty")
+    try:
+        expenses_service.change(db, trip, e, fields)
+    except expenses_service.ExpenseError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status, detail=exc.message)
+    db.commit()
+    return expenses_service.out(e)
+
+
+@router.delete("/{trip_id}/expenses/{expense_id}", status_code=204)
+def delete_expense(trip_id: int, expense_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    trip = _load_trip(db, trip_id, user)
+    db.delete(_expense(db, trip, expense_id))
+    db.commit()
 
 
 @router.get("/{trip_id}/stays")
@@ -1921,6 +2028,8 @@ def _clear_itinerary(db: Session, trip: Trip) -> bool:
             db.expunge(item)
         db.expunge(day)
     day_ids = select(Itinerary.id).where(Itinerary.trip_id == trip.id)
+    # What you spent keeps its notes; the stops they paid for go (a bulk delete skips the ORM's own unlinking)
+    unlink_expenses(db.connection(), select(ItineraryItem.id).where(ItineraryItem.itinerary_id.in_(day_ids)))
     db.query(ItineraryItem).filter(ItineraryItem.itinerary_id.in_(day_ids)).delete(synchronize_session=False)
     removed = db.query(Itinerary).filter(Itinerary.trip_id == trip.id).delete(synchronize_session=False)
     db.expire(trip, ["itinerary_days"])

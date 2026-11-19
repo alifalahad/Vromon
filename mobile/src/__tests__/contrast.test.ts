@@ -282,6 +282,33 @@ describe.each([
     expect(contrast(colors.success, colors.surface)).toBeGreaterThanOrEqual(AA);
   });
 
+  it('What you spent (UI refresh step 19): the parts on their tracks, the chosen part, the plan mark, what no plan has', () => {
+    const parts = [
+      [colors.partGettingThere, colors.partGettingThereTrack],
+      [colors.partStay, colors.partStayTrack],
+      [colors.partFood, colors.partFoodTrack],
+      [colors.partTickets, colors.partTicketsTrack],
+      [colors.partLocal, colors.partLocalTrack],
+    ];
+    for (const [fill, track] of parts) {
+      // Each track shows on the card; in dark each bar stands 3:1 on its track (light: the frames' own steps, with
+      // the part's name and amount beside every bar)
+      expect(contrast(track, colors.surface)).toBeGreaterThanOrEqual(1.15);
+      if (colors === darkColors) expect(contrast(fill, track)).toBeGreaterThanOrEqual(3);
+      else expect(contrast(fill, track)).toBeGreaterThanOrEqual(1.8);
+    }
+    // "What for": the chosen part is the text colour as its ground, with the card colour as its words
+    expect(contrast(colors.surface, colors.textPrimary)).toBeGreaterThanOrEqual(AA);
+    // By day: the spent bar and the plan's mark on the card (3:1, drawings)
+    expect(contrast(colors.accent, colors.surface)).toBeGreaterThanOrEqual(3);
+    expect(contrast(colors.textPrimary, colors.surface)).toBeGreaterThanOrEqual(3);
+    // A blue meter's track shows on the card, and the bar on it (the budget row, "Today")
+    expect(contrast(colors.accentTrack, colors.surface)).toBeGreaterThanOrEqual(1.15);
+    expect(contrast(colors.accent, colors.accentTrack)).toBeGreaterThanOrEqual(colors === darkColors ? 1.5 : 3);
+    // "Not in the plan": its grey swatch, with the words beside it
+    expect(contrast(colors.partUnplanned, colors.surface)).toBeGreaterThanOrEqual(2.9);
+  });
+
   it("a switch's track when off shows on a card and on the ground (3:1)", () => {
     expect(contrast(colors.switchOff, colors.surface)).toBeGreaterThanOrEqual(3);
     expect(contrast(colors.switchOff, colors.bg)).toBeGreaterThanOrEqual(3);

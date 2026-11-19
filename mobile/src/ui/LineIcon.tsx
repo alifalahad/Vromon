@@ -32,7 +32,9 @@ export type LineIconName =
   | 'arrowUp'
   | 'chevronLeft'
   | 'arrowRight'
-  | 'invite';
+  | 'invite'
+  | 'calendar'
+  | 'wallet';
 
 /** Each icon's shapes and the stroke width its frame uses; `color` for the few filled parts */
 const ICONS: Record<LineIconName, { width: number; draw: React.ReactNode | ((color: string) => React.ReactNode) }> = {
@@ -162,6 +164,26 @@ const ICONS: Record<LineIconName, { width: number; draw: React.ReactNode | ((col
       <>
         <Circle cx={10} cy={8.5} r={3.2} />
         <Path d="M4 19c.6-3 3-4.7 6-4.7s5.4 1.7 6 4.7M19 7v6M16 10h6" />
+      </>
+    ),
+  },
+  // A day (frame 39, the day a cost was spent)
+  calendar: {
+    width: 1.9,
+    draw: (
+      <>
+        <Rect x={4} y={5.5} width={16} height={14.5} rx={2.5} />
+        <Path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" />
+      </>
+    ),
+  },
+  // The budget (frames 31–33: the budget row, "Spent today")
+  wallet: {
+    width: 1.9,
+    draw: (
+      <>
+        <Path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3M4 7.5V17a2 2 0 0 0 2 2h14V8H6.5A2.5 2.5 0 0 1 4 7.5Z" />
+        <Circle cx={16.5} cy={13.5} r={1.2} />
       </>
     ),
   },

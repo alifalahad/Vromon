@@ -3,7 +3,7 @@ from app.models.models import (
     User, UserSettings,
     FriendRequest, Friendship, Block, Device,
     Country, Region, City, Visit, Photo,
-    Trip, TripStop, TripStay, StaySuggestion, TripReview, ReviewItem, TripPreference, TripConstraint,
+    Trip, TripStop, TripStay, StaySuggestion, TripReview, ReviewItem, TripExpense, TripPreference, TripConstraint,
     Itinerary, ItineraryItem, Feedback,
     SourceDocument, DocumentChunk,
 )
@@ -21,7 +21,7 @@ __all__ = [
     "User", "UserSettings",
     "FriendRequest", "Friendship", "Block", "Device",
     "Country", "Region", "City", "Visit", "Photo",
-    "Trip", "TripStop", "TripStay", "StaySuggestion", "TripReview", "ReviewItem", "TripPreference", "TripConstraint",
+    "Trip", "TripStop", "TripStay", "StaySuggestion", "TripReview", "ReviewItem", "TripExpense", "TripPreference", "TripConstraint",
     "Itinerary", "ItineraryItem", "Feedback",
     "SourceDocument", "DocumentChunk",
     "DataSource", "IngestionJob", "IngestionJobError", "SourceArtifact", "StagingRecord", "SourceClaim",

@@ -72,17 +72,21 @@ name: 06 Open a trip, build its plan, look at a stop and the menu
     point: "50%,8%"
 - assertNotVisible:
     id: stop-sheet
-# The ⋯ menu opens the budget
+# The ⋯ menu opens the budget: the plan against the budget, or (a trip under way with notes: UI refresh step 19)
+# what's spent so far, and the stay as a part either way
 - tapOn:
     id: trip-menu
 - tapOn:
     id: action-budget
 - extendedWaitUntil:
     visible:
-      id: budget-total
+      id: "budget-total|spent-hero"
     timeout: 20000
-- assertVisible:
-    id: budget-part-stay
+- scrollUntilVisible:
+    element:
+      id: "budget-part-stay|spent-part-stay"
+    direction: DOWN
+    timeout: 20000
 - back
 # Back on the trip (scrolled down, so its menu rather than its title)
 - assertVisible:

@@ -27,6 +27,7 @@ from app.services.photos import StorageError, delete_photos, photos_out
 from app.services.photos.storage import PhotoStore, optional_photo_store
 from app.schemas.schemas import TripStatsOut
 from app.services import avatars, live
+from app.services import expenses as expenses_service
 from app.services import reviews as reviews_service
 from app.services.chat import delete_chat_data, export_chats, partners
 from app.services.rooms import delete_user_rooms
@@ -216,6 +217,8 @@ def export_my_data(
         "chats": export_chats(db, user.id),
         # "How was your trip?" (trip upgrades step 7): your stars, comments and things marked good or bad
         "trip_reviews": reviews_service.export(db, user),
+        # What you noted you spent on your trips (docs/ui-refresh step 19)
+        "trip_expenses": expenses_service.export(db, user),
         # Stops from outside Vromon's list (trip upgrades step 6): the places you added or pinned
         "private_places": [
             {"id": p.id, "name": p.name, "latitude": p.latitude, "longitude": p.longitude, "source": p.source,
@@ -246,8 +249,8 @@ def delete_me(
     store: PhotoStore | None = Depends(optional_photo_store),
 ):
     """
-    Permanently delete the account: photos (files first), trips (with itineraries
-    and feedback), visits, chat messages and memberships, friendships, friend
+    Permanently delete the account: photos (files first), trips (with itineraries, feedback,
+    reviews and what was noted as spent), visits, chat messages and memberships, friendships, friend
     requests, blocks, push tokens, settings, the profile, and the Supabase sign-in identity.
     """
     removes_identity = user.auth_subject != DEV_BYPASS_SUBJECT
@@ -265,8 +268,9 @@ def delete_me(
     chat_partners = partners(db, user.id)
     # Trip rooms first: their own trips' rooms, and their places in friends' rooms (step 7)
     delete_user_rooms(db, user.id)
-    # Their trip reviews, in friends' trip rooms too (trip upgrades step 7)
+    # Their trip reviews, in friends' trip rooms too (trip upgrades step 7), and what they noted they spent (step 19)
     reviews_service.delete_for(db, user)
+    expenses_service.delete_for(db, user)
     for trip in db.scalars(select(Trip).where(Trip.user_id == user.id)).all():
         db.delete(trip)  # ORM cascades to preferences, constraints, itinerary, feedback
     # Now, before the account: nothing tells the ORM that a trip goes before its user, and

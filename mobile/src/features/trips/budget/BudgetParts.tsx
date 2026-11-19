@@ -1,7 +1,8 @@
 /**
  * Budget's parts (docs/ui-refresh step 18, frame 37):
  *   - the hero: what the plan costs (≈ when a part is a guess), of your budget with "Change", the meter, one
- *     status line with an icon and words, the likely range, "Each" and "Of it, estimated";
+ *     status line with an icon and words, the likely range, "Each" and "Of it, estimated" (on the trip with
+ *     nothing noted, "Add what you spent" too: step 19);
  *   - "Where it goes": one bar in pieces with each part's share written inside when it fits, then the five
  *     parts as rows that are also its key; a part that isn't known has no colour and no piece, and says why;
  *   - "By day": one blue bar a day with the amount at its end;
@@ -19,9 +20,20 @@ import { makeStyles, useTheme } from '../../../ui/theme';
 import { dayParts } from '../plan/timeline';
 import { usePlanFormat } from '../plan/usePlanFormat';
 import { anyEstimate, eachAmount, estimatedAmount, onPartColor, PART_ORDER, partColor, partDetail, pieces, statusKind, stayRows } from './budgetView';
+import { HeroAddButton } from './SpentParts';
 
-/** The total against the budget, in the hero colour. */
-export function BudgetHero({ b, onChange }: { b: BudgetBreakdown; /** Your own trip: "Change" */ onChange?: () => void }) {
+/** The total against the budget, in the hero colour. On the trip with nothing noted yet, "Add what you spent" under it (step 19). */
+export function BudgetHero({
+  b,
+  onChange,
+  onAdd,
+}: {
+  b: BudgetBreakdown;
+  /** Your own trip: "Change" */
+  onChange?: () => void;
+  /** Your own trip under way, nothing noted: "Add what you spent" */
+  onAdd?: () => void;
+}) {
   const styles = useStyles();
   const { colors } = useTheme();
   const { t, i18n } = useTranslation();
@@ -84,6 +96,7 @@ export function BudgetHero({ b, onChange }: { b: BudgetBreakdown; /** Your own t
           </View>
         ) : null}
       </View>
+      {onAdd ? <HeroAddButton onPress={onAdd} /> : null}
     </View>
   );
 }

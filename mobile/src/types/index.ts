@@ -931,6 +931,69 @@ export interface BudgetBreakdown {
   parts: BudgetPart[];
   by_day: { day_number: number; date: string | null; amount: number; food: number; tickets: number; local: number; estimate: boolean }[];
   saves: BudgetSave[];
+  /** What you spent (docs/ui-refresh step 19): your own trip only; null without notes (and for a friend's trip) */
+  spent?: BudgetSpent | null;
+  /** By the plan: getting there and the stay beyond what's noted, the days after today and what's left of today's */
+  to_come?: number | null;
+  /** spent + to_come */
+  projected?: number | null;
+}
+
+/** The parts a note can be for: Budget's five, then what no plan has */
+export type ExpensePart = BudgetPartKey | 'shopping' | 'other';
+
+export interface BudgetSpent {
+  total: number;
+  by_part: Record<ExpensePart, number>;
+  /** Each day's notes, without getting there and the stay (the trip's costs, not a day's) */
+  by_day: { date: string; amount: number }[];
+  /** The phone's today, as `by_day` counts it */
+  today: number;
+  count: number;
+}
+
+/** One amount you noted (docs/ui-refresh step 19), for the whole group */
+export interface Expense {
+  id: number;
+  day: string;
+  amount: number;
+  part: ExpensePart;
+  note: string;
+  /** The stop it pays for, or the stop a ride went to */
+  item_id: number | null;
+  ride: ExpenseRide | null;
+  /** When it was noted (UTC, with its offset) */
+  created_at: string | null;
+}
+
+export type ExpenseRide = 'to' | 'back' | 'move';
+
+export interface ExpenseIn {
+  day: string;
+  amount: number;
+  part: ExpensePart;
+  note: string;
+  item_id?: number | null;
+  ride?: ExpenseRide | null;
+}
+
+/** Something of the day's plan to pay for, not noted yet */
+export interface ExpenseSuggestion {
+  key: string;
+  kind: 'meal' | 'stop' | 'ride';
+  item_id: number | null;
+  ride: ExpenseRide | null;
+  part: 'food' | 'tickets' | 'local';
+  amount: number;
+  estimate: boolean;
+  /** The plan's title ("Lunch at …") for a meal or a stop */
+  title: string | null;
+  /** The restaurant, the place, or where a ride goes */
+  place: string | null;
+  mode: TravelMode | null;
+  meal_source: 'restaurant' | 'own' | null;
+  /** Travellers a price is for */
+  count: number | null;
 }
 
 export type BudgetPartKey = 'getting_there' | 'stay' | 'food' | 'tickets' | 'local';

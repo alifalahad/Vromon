@@ -1,0 +1,136 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: 17 What you spent - note a cost from Budget, see the total change, delete it
+---
+# UI refresh step 19: a Kuakata trip of the signed-in account that's under way (made through the API, with a plan)
+- runScript:
+    file: scripts/spent-trip.js
+    env:
+      API_URL: ${API_URL}
+      TOKEN: ${TOKEN}
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
+- tapOn:
+    id: tab-trips
+# The trip was made through the API: pull to refresh (a list fetched in the last 5 minutes is used as it is)
+- extendedWaitUntil:
+    visible:
+      id: trips-list
+    timeout: 20000
+- swipe:
+    start: "50%,45%"
+    end: "50%,85%"
+    duration: 500
+- scrollUntilVisible:
+    element:
+      id: "trip-${output.spentTripId}"
+    direction: DOWN
+    timeout: 60000
+- tapOn:
+    id: "trip-${output.spentTripId}"
+# A trip that's on today opens Today first: on to the full plan, then its ⋯ menu opens Budget
+- extendedWaitUntil:
+    visible:
+      id: "today-full-plan|trip-title"
+    timeout: 30000
+- runFlow:
+    when:
+      visible:
+        id: today-full-plan
+    commands:
+      - tapOn:
+          id: today-full-plan
+- extendedWaitUntil:
+    visible:
+      id: trip-title
+    timeout: 30000
+- tapOn:
+    id: trip-menu
+- tapOn:
+    id: action-budget
+
+# Nothing noted yet: the plan's numbers, with "Add what you spent" on the hero
+- extendedWaitUntil:
+    visible:
+      id: budget-total
+    timeout: 30000
+- assertNotVisible:
+    id: spent-hero
+- tapOn:
+    id: spent-add
+- extendedWaitUntil:
+    visible:
+      id: spent-amount
+    timeout: 15000
+- tapOn:
+    id: spent-amount
+- inputText: "1250"
+- hideKeyboard
+- tapOn:
+    id: spent-for-shopping
+- tapOn:
+    id: spent-save
+
+# Noted: Budget shows what's spent so far
+- extendedWaitUntil:
+    visible:
+      id: spent-hero
+    timeout: 20000
+- assertVisible:
+    id: spent-total
+    text: "৳1,250"
+
+# Everything you noted: open the note and delete it
+- scrollUntilVisible:
+    element:
+      id: spent-all
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: spent-all
+- extendedWaitUntil:
+    visible:
+      id: "spent-note-\\d+"
+    timeout: 20000
+- tapOn:
+    id: "spent-note-\\d+"
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: spent-delete
+    timeout: 15000
+- tapOn:
+    id: spent-delete
+- extendedWaitUntil:
+    visible:
+      id: spent-snackbar
+    timeout: 15000
+- back
+# Nothing noted again: the plan's numbers, never "৳0 spent" (up to the top, in case the screen kept its place)
+- scrollUntilVisible:
+    element:
+      id: budget-total
+    direction: UP
+    timeout: 30000
+- assertNotVisible:
+    id: spent-hero
+
+# Leave nothing behind: delete the trip
+- back
+- extendedWaitUntil:
+    visible:
+      id: trip-title
+    timeout: 20000
+- tapOn:
+    id: trip-menu
+- tapOn:
+    id: action-delete
+- tapOn: "(?i)delete"
+- extendedWaitUntil:
+    visible:
+      id: tab-trips
+    timeout: 20000

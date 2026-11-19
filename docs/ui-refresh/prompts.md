@@ -30,7 +30,7 @@ The owner's copy for the account used from step 13 on (2026-11-18). Checked agai
 | 16 | (asked 2026-11-14) | After the trip: the trip as it was; "This trip didn't happen" | ✅ done 2026-11-19 | [step-16-report.md](reports/step-16-report.md) |
 | 17 | (asked 2026-11-14) | Conditions, before, on and after the trip | ✅ done 2026-11-19 | [step-17-report.md](reports/step-17-report.md) |
 | 18 | (asked 2026-11-14) | Budget, redesigned | ✅ done 2026-11-19 | [step-18-report.md](reports/step-18-report.md) |
-| 19 | (asked 2026-11-14) | What you really spent: noting it, Budget on and after the trip | not started | |
+| 19 | (asked 2026-11-14) | What you really spent: noting it, Budget on and after the trip | ✅ done 2026-11-19 | [step-19-report.md](reports/step-19-report.md) |
 | 20 | (whole app) | Polish pass, full checks, the friends' APK | not started | |
 
 Steps 1–9 have the same numbers as your nine points.
