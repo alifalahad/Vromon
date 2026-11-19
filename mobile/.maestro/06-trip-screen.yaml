@@ -64,6 +64,10 @@ name: 06 Open a trip, build its plan, look at a stop and the menu
     index: 0
 - assertVisible:
     id: stop-sheet
+# The backdrop closes it only once the sheet has slid in: on a slow phone a tap a second after it showed
+# was ignored (2026-11-19)
+- waitForAnimationToEnd:
+    timeout: 5000
 - tapOn:
     point: "50%,8%"
 - assertNotVisible:

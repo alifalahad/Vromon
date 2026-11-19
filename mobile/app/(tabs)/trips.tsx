@@ -113,7 +113,8 @@ export default function TripsScreen() {
               today={today}
               onPress={() => open(item)}
               onMap={past && !theirs && visits.data ? onMap(item, visited) : undefined}
-              onMark={past && !theirs && visits.data && (item.stops?.length ?? 0) > 0 ? () => marking.mark(item) : undefined}
+              // While the offer is unanswered (here or on the trip itself: step 16), and not for a trip that didn't happen
+              onMark={past && !theirs && visits.data && (item.stops?.length ?? 0) > 0 && !item.visited_prompt && !item.not_taken ? () => marking.mark(item) : undefined}
               marking={marking.busyId === item.id}
             />
           );

@@ -107,7 +107,10 @@ def mark_trip_visited(db: Session, trip: Trip) -> int:
     """
     Mark each stop's city and country visited. Never downgrades: "lived" and
     "visited" stay, "want to visit" becomes "visited". Missing visit dates are
-    filled from the stop (or the trip). Returns how many places changed.
+    filled from the stop (or the trip). Returns how many places are new on the
+    map (marked, or "want to visit" now visited): what the app's offer named
+    ("Marks Bandarban as visited", docs/ui-refresh step 16), not the places that
+    only had their dates filled in.
     """
     existing = {(v.place_type, v.place_code): v for v in db.scalars(select(Visit).where(Visit.user_id == trip.user_id))}
     now = datetime.utcnow()
@@ -129,11 +132,11 @@ def mark_trip_visited(db: Session, trip: Trip) -> int:
         touched = False
         if visit.status == "want":
             visit.status, touched = "visited", True
+            changed += 1
         if visit.first_visited_on is None:
             visit.first_visited_on, touched = first, True
         if visit.last_visited_on is None or visit.last_visited_on < last:
             visit.last_visited_on, touched = last, True
         if touched:
             visit.updated_at = now
-            changed += 1
     return changed

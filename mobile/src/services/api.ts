@@ -22,6 +22,7 @@ import type {
   Compare,
   ConditionWarning,
   Conversation,
+  CopyDates,
   DayRoute,
   Destination,
   EditResult,
@@ -205,9 +206,15 @@ export const tripsApi = {
   update: (id: number, payload: Partial<TripCreate>) =>
     api.patch<Trip>(`/trips/${id}`, payload).then((r) => r.data),
   delete: (id: number) => api.delete(`/trips/${id}`).then((r) => r.data),
-  duplicate: (id: number) => api.post<Trip>(`/trips/${id}/duplicate`).then((r) => r.data),
-  /** "Copy to my trips": any trip you can see becomes a draft of your own (not its plan) */
-  copy: (id: number) => api.post<Trip>(`/trips/${id}/copy`).then((r) => r.data),
+  /** A copy of your trip; with dates, for those days ("Plan it again", docs/ui-refresh step 16) */
+  duplicate: (id: number, dates?: CopyDates, today?: string) =>
+    api.post<Trip>(`/trips/${id}/duplicate`, dates ?? null, { params: today ? { today } : undefined }).then((r) => r.data),
+  /** "Copy to my trips": any trip you can see becomes a draft of your own (not its plan); with dates, for those days */
+  copy: (id: number, dates?: CopyDates, today?: string) =>
+    api.post<Trip>(`/trips/${id}/copy`, dates ?? null, { params: today ? { today } : undefined }).then((r) => r.data),
+  /** "This trip didn't happen" (true) or "It did happen" (false), once it's over on the phone's `today` (step 16) */
+  setNotTaken: (id: number, notTaken: boolean, today: string) =>
+    api.patch<Trip>(`/trips/${id}`, { not_taken: notTaken }, { params: { today } }).then((r) => r.data),
   setStops: (id: number, stops: TripStopInput[]) => api.put<Trip>(`/trips/${id}/stops`, { stops }).then((r) => r.data),
   markVisited: (id: number, mark: boolean) =>
     api.post<{ visited_prompt: string; places_marked: number }>(`/trips/${id}/mark-visited`, { mark }).then((r) => r.data),

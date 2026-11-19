@@ -3,7 +3,8 @@
  * old "Trip details": one list, each row with what's set now, opening the screen or sheet that changes
  * it: your must-dos, where you stay, meals, planning together, the route, photos (shown in place) and
  * your preferences. A friend's trip shows the same rows to read, without the ones only the owner sees.
- * The plan feedback form stays at the end, and "How was your trip?" where it was (until step 16).
+ * After the trip (step 16) they're read-only too, but for its photos. The plan feedback form stays at the
+ * end, and "How was your trip?" while the trip is on (after it, "Your trip" at the top has it).
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -45,6 +46,7 @@ export function AboutTrip({
   mine,
   hasPlan,
   went = mine,
+  locked = false,
   stays,
   room,
   onStays,
@@ -55,8 +57,10 @@ export function AboutTrip({
   ownerId: string | undefined;
   mine: boolean;
   hasPlan: boolean;
-  /** The owner or a member of the trip's room: they rate it (trip upgrades step 7, D8) */
+  /** The owner or a member of the trip's room, while the trip is on: they rate it here (trip upgrades step 7, D8) */
   went?: boolean;
+  /** After the trip: kept as it was, nothing opens to change it (docs/ui-refresh step 16, D21) */
+  locked?: boolean;
   /** Where you stay (only the owner has it) */
   stays?: Stays | null;
   /** The trip's room, once someone was invited */
@@ -94,6 +98,7 @@ export function AboutTrip({
     skip.length ? t('mustDos.skipList', { list: skip.map(placeName).join(', ') }) : null,
   ].filter(Boolean);
   const stayLine = mine && stays ? staysText(stays, t, f.n) : null;
+  const edits = mine && !locked;
   const photoCount = photos.data?.length ?? 0;
   const route = trip.stops?.length ? trip.stops.map((s) => s.city_name ?? s.country_name).join(' → ') : t('trips.noStops');
   const prefs = pref
@@ -113,15 +118,15 @@ export function AboutTrip({
       key: 'must',
       title: t('mustDos.section'),
       value: mustDos.length ? mustDos.join(' · ') : t('about.noneYet'),
-      onPress: mine ? () => router.push({ pathname: '/trip/must-dos/[id]', params: { id: trip.id } }) : undefined,
-      testID: mine ? 'edit-must-dos' : 'trip-must-dos',
+      onPress: edits ? () => router.push({ pathname: '/trip/must-dos/[id]', params: { id: trip.id } }) : undefined,
+      testID: edits ? 'edit-must-dos' : 'trip-must-dos',
     });
   }
-  if (stayLine) rows.push({ key: 'stay', title: t('about.stay'), value: stayLine, onPress: onStays, testID: 'about-stays' });
+  if (stayLine) rows.push({ key: 'stay', title: t('about.stay'), value: stayLine, onPress: edits ? onStays : undefined, testID: 'about-stays' });
   if (pref && (mine || pref.meals)) {
-    rows.push({ key: 'meals', title: t('meals.title'), value: planSummary(pref.meals, t), onPress: mine ? onMeals : undefined, testID: 'about-meals' });
+    rows.push({ key: 'meals', title: t('meals.title'), value: planSummary(pref.meals, t), onPress: edits ? onMeals : undefined, testID: 'about-meals' });
   }
-  if (mine) {
+  if (edits) {
     const people = room?.members?.length ?? 0;
     rows.push({
       key: 'together',
@@ -135,8 +140,8 @@ export function AboutTrip({
     key: 'route',
     title: t('trips.route'),
     value: route,
-    onPress: mine ? () => router.push({ pathname: '/trip/route/[id]', params: { id: trip.id } }) : undefined,
-    testID: mine ? 'edit-route' : 'trip-route',
+    onPress: edits ? () => router.push({ pathname: '/trip/route/[id]', params: { id: trip.id } }) : undefined,
+    testID: edits ? 'edit-route' : 'trip-route',
   });
   rows.push({
     key: 'photos',
@@ -171,7 +176,7 @@ export function AboutTrip({
 
       {mine && hasPlan && <FeedbackForm tripId={trip.id} />}
 
-      {/* "How was your trip?" from its first day (trip upgrades step 7) */}
+      {/* "How was your trip?" from its first day while it's on (trip upgrades step 7) */}
       {went && canRate(trip, localToday()) ? <TripReviewCard trip={trip} /> : null}
     </View>
   );

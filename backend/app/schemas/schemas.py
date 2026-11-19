@@ -416,6 +416,22 @@ class TripUpdate(BaseModel):
     total_budget: Optional[float] = Field(None, gt=0, le=100_000_000)   # by hand, or the AI estimate taken
     preference: Optional[TripPreferenceCreate] = None
     constraints: Optional[TripConstraintCreate] = None
+    # "This trip didn't happen" (true) or "It did happen" (false): the owner's, once the trip is over (step 16)
+    not_taken: Optional[bool] = None
+
+
+class TripCopyIn(BaseModel):
+    """"Plan it again" (docs/ui-refresh step 16): the copy's own dates. Without them a copy keeps the trip's."""
+    start_date: date
+    end_date: date
+
+    @model_validator(mode="after")
+    def valid_range(self):
+        if self.end_date < self.start_date:
+            raise ValueError("end_date must be on or after start_date")
+        if (self.end_date - self.start_date).days + 1 > MAX_TRIP_DAYS:
+            raise ValueError(f"trips can be at most {MAX_TRIP_DAYS} days long")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -639,6 +655,7 @@ class TripOut(BaseModel):
     user_id: Optional[uuid.UUID] = None
     stops: List[TripStopOut] = []
     visited_prompt: Optional[str] = None
+    not_taken: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
@@ -658,6 +675,7 @@ class TripSummaryOut(BaseModel):
     user_id: Optional[uuid.UUID] = None
     stops: List[TripStopOut] = []
     visited_prompt: Optional[str] = None
+    not_taken: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

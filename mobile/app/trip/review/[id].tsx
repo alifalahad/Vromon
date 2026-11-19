@@ -4,14 +4,15 @@
  * one again to clear it) with an optional comment. "Mark all good" / "Mark all bad" set every thing not rated
  * yet; then change the few that differ. Save sends only what changed, and the screen stays with "Saved" (going
  * back in the same moment the leave guard switched off crashed react-native-screens: "ScreenStackFragment added
- * into a non-stack container"). Leaving with unsaved changes asks first.
+ * into a non-stack container"). Leaving with unsaved changes asks first. Opened from a stop's "Rate" on a
+ * finished trip (docs/ui-refresh step 16), it starts at that stop, outlined.
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,7 +43,8 @@ const TARGET_ICON: Record<string, Icon> = {
 };
 
 export default function TripReviewScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `item`: a thing's key, to start at it ("Rate" on a finished trip's stop)
+  const { id, item } = useLocalSearchParams<{ id: string; item?: string }>();
   const tripId = Number(id);
   const styles = useStyles();
   const { colors } = useTheme();
@@ -68,10 +70,10 @@ export default function TripReviewScreen() {
     );
   }
   // Keyed: a fresh draft when the saved review reloads
-  return <Editor key={review.data.review?.updated_at ?? 'new'} trip={trip.data} data={review.data} saved={saved} onSaved={() => setSaved(true)} />;
+  return <Editor key={review.data.review?.updated_at ?? 'new'} trip={trip.data} data={review.data} saved={saved} onSaved={() => setSaved(true)} focus={item} />;
 }
 
-function Editor({ trip, data, saved, onSaved }: { trip: Trip; data: TripReviewResponse; saved: boolean; onSaved: () => void }) {
+function Editor({ trip, data, saved, onSaved, focus }: { trip: Trip; data: TripReviewResponse; saved: boolean; onSaved: () => void; focus?: string }) {
   const styles = useStyles();
   const theme = useTheme();
   const { colors } = theme;
@@ -87,6 +89,19 @@ function Editor({ trip, data, saved, onSaved }: { trip: Trip; data: TripReviewRe
   const [openComments, setOpenComments] = useState<Set<string>>(() => new Set(data.items.filter((i) => i.comment).map((i) => i.key)));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Starting at one thing: where its section and its row are, then one scroll there
+  const scroll = useRef<ScrollView>(null);
+  const focusAt = useRef<{ section?: number; row?: number }>({});
+  const scrolled = useRef(!focus);
+  const focusSection = focus ? sections(data.items).find((s) => s.items.some((i) => i.key === focus))?.key : undefined;
+  // (the section's and the row's layouts come in either order)
+  const toFocus = (part: { section?: number; row?: number }) => {
+    const at = { ...focusAt.current, ...part };
+    focusAt.current = at;
+    if (scrolled.current || at.section == null || at.row == null) return;
+    scrolled.current = true;
+    scroll.current?.scrollTo({ y: Math.max(0, at.section + at.row - 12), animated: false });
+  };
 
   const itemChanges = changes(data.items, draft);
   const ratingChanged = rating > 0 && rating !== (data.review?.rating ?? 0);
@@ -144,7 +159,7 @@ function Editor({ trip, data, saved, onSaved }: { trip: Trip; data: TripReviewRe
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
           <Text style={styles.title} accessibilityRole="header">
             {t('review.title')}
@@ -190,7 +205,11 @@ function Editor({ trip, data, saved, onSaved }: { trip: Trip; data: TripReviewRe
         {data.items.length ? <Text style={styles.hint}>{t('review.markAllHint')}</Text> : null}
 
         {sections(data.items).map((s) => (
-          <View key={s.key} style={styles.section}>
+          <View
+            key={s.key}
+            style={styles.section}
+            onLayout={s.key === focusSection ? (e) => toFocus({ section: e.nativeEvent.layout.y }) : undefined}
+          >
             <Text style={styles.sectionTitle} accessibilityRole="header">
               {sectionTitle(s.kind, s.day)}
             </Text>
@@ -200,7 +219,12 @@ function Editor({ trip, data, saved, onSaved }: { trip: Trip; data: TripReviewRe
               const icon = i.target_type === 'journey' ? (i.mode && MODE_ICON[i.mode]) || TARGET_ICON.journey : TARGET_ICON[i.target_type];
               const commentOpen = !!d.verdict && openComments.has(i.key);
               return (
-                <View key={i.key} style={styles.row} testID={`review-row-${i.key}`}>
+                <View
+                  key={i.key}
+                  style={[styles.row, i.key === focus && styles.rowFocus]}
+                  onLayout={i.key === focus ? (e) => toFocus({ row: e.nativeEvent.layout.y }) : undefined}
+                  testID={`review-row-${i.key}`}
+                >
                   <View style={styles.rowTop}>
                     <View style={styles.icon}>
                       <MaterialCommunityIcons name={icon} size={20} color={colors.textSecondary} />
@@ -317,6 +341,7 @@ const useStyles = makeStyles((t) => ({
   section: { gap: t.spacing.sm, marginTop: t.spacing.sm },
   sectionTitle: { ...t.type.headline, color: t.colors.textPrimary },
   row: { backgroundColor: t.colors.surface, borderRadius: 16, padding: t.spacing.md, gap: t.spacing.sm },
+  rowFocus: { borderWidth: 2, borderColor: t.colors.accent, padding: t.spacing.md - 2 },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md },
   icon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.surfaceInset },
   rowText: { flex: 1, gap: 2 },

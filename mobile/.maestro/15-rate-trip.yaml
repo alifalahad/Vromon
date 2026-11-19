@@ -87,16 +87,25 @@ name: 15 Rate a trip - one tap, then things one by one
       id: trip-title
     timeout: 30000
 
-# "How was your trip?" at the bottom of the plan: one tap
+# "How was your trip?" at the bottom of the plan: one tap. It's the last thing there, so flick to the end
+# first: scrollUntilVisible alone looks at the screen after each short swipe, and on a slow phone (6-8 s a
+# look, 2026-11-19) 30 s ran out halfway down a day of seven stops
 - swipe:
     start: "50%,56%"
     end: "50%,12%"
     duration: 600
+- repeat:
+    times: 6
+    commands:
+      - swipe:
+          start: "50%,80%"
+          end: "50%,25%"
+          duration: 300
 - scrollUntilVisible:
     element:
       id: trip-review-star-4
     direction: DOWN
-    timeout: 30000
+    timeout: 60000
 - tapOn:
     id: trip-review-star-4
 - extendedWaitUntil:
@@ -111,7 +120,7 @@ name: 15 Rate a trip - one tap, then things one by one
     element:
       id: trip-review-one-by-one
     direction: DOWN
-    timeout: 15000
+    timeout: 30000
 - tapOn:
     id: trip-review-one-by-one
 - extendedWaitUntil:
@@ -134,7 +143,7 @@ name: 15 Rate a trip - one tap, then things one by one
     element:
       id: trip-review-one-by-one
     direction: DOWN
-    timeout: 15000
+    timeout: 30000
 
 # Leave nothing behind: delete the trip
 - swipe:

@@ -1,6 +1,7 @@
 /**
  * A trip in the Trips tab's list (docs/ui-refresh step 9, frame 15): a date block, the name, the dates
- * and length. A trip without a plan says so; a finished one has "Mark visited" (or "On your map").
+ * and length. A trip without a plan says so; a finished one has "Mark visited" while that's unanswered
+ * (or "On your map"), and one that didn't happen says "Not taken" (step 16, D19).
  * `StopList` is the full route (trip details).
  */
 
@@ -48,6 +49,7 @@ export function TripRow({
   const stops = trip.stops ?? [];
   const name = trip.title || trip.destination;
   const status = !past && trip.status === 'draft' ? t('trips.row.notBuilt') : null;
+  const notTaken = past && !!trip.not_taken;
   const lengthText = t('trips.row.days', { count: days, n: d(days) });
   const start = parseDay(trip.start_date);
 
@@ -56,7 +58,7 @@ export function TripRow({
       style={styles.card}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={[name, `${range} · ${lengthText}`, status].filter(Boolean).join('. ')}
+      accessibilityLabel={[name, `${range} · ${lengthText}`, status, notTaken ? t('trips.row.notTaken') : null].filter(Boolean).join('. ')}
       testID={`trip-${trip.id}`}
     >
       <View style={[styles.date, past && styles.datePast]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -73,7 +75,12 @@ export function TripRow({
         </Text>
         <Text style={styles.range}>{`${range} · ${lengthText}`}</Text>
         {status ? <Text style={styles.status}>{status}</Text> : null}
-        {past && onMap ? (
+        {notTaken ? (
+          <View style={styles.onMap} testID={`not-taken-${trip.id}`}>
+            <MaterialCommunityIcons name="close" size={16} color={colors.textSecondary} />
+            <Text style={styles.notTakenText}>{t('trips.row.notTaken')}</Text>
+          </View>
+        ) : past && onMap ? (
           <View style={styles.onMap} testID={`on-map-${trip.id}`}>
             <MaterialCommunityIcons name="check" size={16} color={colors.success} />
             <Text style={styles.onMapText}>{t('trips.row.onMap')}</Text>
@@ -153,6 +160,7 @@ const useStyles = makeStyles((t) => ({
   status: { ...t.type.footnote, fontWeight: '600', color: t.colors.warning },
   onMap: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   onMapText: { ...t.type.footnote, fontWeight: '600', color: t.colors.success },
+  notTakenText: { ...t.type.footnote, fontWeight: '600', color: t.colors.textSecondary },
   mark: { alignSelf: 'flex-start', minHeight: 40, marginTop: 4, paddingHorizontal: 16, borderRadius: 999, backgroundColor: t.colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
   markText: { ...t.type.footnote, fontWeight: '700', color: t.colors.onAccentSoft },
   // The full route (trip details)

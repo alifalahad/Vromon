@@ -26,14 +26,14 @@ const TAB_GAP = 8;
 
 type T = (k: string, o?: Record<string, unknown>) => string;
 
-/** The chip's words: "In 6 days", "Tomorrow", "Day 2 of 3", "Finished". */
-export function phaseText(p: PlanPhase, t: T, n: (v: number) => string): string {
-  if (p.kind === 'after') return t('plan.phase.after');
+/** The chip's words: "In 6 days", "Tomorrow", "Day 2 of 3", "Finished", or "Not taken" (step 16). */
+export function phaseText(p: PlanPhase, t: T, n: (v: number) => string, notTaken = false): string {
+  if (p.kind === 'after') return t(notTaken ? 'plan.phase.notTaken' : 'plan.phase.after');
   if (p.kind === 'on') return t('plan.phase.on', { day: n(p.day), of: n(p.of) });
   return p.days <= 1 ? t('plan.phase.tomorrow') : t('plan.phase.before', { count: p.days, n: n(p.days) });
 }
 
-export function PhaseChip({ start, end, today }: { start: string; end: string; today: string }) {
+export function PhaseChip({ start, end, today, notTaken = false }: { start: string; end: string; today: string; notTaken?: boolean }) {
   const styles = useStyles();
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -47,10 +47,12 @@ export function PhaseChip({ start, end, today }: { start: string; end: string; t
         ? [colors.successBg, colors.success]
         : [colors.surfaceInset, colors.textSecondary];
   return (
-    <View style={[styles.chip, { backgroundColor: bg }]} testID="trip-phase">
+    <View style={[styles.chip, p.kind === 'after' && styles.chipAfter, { backgroundColor: bg }]} testID="trip-phase">
       {p.kind === 'on' ? <View style={[styles.chipDot, { backgroundColor: colors.success }]} /> : null}
+      {/* After it (frame 33): a tick for "Finished"; a trip that didn't happen says so with a cross */}
+      {p.kind === 'after' ? <MaterialCommunityIcons name={notTaken ? 'close' : 'check'} size={15} color={ink} /> : null}
       <Text style={[styles.chipText, { color: ink }]} maxFontSizeMultiplier={1.3} numberOfLines={1}>
-        {phaseText(p, t, f.n)}
+        {phaseText(p, t, f.n, notTaken)}
       </Text>
     </View>
   );
@@ -301,6 +303,7 @@ export function DayLine({
 const useStyles = makeStyles((t) => ({
   chip: { minHeight: 28, paddingHorizontal: 12, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 0 },
   chipDot: { width: 8, height: 8, borderRadius: 4 },
+  chipAfter: { gap: 5, paddingLeft: 9 },
   chipText: { fontSize: 13, fontWeight: '700' },
   room: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.accentTint, flexShrink: 0 },
   roomBadge: {

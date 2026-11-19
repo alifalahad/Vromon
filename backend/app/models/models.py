@@ -616,6 +616,9 @@ class Trip(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     # The "mark these places as visited?" offer after the trip ends: None (not answered), "marked", "dismissed"
     visited_prompt: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    # "This trip didn't happen" (docs/ui-refresh step 16, D19): when the owner said so, after its last day.
+    # Such a trip isn't counted in trip stats, offered for rating or for the map; None = it was taken
+    not_taken: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     stops: Mapped[List["TripStop"]] = relationship(

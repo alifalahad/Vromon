@@ -314,7 +314,8 @@ describe('trip screen', () => {
   });
 
   it('removes a stop with Undo, and only sends it when Undo runs out', async () => {
-    jest.useFakeTimers();
+    // All timers fake, on the file's date (a trip that's over can't change: UI refresh step 16)
+    jest.useFakeTimers({ now: new Date(2026, 9, 12, 10, 0) });
     try {
       api.get.mockResolvedValue(TRIP);
       api.getItinerary.mockResolvedValue(ITIN([DAY1]));
@@ -341,7 +342,8 @@ describe('trip screen', () => {
       expect(api.removeItem).toHaveBeenCalledTimes(1);
       expect(api.removeItem).toHaveBeenCalledWith(5, 2);
     } finally {
-      jest.useRealTimers();
+      // Back to the file's clock: the real date is after these trips
+      jest.useFakeTimers({ doNotFake: [...REAL_TIMERS], now: new Date(2026, 9, 12, 10, 0) });
     }
   });
 

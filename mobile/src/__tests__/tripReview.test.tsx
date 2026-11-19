@@ -7,7 +7,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, ScrollView } from 'react-native';
 
 import TripReviewScreen from '../../app/trip/review/[id]';
 import { usePreferences } from '../features/preferences/store';
@@ -21,11 +21,13 @@ import type { ReviewThing, Trip, TripReviewIn, TripReviewResponse } from '../typ
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
+// `item`: start at that thing ("Rate" on a finished trip's stop: UI refresh step 16)
+const mockParams: { id: string; item?: string } = { id: '5' };
 const mockDispatch = jest.fn();
 const mockGuard: { enabled: boolean; onLeave: ((e: { data: { action: unknown } }) => void) | null } = { enabled: false, onLeave: null };
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, back: mockBack }),
-  useLocalSearchParams: () => ({ id: '5' }),
+  useLocalSearchParams: () => mockParams,
   useNavigation: () => ({ dispatch: mockDispatch }),
 }));
 jest.mock('expo-router/react-navigation', () => ({
@@ -71,6 +73,7 @@ beforeAll(() => {
 afterAll(() => jest.useRealTimers());
 beforeEach(async () => {
   jest.clearAllMocks();
+  delete mockParams.item;
   mockGuard.enabled = false;
   mockGuard.onLeave = null;
   usePreferences.setState({ rateReminderDismissed: [] });
@@ -331,6 +334,29 @@ describe('Rate things one by one', () => {
     buttons.find((b: { text: string }) => b.text === 'Leave').onPress();
     expect(mockDispatch).toHaveBeenCalledWith({ type: 'GO_BACK' });
     alert.mockRestore();
+  });
+
+  it('opened from a stop\'s "Rate" (UI refresh step 16): starts at that stop, outlined', async () => {
+    mockParams.item = 'place:12:201';
+    const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo').mockImplementation(() => {});
+    try {
+      await open();
+      const row = screen.getByTestId('review-row-place:12:201');
+      expect(row).toHaveStyle({ borderWidth: 2 });
+      expect(screen.getByTestId('review-row-place:11:101')).not.toHaveStyle({ borderWidth: 2 });
+      // Its section (day 2) and the row within it, in either order: one scroll there, a little above it
+      await act(async () => fireEvent(row, 'layout', { nativeEvent: { layout: { x: 0, y: 60, width: 300, height: 120 } } }));
+      expect(scrollTo).not.toHaveBeenCalled();
+      // (the section: the nearest view above the row that listens for its layout)
+      let section = row.parent;
+      while (section && !section.props.onLayout) section = section.parent;
+      await act(async () => fireEvent(section!, 'layout', { nativeEvent: { layout: { x: 0, y: 700, width: 300, height: 400 } } }));
+      expect(scrollTo).toHaveBeenCalledWith({ y: 748, animated: false });
+      await act(async () => fireEvent(row, 'layout', { nativeEvent: { layout: { x: 0, y: 64, width: 300, height: 120 } } }));
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+    } finally {
+      scrollTo.mockRestore();
+    }
   });
 
   it('before the first day, says when it opens', async () => {

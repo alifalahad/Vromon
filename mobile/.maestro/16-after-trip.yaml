@@ -1,0 +1,172 @@
+appId: ${APP_ID}
+env:
+  APP_ID: com.vromon.app.dev
+name: 16 After a trip - rate it, the map offer, plan it again, it didn't happen
+---
+# UI refresh step 16: a Bandarban trip of the signed-in account that ended yesterday, with a plan (made through
+# the API: the app only plans trips from today on)
+- runScript:
+    file: scripts/past-trip.js
+    env:
+      API_URL: ${API_URL}
+      TOKEN: ${TOKEN}
+- runFlow: subflows/launch.yaml
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 60000
+- tapOn:
+    id: tab-trips
+# The trip was made through the API: pull to refresh. A list the app fetched in the last 5 minutes (by the
+# flow before this one) is used as it is, without it (2026-11-19)
+- extendedWaitUntil:
+    visible:
+      id: trips-list
+    timeout: 20000
+- swipe:
+    start: "50%,45%"
+    end: "50%,85%"
+    duration: 500
+
+# The Trips tab asks the day after a trip ends (the card names the trip): one tap there, then stars and Save
+- extendedWaitUntil:
+    visible: "Rate your trip to Bandarban\\?"
+    timeout: 20000
+- tapOn:
+    id: rate-reminder-rate
+- extendedWaitUntil:
+    visible:
+      id: review-save
+    timeout: 20000
+- tapOn:
+    id: review-star-4
+- tapOn:
+    id: review-save
+- extendedWaitUntil:
+    visible:
+      id: review-saved
+    timeout: 15000
+- back
+- extendedWaitUntil:
+    notVisible:
+      id: rate-reminder
+    timeout: 10000
+
+# The finished trip opens on "Your trip", with the rating at the top (it was at the bottom of the plan)
+- scrollUntilVisible:
+    element:
+      id: "trip-${output.pastTripId}"
+    direction: DOWN
+    timeout: 60000
+- tapOn:
+    id: "trip-${output.pastTripId}"
+- extendedWaitUntil:
+    visible:
+      id: trip-recap
+    timeout: 30000
+- swipe:
+    start: "50%,56%"
+    end: "50%,12%"
+    duration: 600
+- assertVisible:
+    id: trip-review-summary
+- assertVisible: "Very good"
+
+# The map offer, when there's something to mark: Not now (the test account's map stays as it is)
+- runFlow:
+    when:
+      visible:
+        id: map-offer
+    commands:
+      - tapOn:
+          id: map-offer-not-now
+      - extendedWaitUntil:
+          notVisible:
+            id: map-offer
+          timeout: 10000
+
+# A stop not rated yet: "Rate" opens "Rate things one by one" at it
+- scrollUntilVisible:
+    element:
+      id: "rate-\\d+"
+    direction: DOWN
+    timeout: 40000
+- tapOn:
+    id: "rate-\\d+"
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: review-save
+    timeout: 20000
+- back
+
+# "Plan it again": new dates first, then the copy opens, its plan not built yet
+- scrollUntilVisible:
+    element:
+      id: plan-again
+    direction: UP
+    timeout: 20000
+- tapOn:
+    id: plan-again
+- extendedWaitUntil:
+    visible:
+      id: plan-again-make
+    timeout: 10000
+- tapOn:
+    id: plan-again-make
+- extendedWaitUntil:
+    visible:
+      id: build-plan
+    timeout: 30000
+# Leave nothing behind: delete the copy
+- tapOn:
+    id: trip-menu
+- tapOn:
+    id: action-delete
+- tapOn: "(?i)delete"
+- extendedWaitUntil:
+    visible:
+      id: tab-trips
+    timeout: 20000
+
+# "This trip didn't happen" (asked first), then "It did happen"
+- scrollUntilVisible:
+    element:
+      id: "trip-${output.pastTripId}"
+    direction: DOWN
+    timeout: 60000
+- tapOn:
+    id: "trip-${output.pastTripId}"
+- extendedWaitUntil:
+    visible:
+      id: trip-recap
+    timeout: 30000
+- tapOn:
+    id: trip-menu
+- tapOn:
+    id: action-notTaken
+- tapOn: "(?i)it didn.t happen"
+- extendedWaitUntil:
+    visible: "Not taken"
+    timeout: 15000
+- assertNotVisible:
+    id: trip-recap
+- tapOn:
+    id: trip-menu
+- tapOn:
+    id: action-didHappen
+- extendedWaitUntil:
+    visible:
+      id: trip-recap
+    timeout: 15000
+
+# Leave nothing behind: delete the trip
+- tapOn:
+    id: trip-menu
+- tapOn:
+    id: action-delete
+- tapOn: "(?i)delete"
+- extendedWaitUntil:
+    visible:
+      id: tab-trips
+    timeout: 20000

@@ -38,11 +38,11 @@ export function stopPoints(trip: Trip): LngLat[] {
     .map((s) => [s.lon!, s.lat!]);
 }
 
-/** Trails of trips that have ended: one line per trip with two or more placed stops. */
+/** Trails of trips that have ended: one line per trip with two or more placed stops (not one that didn't happen). */
 export function trailsGeoJSON(trips: readonly Trip[], today: string): GeoJSON.FeatureCollection<GeoJSON.LineString> {
   const features: GeoJSON.Feature<GeoJSON.LineString>[] = [];
   for (const trip of trips) {
-    if (tripPhase(trip.start_date, trip.end_date, today) !== 'past') continue;
+    if (tripPhase(trip.start_date, trip.end_date, today) !== 'past' || trip.not_taken) continue;
     const points = stopPoints(trip);
     if (points.length < 2) continue;
     const coordinates = points.slice(1).flatMap((p, i) => arc(points[i], p, i % 2 ? -0.16 : 0.16).slice(i === 0 ? 0 : 1));

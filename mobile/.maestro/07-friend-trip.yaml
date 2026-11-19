@@ -3,7 +3,7 @@ env:
   APP_ID: com.vromon.app.dev
 name: 07 A friend's trip opens read-only
 ---
-# The friend's planned trip (made in flow 04, so the profile has already loaded it)
+# The friend's planned trip that hasn't ended (one is made if there's none)
 - runScript:
     file: scripts/friend-trip.js
     env:

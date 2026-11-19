@@ -1,7 +1,8 @@
 """
 "How was your trip?" (docs/trip-upgrades, step 7; decisions D7-D9).
 
-- **When:** from the trip's first day, and any time after (D7). Before it, 409.
+- **When:** from the trip's first day, and any time after (D7). Before it, 409; and for a trip its owner
+  said didn't happen (docs/ui-refresh step 16, D19).
 - **Who:** the trip's owner and each joined member of its trip room, each with their own review (D8).
   Anyone else gets 404. No endpoint returns someone else's review (D9).
 - **What:** five stars and an optional comment for the whole trip, and, optionally, things one by one,
@@ -47,7 +48,10 @@ def can_review(db: "Session", trip: "Trip", user: "User") -> bool:
 
 
 def check_open(trip: "Trip", today: date) -> None:
-    """From the trip's first day (D7)."""
+    """From the trip's first day (D7); never for a trip that didn't happen (docs/ui-refresh step 16, D19:
+    what it was rated before stays stored, unseen, until it's said to have happened after all)."""
+    if trip.not_taken is not None:
+        raise ReviewError("This trip didn't happen, so it can't be rated.", 409)
     if today < trip.start_date:
         raise ReviewError(f"You can rate this trip from its first day, {trip.start_date.day} {trip.start_date:%b}.", 409)
 

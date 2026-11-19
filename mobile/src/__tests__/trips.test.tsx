@@ -321,6 +321,22 @@ describe('Trips tab', () => {
     }
   });
 
+  it("a trip that didn't happen says so; 'Mark visited' only while the offer is unanswered (UI refresh step 16)", async () => {
+    const s = [stop("Cox's Bazar", 'Bangladesh', 'BD', 'bus', 0)];
+    api.list.mockResolvedValue([
+      trip(9, addDays(-6), addDays(-3), { stops: s, not_taken: '2026-11-20T08:00:00' }),
+      trip(10, addDays(-12), addDays(-10), { stops: s, visited_prompt: 'dismissed' }),
+    ]);
+    api.stats.mockResolvedValue(ZERO);
+    await renderWithQuery(<TripsScreen />);
+    expect(await screen.findByTestId('not-taken-9')).toHaveTextContent(/Not taken/);
+    expect(screen.getByTestId('trip-9').props.accessibilityLabel).toMatch(/\. Not taken$/);
+    // Answered on the trip itself ("Not now"), or a trip that didn't happen: no offer here either
+    expect(screen.queryByTestId('mark-visited-9')).toBeNull();
+    expect(screen.queryByTestId('mark-visited-10')).toBeNull();
+    expect(screen.getByTestId('trip-10')).toBeTruthy();
+  });
+
   it('with no trips, invites you to plan the first; the header still has New trip', async () => {
     api.list.mockResolvedValue([]);
     api.stats.mockResolvedValue(ZERO);

@@ -560,6 +560,12 @@ export interface TripCreate {
   meals?: MealPlan | null;
 }
 
+/** "Plan it again": the copy's own dates (TripCopyIn) */
+export interface CopyDates {
+  start_date: string;
+  end_date: string;
+}
+
 // Matches _trip_summary_out / _trip_out in trips.py
 export interface Trip {
   id: number;
@@ -579,6 +585,8 @@ export interface Trip {
   stops?: TripStop[];
   /** The "mark these places as visited?" answer: null until answered */
   visited_prompt?: 'marked' | 'dismissed' | null;
+  /** When the owner said "This trip didn't happen" (docs/ui-refresh step 16, D19); null: it was taken */
+  not_taken?: string | null;
   preference?: {
     id: number;
     interests: string[];

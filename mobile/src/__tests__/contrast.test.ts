@@ -202,6 +202,38 @@ describe.each([
     expect(contrast(colors.success, sheet)).toBeGreaterThanOrEqual(AA);
   });
 
+  it('after the trip (UI refresh step 16): "Your trip", its rating, the map offer, the rows\' Good and Bad', () => {
+    const dark = colors === darkColors;
+    const sheet = dark ? colors.bg : colors.surface;
+    const card = dark ? colors.surface : colors.bg;
+    const seen = (tint: string, under: string) => {
+      const m = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(tint);
+      if (!m) return tint;
+      const top = `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+      return mix(under, top, Number(m[4]));
+    };
+    // "YOUR TRIP" in marigold, the numbers, their words, "Rate things one by one" and "3 rated" on the hero
+    for (const text of [colors.highlight, colors.onHero, colors.onHeroSecondary, colors.heroLink]) {
+      expect(contrast(text, colors.hero)).toBeGreaterThanOrEqual(AA);
+    }
+    // "Edit" on its quiet button, and the empty stars on the hero (3:1, a drawing)
+    expect(contrast(colors.onHero, seen(colors.heroQuiet, colors.hero))).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.onHeroSecondary, colors.hero)).toBeGreaterThanOrEqual(3);
+    // The map offer: the pin on its warm square (3:1), "Mark visited", "Not now"
+    expect(contrast(colors.onMarkTint, colors.markTint)).toBeGreaterThanOrEqual(3);
+    expect(contrast(colors.onAccent, colors.accentStrong)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.textPrimary, colors.surfaceInset)).toBeGreaterThanOrEqual(AA);
+    // "Plan it again" (blue on the blue tint) and "Finished" / "Not taken" (grey on the inset)
+    expect(contrast(colors.onAccentSoft, colors.accentTint)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.textSecondary, colors.surfaceInset)).toBeGreaterThanOrEqual(AA);
+    // A row: its time on the sheet, its name, comment and "Rate" on the row's card; Good and Bad on their tints
+    expect(contrast(colors.textPrimary, sheet)).toBeGreaterThanOrEqual(AA);
+    for (const text of [colors.textPrimary, colors.textSecondary, colors.link]) expect(contrast(text, card)).toBeGreaterThanOrEqual(AA);
+    const review = reviewColors({ scheme: dark ? 'dark' : 'light' });
+    expect(contrast(review.onGood, review.good)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(review.onBad, review.bad)).toBeGreaterThanOrEqual(AA);
+  });
+
   it("a switch's track when off shows on a card and on the ground (3:1)", () => {
     expect(contrast(colors.switchOff, colors.surface)).toBeGreaterThanOrEqual(3);
     expect(contrast(colors.switchOff, colors.bg)).toBeGreaterThanOrEqual(3);

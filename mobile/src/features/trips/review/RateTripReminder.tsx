@@ -57,7 +57,8 @@ export function RateTripReminder({ trips, today }: { trips: readonly Trip[]; tod
 }
 
 const useStyles = makeStyles((t) => ({
-  card: { backgroundColor: t.colors.surface, borderRadius: 20, padding: 18, gap: 14 },
+  // The Trips tab's cards each keep their own side margin (since UI refresh step 9)
+  card: { marginHorizontal: t.spacing.lg, backgroundColor: t.colors.surface, borderRadius: 20, padding: 18, gap: 14 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   badge: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.surfaceInset },
   text: { flex: 1, gap: 2 },

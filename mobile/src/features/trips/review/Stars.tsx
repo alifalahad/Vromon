@@ -24,6 +24,9 @@ export function Stars({
   size = 36,
   label,
   testID,
+  color,
+  emptyColor,
+  gap,
 }: {
   value: number;
   /** Without it, the stars are only shown */
@@ -31,17 +34,27 @@ export function Stars({
   size?: number;
   label: string;
   testID?: string;
+  /** A chosen star and an empty one (on the hero card: marigold and its second-line colour) */
+  color?: string;
+  emptyColor?: string;
+  /** Between the stars when they're only shown */
+  gap?: number;
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const now = value ? t('review.starsOf', { n: value, word: starWord(value, t) }) : t('review.notRated');
   const icons = [1, 2, 3, 4, 5].map((n) => (
-    <MaterialCommunityIcons key={n} name={n <= value ? 'star' : 'star-outline'} size={size} color={n <= value ? colors.warning : colors.textTertiary} />
+    <MaterialCommunityIcons
+      key={n}
+      name={n <= value ? 'star' : 'star-outline'}
+      size={size}
+      color={n <= value ? (color ?? colors.warning) : (emptyColor ?? colors.textTertiary)}
+    />
   ));
   if (!onChange) {
     return (
-      <View style={styles.row} accessible accessibilityLabel={`${label}: ${now}`} testID={testID}>
+      <View style={[styles.row, gap != null && { gap }]} accessible accessibilityLabel={`${label}: ${now}`} testID={testID}>
         {icons}
       </View>
     );

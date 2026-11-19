@@ -66,9 +66,16 @@ export function ratedCount(draft: Draft): number {
 export const REMINDER_DAYS = 14;
 
 /** The trip the Trips tab's one-time card asks about: the one that ended most recently, from the day after it
- * ended, for two weeks; not a draft, not dismissed ("Not now" is for good). Whether it's rated is the server's
- * to say (the card checks). */
+ * ended, for two weeks; not a draft, not dismissed ("Not now" is for good), not one that didn't happen (step 16).
+ * Whether it's rated is the server's to say (the card checks). */
 export function reminderTrip(trips: readonly Trip[], today: string, dismissed: readonly number[]): Trip | null {
-  const waiting = trips.filter((t) => t.status !== 'draft' && tripPhase(t.start_date, t.end_date, today) === 'past' && addDays(t.end_date, REMINDER_DAYS) >= today && !dismissed.includes(t.id));
+  const waiting = trips.filter(
+    (t) =>
+      t.status !== 'draft' &&
+      !t.not_taken &&
+      tripPhase(t.start_date, t.end_date, today) === 'past' &&
+      addDays(t.end_date, REMINDER_DAYS) >= today &&
+      !dismissed.includes(t.id),
+  );
   return [...waiting].sort((a, b) => b.end_date.localeCompare(a.end_date))[0] ?? null;
 }

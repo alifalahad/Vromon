@@ -4,6 +4,8 @@ Trip statistics: "Your trips so far" (prompt §6.8; redrawn in docs/ui-refresh s
 Rules:
 - Only finished trips count: the end date is before today. Upcoming and ongoing
   trips are counted separately and never added to the totals.
+- A trip its owner said didn't happen (`not_taken`, docs/ui-refresh step 16, D19)
+  isn't counted anywhere: not in the totals, the places, the years or the lists.
 - Duration = end − start + 1 days (12–31 Oct = 20 days).
 - Average = total days / finished trips, to one decimal.
 - Where you went comes from the finished trips' stops, without where a trip starts:
@@ -85,6 +87,7 @@ def summarize(
     on the trips' stops. Pure: no database access, so the maths is easy to test.
     """
     cities = cities or {}
+    trips = [t for t in trips if not getattr(t, "not_taken", None)]
     done = sorted(
         (t for t in trips if trip_phase(t.start_date, t.end_date, today) == "past"),
         key=lambda t: (t.end_date, t.start_date, t.id),

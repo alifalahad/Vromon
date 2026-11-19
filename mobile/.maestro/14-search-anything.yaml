@@ -59,11 +59,12 @@ name: 14 Search anything - a college added as a stop, marked Not checked
     start: "50%,56%"
     end: "50%,12%"
     duration: 600
+# A slow phone looks at its screen for 7-13 s after each swipe (2026-11-19): 20 s was three swipes
 - scrollUntilVisible:
     element:
       id: add-stop
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn:
     id: add-stop
 # The sheet opens on suggestions; "Put a pin" is further down

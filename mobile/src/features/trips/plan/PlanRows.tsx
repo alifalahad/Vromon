@@ -8,13 +8,13 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Text, useWindowDimensions, View } from 'react-native';
 import { GestureDetector, type GestureType } from 'react-native-gesture-handler';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, { FadeIn, LinearTransition, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import Svg, { Line } from 'react-native-svg';
 
-import type { ItineraryItem, TravelMode, Violation } from '../../../types';
+import type { ItineraryItem, TravelMode, Verdict, Violation } from '../../../types';
 import { LineIcon } from '../../../ui/LineIcon';
 import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
@@ -22,6 +22,7 @@ import { sky, useConditionText } from '../conditions/useConditionText';
 import { isPrivatePlace, isUnchecked, kindLabel } from '../../places/kinds';
 import { NotCheckedBadge } from '../../places/NotCheckedBadge';
 import { mealTitle, slotOf, sourceOf } from '../meals/meals';
+import { reviewColors } from '../review/colors';
 import { planColors } from './colors';
 import { forYou, stopTitle, type StopKind } from './timeline';
 import { usePlanFormat, type PlanFormat } from './usePlanFormat';
@@ -473,6 +474,98 @@ export function DoneRow({ item, onPress, dimmed }: { item: ItineraryItem; onPres
   );
 }
 
+/**
+ * A stop after the trip (docs/ui-refresh step 16, frame 33): its time, number and name, and how you found it:
+ * "Good" or "Bad" with your comment, or "Rate", which opens "Rate things one by one" at it. It opens the
+ * stop's details, read-only; it can't be moved or removed.
+ */
+export function RatedRow({
+  item,
+  n,
+  kind,
+  verdict,
+  comment,
+  onPress,
+  onRate,
+}: {
+  item: ItineraryItem;
+  n: number;
+  kind: StopKind;
+  /** Your verdict, when you've rated it */
+  verdict?: Verdict | null;
+  comment?: string | null;
+  onPress: () => void;
+  /** Not rated yet, and yours to rate */
+  onRate?: () => void;
+}) {
+  const styles = useStyles();
+  const theme = useTheme();
+  const pc = planColors(theme);
+  const rc = reviewColors(theme);
+  const { t } = useTranslation();
+  const f = usePlanFormat();
+  const title = cardTitle(item, t);
+  // At large text the verdict or "Rate" goes under the name, which then has the card's width (a name broke mid-word)
+  const stacked = useWindowDimensions().fontScale >= 1.3;
+  const said = verdict ? t(verdict === 'good' ? 'after.ratedGood' : 'after.ratedBad') : null;
+  const label = [f.time(item.start_time), f.n(n), title, said, said && comment ? `“${comment}”` : null].filter(Boolean).join(', ');
+  return (
+    <View style={styles.ratedRow}>
+      <Text style={styles.ratedTime} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit importantForAccessibility="no">
+        {f.time(item.start_time)}
+      </Text>
+      <View style={[styles.ratedCard, stacked && styles.ratedCardStacked]}>
+        <PressableScale
+          pressEffect="opacity"
+          haptic="selection"
+          onPress={onPress}
+          style={[styles.ratedMain, stacked && styles.ratedMainStacked]}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          testID={`stop-${item.id}`}
+        >
+          <View style={[styles.badge, { backgroundColor: kind === 'meal' ? pc.meal : pc.visit }]}>
+            <Text style={[styles.badgeText, { color: kind === 'meal' ? pc.onMeal : pc.onVisit }]} maxFontSizeMultiplier={1.3}>
+              {f.n(n)}
+            </Text>
+          </View>
+          <View style={styles.texts}>
+            <Text style={styles.ratedTitle}>{title}</Text>
+            {verdict && comment ? <Text style={styles.sub}>“{comment}”</Text> : null}
+          </View>
+        </PressableScale>
+        {verdict ? (
+          <View
+            style={[styles.verdict, stacked && styles.ratedEndStacked, { backgroundColor: verdict === 'good' ? rc.good : rc.bad }]}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            testID={`verdict-${item.id}`}
+          >
+            <MaterialCommunityIcons name={verdict === 'good' ? 'thumb-up-outline' : 'thumb-down-outline'} size={15} color={verdict === 'good' ? rc.onGood : rc.onBad} />
+            <Text style={[styles.verdictText, { color: verdict === 'good' ? rc.onGood : rc.onBad }]} maxFontSizeMultiplier={1.3}>
+              {t(`review.${verdict}`)}
+            </Text>
+          </View>
+        ) : onRate ? (
+          <PressableScale
+            pressEffect="opacity"
+            haptic="selection"
+            onPress={onRate}
+            style={[styles.rate, stacked && styles.rateStacked]}
+            accessibilityRole="button"
+            accessibilityLabel={t('after.rateA11y', { name: title })}
+            testID={`rate-${item.id}`}
+          >
+            <Text style={styles.rateText} maxFontSizeMultiplier={1.3}>
+              {t('review.rate')}
+            </Text>
+          </PressableScale>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 /** Free time (frame 29): a dashed row, "Free time · 45 min", and "Add", which adds a stop there */
 export function FreeRow({ start, minutes, onAdd, dimmed }: { start: string; minutes: number; onAdd?: () => void; dimmed?: boolean }) {
   const styles = useStyles();
@@ -720,4 +813,29 @@ const useStyles = makeStyles((t) => ({
   doneTick: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.successBg },
   doneTitle: { flex: 1, fontSize: 14.5, color: t.colors.textSecondary },
   doneWord: { fontSize: 12.5, fontWeight: '500', color: t.colors.success },
+  // After the trip (frame 33): the time, then the stop on the sheet's quiet card with how you found it
+  ratedRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 3 },
+  ratedTime: { width: TIME_COL, textAlign: 'right', fontSize: 14, fontWeight: '700', color: t.colors.textPrimary },
+  ratedCard: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 58,
+    paddingRight: 10,
+    borderRadius: 18,
+    backgroundColor: t.scheme === 'dark' ? t.colors.surface : t.colors.bg,
+  },
+  ratedMain: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 58, paddingVertical: 8, paddingLeft: 12 },
+  ratedCardStacked: { flexDirection: 'column', alignItems: 'stretch', gap: 0, paddingBottom: 8 },
+  ratedMainStacked: { flex: 0 },
+  // Under the name: past the number's 12 + 30 + 12
+  ratedEndStacked: { alignSelf: 'flex-start', marginLeft: 54 },
+  rateStacked: { alignSelf: 'flex-start', marginLeft: 48, alignItems: 'flex-start' },
+  ratedTitle: { fontSize: 15, fontWeight: '700', color: t.colors.textPrimary },
+  verdict: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 30, paddingLeft: 8, paddingRight: 10, borderRadius: 15 },
+  verdictText: { fontSize: 12.5, fontWeight: '700' },
+  rate: { minHeight: 44, minWidth: 48, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
+  rateText: { fontSize: 14, fontWeight: '500', color: t.colors.link },
 }));

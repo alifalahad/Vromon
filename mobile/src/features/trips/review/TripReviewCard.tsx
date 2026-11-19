@@ -1,7 +1,9 @@
 /**
- * "How was your trip?" at the bottom of the plan, from the trip's first day (trip upgrades step 7, D7).
- * One tap on a star saves it. Then a short summary with Edit (the stars and an optional comment) and
- * "Rate things one by one". Yours only (D9); the owner and each trip-room member rate on their own (D8).
+ * "How was your trip?" at the bottom of the plan while the trip is on, from its first day (trip upgrades
+ * step 7, D7). One tap on a star saves it. Then a short summary with Edit (the stars and an optional
+ * comment) and "Rate things one by one". Yours only (D9); the owner and each trip-room member rate on
+ * their own (D8). After the trip the rating is on "Your trip" at the top instead (docs/ui-refresh step 16,
+ * `TripRecap`); both use `useTripReview`.
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -28,34 +30,36 @@ export function reviewKey(tripId: number) {
   return ['review', tripId] as const;
 }
 
+/** Your review of the trip (null until rated, or when it isn't yours to rate), how many things are rated, and saving. */
+export function useTripReview(tripId: number, enabled = true) {
+  const queryClient = useQueryClient();
+  const today = localToday();
+  const review = useQuery({ queryKey: reviewKey(tripId), queryFn: () => tripsApi.review(tripId, today), enabled });
+  const save = useMutation({
+    mutationFn: (body: TripReviewIn) => tripsApi.saveReview(tripId, body, today),
+    onSuccess: (data) => {
+      haptics.success();
+      queryClient.setQueryData(reviewKey(tripId), data);
+    },
+    onError: () => haptics.error(),
+  });
+  const data = review.data;
+  return { data, saved: data?.review ?? null, stars: data?.review?.rating ?? 0, rated: data ? ratedCount(draftOf(data.items)) : 0, save };
+}
+
 export function TripReviewCard({ trip }: { trip: Trip }) {
   const styles = useStyles();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const f = usePlanFormat();
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const today = localToday();
-  const review = useQuery({ queryKey: reviewKey(trip.id), queryFn: () => tripsApi.review(trip.id, today) });
+  const { data, saved, stars, rated, save } = useTripReview(trip.id);
   const [editing, setEditing] = useState(false);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
 
-  const save = useMutation({
-    mutationFn: (body: TripReviewIn) => tripsApi.saveReview(trip.id, body, today),
-    onSuccess: (data) => {
-      haptics.success();
-      queryClient.setQueryData(reviewKey(trip.id), data);
-      setEditing(false);
-    },
-    onError: () => haptics.error(),
-  });
-
   // Not this traveller's to rate (a friend reading the trip), or not open yet: nothing to show
-  if (!review.data) return null;
-  const saved = review.data.review;
-  const stars = saved?.rating ?? 0;
-  const rated = ratedCount(draftOf(review.data.items));
+  if (!data) return null;
   const openOneByOne = () => router.push({ pathname: '/trip/review/[id]', params: { id: trip.id } });
   const startEditing = () => {
     setRating(stars);
@@ -110,7 +114,7 @@ export function TripReviewCard({ trip }: { trip: Trip }) {
             <Button label={t('common.cancel')} variant="secondary" onPress={() => setEditing(false)} testID="trip-review-cancel" />
             <Button
               label={t('review.save')}
-              onPress={() => save.mutate({ rating, comment: comment.trim() || null })}
+              onPress={() => save.mutate({ rating, comment: comment.trim() || null }, { onSuccess: () => setEditing(false) })}
               loading={save.isPending}
               disabled={save.isPending}
               haptic="medium"

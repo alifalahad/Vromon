@@ -11,7 +11,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -29,7 +29,7 @@ from app.models.models import (
     Itinerary, ItineraryItem, Feedback, Place, Restaurant, Hotel,
 )
 from app.schemas.schemas import (
-    TripCreate, TripUpdate, TripOut, TripSummaryOut,
+    TripCreate, TripUpdate, TripCopyIn, TripOut, TripSummaryOut,
     FeedbackCreate, FeedbackOut, AdaptRequest,
     GenerateResponse, ItineraryResponse,
     MarkVisitedIn, MarkVisitedOut, TripStopIn, TripStopsIn, MustSeeIn, BusyIn, TIME_PATTERN, JourneyPreferences,
@@ -177,9 +177,23 @@ def get_trip(trip_id: int, db: Session = Depends(get_db), user: User = Depends(g
 
 
 @router.patch("/{trip_id}", response_model=TripOut)
-def update_trip(trip_id: int, payload: TripUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Update trip title, status, preferences, or constraints (only the fields sent)."""
+def update_trip(trip_id: int, payload: TripUpdate, today: Optional[date] = None, db: Session = Depends(get_db),
+                user: User = Depends(get_current_user)):
+    """
+    Update trip title, status, preferences, or constraints (only the fields sent). `not_taken`: "This trip
+    didn't happen" (true) or "It did happen" (false), the owner's once the trip's last day has passed on
+    the phone's date (`today`), else 409 (docs/ui-refresh step 16, D19).
+    """
     trip = _load_trip(db, trip_id, user)
+    if payload.not_taken is not None:
+        if trip.end_date >= viewer_today(today):
+            raise HTTPException(status_code=409, detail="This trip hasn't ended yet")
+        trip.not_taken = (trip.not_taken or datetime.utcnow()) if payload.not_taken else None
+        if payload.model_fields_set <= {"not_taken"}:
+            trip.updated_at = datetime.utcnow()
+            db.commit()
+            db.refresh(trip)
+            return _trip_out(db, trip)
     _drop_gone_places(db, trip)
     if payload.title is not None:
         trip.title = payload.title
@@ -269,6 +283,8 @@ def mark_visited(trip_id: int, payload: MarkVisitedIn, db: Session = Depends(get
     # A day of slack: the phone's "today" may be ahead of the server's UTC date
     if trip.end_date >= date.today() + timedelta(days=1):
         raise HTTPException(status_code=409, detail="This trip hasn't ended yet")
+    if trip.not_taken is not None:
+        raise HTTPException(status_code=409, detail="This trip didn't happen, so it isn't put on your map")
     marked = mark_trip_visited(db, trip) if payload.mark else 0
     trip.visited_prompt = "marked" if payload.mark else "dismissed"
     db.commit()
@@ -280,46 +296,66 @@ def mark_visited(trip_id: int, payload: MarkVisitedIn, db: Session = Depends(get
 # ---------------------------------------------------------------------------
 
 @router.post("/{trip_id}/duplicate", response_model=TripOut, status_code=201)
-def duplicate_trip(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Create a copy of an existing trip with its preferences and constraints."""
+def duplicate_trip(trip_id: int, payload: Optional[TripCopyIn] = Body(None), today: Optional[date] = None,
+                   db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    Create a copy of an existing trip with its preferences and constraints. With dates ("Plan it again",
+    docs/ui-refresh step 16) the copy is for those days, from the phone's `today` on.
+    """
     original = _load_trip(db, trip_id, user)
-    new_trip = _copy_trip(db, original, user)
+    _check_copy_dates(payload, today)
+    new_trip = _copy_trip(db, original, user, payload)
     db.commit()
     db.refresh(new_trip)
     return _trip_out(db, new_trip)
 
 
 @router.post("/{trip_id}/copy", response_model=TripOut, status_code=201)
-def copy_trip(trip_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def copy_trip(trip_id: int, payload: Optional[TripCopyIn] = Body(None), today: Optional[date] = None,
+              db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """
     "Copy to my trips" from a trip card (docs/friends-chat-plan.md, step 4): any trip
     you can see (yours, or a friend's) becomes a new draft of your own, with its dates,
     stops, preferences and must-dos. Not its plan (you build your own), photos,
     feedback or members, and not a friend's busy times (their own schedule).
-    Someone who can't see the trip gets 404.
+    Someone who can't see the trip gets 404. With dates, as "Plan it again" (step 16).
     """
     original = _load_trip(db, trip_id, user, friends_may_read=True)
-    new_trip = _copy_trip(db, original, user)
+    _check_copy_dates(payload, today)
+    new_trip = _copy_trip(db, original, user, payload)
     db.commit()
     db.refresh(new_trip)
     return _trip_out(db, new_trip)
 
 
-def _copy_trip(db: Session, original: Trip, owner: User) -> Trip:
-    """A new draft trip for `owner` like `original` (no plan yet). Doesn't commit."""
+def _check_copy_dates(dates: Optional[TripCopyIn], today: Optional[date]) -> None:
+    """A copy with its own dates ("Plan it again") starts on the phone's today or later."""
+    if dates is not None and dates.start_date < viewer_today(today):
+        raise HTTPException(status_code=422, detail="Pick dates from today on.")
+
+
+def _copy_trip(db: Session, original: Trip, owner: User, dates: Optional[TripCopyIn] = None) -> Trip:
+    """
+    A new draft trip for `owner` like `original` (no plan yet). Doesn't commit. With `dates` ("Plan it
+    again"), the copy is for those days: the route's days move with it, and must-dos and busy times on a
+    day the copy doesn't have lose that day (must-dos) or are left out (busy times).
+    """
     own = original.user_id == owner.id
+    start = dates.start_date if dates is not None else original.start_date
+    end = dates.end_date if dates is not None else original.end_date
+    num_days = (end - start).days + 1
     new_trip = Trip(
         user_id=owner.id,
         destination=original.destination,
-        start_date=original.start_date,
-        end_date=original.end_date,
+        start_date=start,
+        end_date=end,
         num_travelers=original.num_travelers,
         total_budget=original.total_budget,
-        # Your own copy says so; a friend's trip keeps its name in your list
-        title=f"{original.title or original.destination + ' Trip'} (Copy)" if own else original.title,
+        # Your own copy says so (planned again for new dates, it keeps its name); a friend's keeps its name
+        title=f"{original.title or original.destination + ' Trip'} (Copy)" if own and dates is None else original.title,
         status="draft",
         # A copy of a trip that's already over isn't one you went on: don't ask to mark it visited
-        visited_prompt=None if own or original.end_date >= date.today() else "dismissed",
+        visited_prompt=None if own or end >= date.today() else "dismissed",
     )
     db.add(new_trip)
     db.flush()
@@ -346,16 +382,22 @@ def _copy_trip(db: Session, original: Trip, owner: User) -> Trip:
             avoid_crowded=original.constraints.avoid_crowded,
             avoid_high_activity=original.constraints.avoid_high_activity,
         )
-        cons.must_sees = original.constraints.must_sees
+        cons.must_sees = [m if not m.get("day") or m["day"] <= num_days else {**m, "day": None} for m in original.constraints.must_sees]
         if own:
-            cons.busy = original.constraints.busy
+            cons.busy = [b for b in original.constraints.busy if b["day"] <= num_days]
         cons.excluded_places = original.constraints.excluded_places
         db.add(cons)
 
     if original.stops:
+        # The route's days move with the trip, and stay within it
+        shift = start - original.start_date
+
+        def moved(day: Optional[date]) -> Optional[date]:
+            return None if day is None else min(max(day + shift, start), end)
+
         set_stops(db, new_trip, [
             TripStopIn(city_geonameid=st.city_geonameid, country_iso2=st.country_iso2, transport_mode=st.transport_mode,
-                       arrive_on=st.arrive_on, depart_on=st.depart_on)
+                       arrive_on=moved(st.arrive_on), depart_on=moved(st.depart_on))
             for st in original.stops
         ])
     return new_trip
@@ -2127,6 +2169,7 @@ def _trip_out(db: Session, trip: Trip, viewer: Optional[User] = None) -> dict:
         "user_id": trip.user_id,
         "stops": [stop_out(st) for st in trip.stops],
         "visited_prompt": trip.visited_prompt,
+        "not_taken": trip.not_taken.isoformat() if trip.not_taken else None,
         "preference": {
             "id": pref.id,
             "interests": pref.interests,
@@ -2173,6 +2216,7 @@ def _trip_summary_out(trip: Trip) -> dict:
         "user_id": trip.user_id,
         "stops": [stop_out(st) for st in trip.stops],
         "visited_prompt": trip.visited_prompt,
+        "not_taken": trip.not_taken.isoformat() if trip.not_taken else None,
     }
 
 

@@ -9,6 +9,10 @@
  * rest (budget, rebuild, duplicate, delete) is in the ⋯ menu. A friend's trip
  * opens read-only.
  *
+ * After the trip (docs/ui-refresh step 16, frame 33) the plan is kept as it was: "Your trip" with your
+ * rating, the budget, "Put this trip on your map?", "Plan it again" and "Send to a friend", then each day's
+ * stops with how you found them. Nothing in it changes; "This trip didn't happen" is in the ⋯ menu (D19).
+ *
  * Every edit goes to the backend, which re-times the day and re-checks the trip;
  * the screen then refetches. Travel legs are still straight-line estimates.
  */
@@ -30,9 +34,17 @@ import { useConversations } from '../../src/features/chat/queries';
 import { tripCard } from '../../src/features/chat/share';
 import { usePreferences } from '../../src/features/preferences/store';
 import { localToday, planPhase } from '../../src/features/trips/dates';
+import { MapOffer } from '../../src/features/trips/after/MapOffer';
+import { PlanAgainSheet } from '../../src/features/trips/after/PlanAgainSheet';
+import { againDates, placesToMark, ratingFor, recapNumbers } from '../../src/features/trips/after/recap';
+import { TripRecap } from '../../src/features/trips/after/TripRecap';
+import { useTripReview } from '../../src/features/trips/review/TripReviewCard';
+import { refreshTrips } from '../../src/features/trips/queries';
+import { useMarkVisited } from '../../src/features/trips/useMarkVisited';
+import { useVisits } from '../../src/features/map/visits';
 import { DayMap, type MapBase, type MapPin } from '../../src/features/trips/plan/DayMap';
 import { MapOptions, TripTopBar, weatherLook } from '../../src/features/trips/plan/TripTopBar';
-import { DoneRow, DragGhost, FreeRow, LandingLine, LegRow, StopCard, type StopWeather } from '../../src/features/trips/plan/PlanRows';
+import { DoneRow, DragGhost, FreeRow, LandingLine, LegRow, RatedRow, StopCard, type StopWeather } from '../../src/features/trips/plan/PlanRows';
 import { NowCard } from '../../src/features/trips/today/NowCard';
 import {
   backAt as wayBackAt,
@@ -69,7 +81,7 @@ import {
 } from '../../src/features/trips/plan/timeline';
 import { UnplacedCard } from '../../src/features/trips/new/UnplacedCard';
 import { buildPlan } from '../../src/features/trips/plan/build';
-import { takeFlash } from '../../src/features/trips/plan/flash';
+import { setFlash, takeFlash } from '../../src/features/trips/plan/flash';
 import { useDeferredRemoval } from '../../src/features/trips/plan/useDeferredRemoval';
 import { useStopDrag } from '../../src/features/trips/plan/useStopDrag';
 import { usePlanFormat } from '../../src/features/trips/plan/usePlanFormat';
@@ -98,6 +110,7 @@ import type {
   StayIn,
   StaySuggestion,
   TravelMode,
+  Trip,
   Unplaced,
   ValidationReport,
 } from '../../src/types';
@@ -127,7 +140,7 @@ export default function TripScreen() {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
+  const { height, fontScale } = useWindowDimensions();
   const router = useRouter();
   const queryClient = useQueryClient();
   // `at` and `date` set the clock for checking a trip day, in development builds only (as on Today)
@@ -163,6 +176,27 @@ export default function TripScreen() {
   // The trip's room, once someone was invited (friends-chat step 7), with what's unread
   const room = useConversations(!!me.data).data?.find((c) => c.kind === 'trip' && c.trip_id === tripId) ?? null;
   const openToday = () => router.push({ pathname: '/trip/today/[id]', params: { id: tripId } });
+  // After the trip (docs/ui-refresh step 16): kept as it was, nothing changes by accident (D21). The owner and
+  // the trip room's members went on it: "Your trip" with their own rating, unless the owner said it didn't happen (D19)
+  const after = phase?.kind === 'after';
+  const notTaken = after && !!trip.data?.not_taken;
+  const canEdit = mine && !after;
+  const went = mine || !!room;
+  const recap = after && went && !notTaken;
+  // (a trip that didn't happen keeps its ratings, unseen: a query that's off still holds its last answer)
+  const review = useTripReview(tripId, recap && hasPlan).data;
+  const ratings = recap ? review : undefined;
+  const visits = useVisits(after && mine ? me.data?.id : undefined);
+  const visited = useMemo(
+    () => (visits.data ? new Set(visits.data.filter((v) => v.status !== 'want').map((v) => `${v.place_type}:${v.place_code}`)) : null),
+    [visits.data],
+  );
+  // What "Mark visited" would put on the map that isn't there yet (nothing: no offer)
+  const mapPlaces = after && mine && trip.data ? placesToMark(trip.data, visited) : [];
+  const marking = useMarkVisited(me.data?.id);
+  const [againOpen, setAgainOpen] = useState(false);
+  // The copy opens once the dates sheet has gone (a sheet left open would stay over the next screen)
+  const madeCopy = useRef<Trip | null>(null);
 
   const [dayChoice, setDayChoice] = useState<number | null>(null);
   const dayIndex = Math.min(dayChoice ?? initialDayIndex(days, today), Math.max(0, days.length - 1));
@@ -314,11 +348,37 @@ export default function TripScreen() {
     mutationFn: () => tripsApi.delete(tripId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trips'] });
-      // Nothing may show the deleted trip again (Today mode may be under this screen)
-      for (const key of ['trip', 'itinerary', 'budget', 'conditions']) queryClient.removeQueries({ queryKey: [key, tripId] });
+      // Nothing may show the deleted trip again (Today mode may be under this screen). Its rating too: on SQLite
+      // (development, the friends' server) the next new trip can get the same id, and showed it (step 16)
+      for (const key of ['trip', 'itinerary', 'budget', 'conditions', 'review', 'stays', 'staySuggestions', 'dayRoute', 'leg', 'alternatives', 'suggestions'])
+        queryClient.removeQueries({ queryKey: [key, tripId] });
       router.dismissTo('/trips');
     },
     onError: failed(t('plan.deleteFailed')),
+  });
+  // "Plan it again" (step 16, D21): a copy for new dates, yours or (as a trip-room member) a copy of the owner's
+  const again = useMutation({
+    mutationFn: (range: { start: string; end: string }) =>
+      (mine ? tripsApi.duplicate : tripsApi.copy)(tripId, { start_date: range.start, end_date: range.end }, today),
+    onSuccess: (copy) => {
+      refreshTrips(queryClient);
+      setFlash(copy.id, t('after.againReady', { range: friendlyRange(copy.start_date, copy.end_date, i18n.language, today) }));
+      madeCopy.current = copy;
+      setAgainOpen(false);
+    },
+    onError: failed(t('after.againFailed')),
+  });
+  // "This trip didn't happen" and back (D19): out of your numbers, not offered for rating or the map
+  const setNotTaken = useMutation({
+    mutationFn: (value: boolean) => tripsApi.setNotTaken(tripId, value, today),
+    onSuccess: (updated, value) => {
+      queryClient.setQueryData<Trip>(['trip', tripId], (old) => (old ? { ...old, not_taken: updated.not_taken } : updated));
+      refreshTrips(queryClient, tripId);
+      queryClient.invalidateQueries({ queryKey: ['review', tripId] });
+      haptics.success();
+      setSnack(value ? { message: t('after.notTakenDone'), undo: () => setNotTaken.mutate(false) } : { message: t('after.didHappenDone') });
+    },
+    onError: failed(t('after.notTakenFailed')),
   });
 
   // Where the traveller stays (docs/trip-upgrades, step 2): only the owner sees and changes the stays
@@ -691,7 +751,7 @@ export default function TripScreen() {
   const drag = useStopDrag({
     stopIds,
     minIndex: fixedCount,
-    enabled: mine && !busy,
+    enabled: canEdit && !busy,
     screenHeight: height,
     sheetHeights: [sheetLow, sheetHigh],
     bottomInset: insets.bottom,
@@ -711,7 +771,7 @@ export default function TripScreen() {
   const gestures = useMemo(() => Object.fromEntries(stopIds.map((sid) => [sid, gestureFor(sid)])), [stopIds, gestureFor]);
   const dragging = drag.drag;
   const draggedRow = dragging ? rows.find((r): r is Extract<typeof r, { kind: 'stop' }> => r.kind === 'stop' && r.item.id === dragging.itemId) : undefined;
-  const showHint = hintFirst && !hintClosed && mine && !busy && rows.some((r) => r.kind === 'stop' && !r.item.pinned) && (stopIds.length > 1 || days.length > 1);
+  const showHint = hintFirst && !hintClosed && canEdit && !busy && rows.some((r) => r.kind === 'stop' && !r.item.pinned) && (stopIds.length > 1 || days.length > 1);
   // Seen once it shows: it stays for this visit, until closed or a stop is lifted
   useEffect(() => {
     if (showHint) setDragHintSeen();
@@ -755,7 +815,7 @@ export default function TripScreen() {
       v.item_id == null &&
       (v.day_number == null || v.day_number === day?.day_number) &&
       // a missing must-see has its own card, with the choices
-      !(v.code === 'MUST_VISIT_MISSING' && mine && unplaced.length > 0),
+      !(v.code === 'MUST_VISIT_MISSING' && canEdit && unplaced.length > 0),
   );
   const stopCount = rows.filter((r) => r.kind === 'stop').length;
   const hasLegs = rows.some((r) => r.kind === 'leg');
@@ -781,6 +841,28 @@ export default function TripScreen() {
 
   // The day's rows; while a stop is dragged, a line shows where it would land and the times preview the change
   function renderRows(d: ItineraryDay) {
+    // After the trip (frame 33): each stop with how you found it, or "Rate"; rides and free time aren't shown
+    if (after) {
+      return rows.flatMap((r) => {
+        if (r.kind !== 'stop') return [];
+        const thing = ratingFor(ratings?.items, r.item.id);
+        return [
+          <RatedRow
+            key={r.key}
+            item={r.item}
+            n={r.n}
+            kind={r.stopKind}
+            verdict={thing?.verdict}
+            comment={thing?.comment}
+            onPress={() => {
+              setSelectedId(r.item.id);
+              setSheetItem(r.item);
+            }}
+            onRate={thing && !thing.verdict ? () => router.push({ pathname: '/trip/review/[id]', params: { id: tripId, item: thing.key } }) : undefined}
+          />,
+        ];
+      });
+    }
     const stops = orderedStops(d, removal.hidden);
     const out: React.ReactNode[] = [];
     // Where it would land, with the time it would get there
@@ -813,7 +895,7 @@ export default function TripScreen() {
                   })
                 : undefined
             }
-            onPress={mine && !busy ? () => setLegItem(r.itemId) : undefined}
+            onPress={canEdit && !busy ? () => setLegItem(r.itemId) : undefined}
           />,
         );
         return;
@@ -828,7 +910,7 @@ export default function TripScreen() {
             start={r.start}
             minutes={r.minutes}
             dimmed={dim}
-            onAdd={mine && !busy && before >= 0 ? () => setAddTarget({ dayId: d.id, position: before + 1, nearItemId: stops[before].id }) : undefined}
+            onAdd={canEdit && !busy && before >= 0 ? () => setAddTarget({ dayId: d.id, position: before + 1, nearItemId: stops[before].id }) : undefined}
           />,
         );
         return;
@@ -868,18 +950,18 @@ export default function TripScreen() {
               .map((w) => ({ severity: isSerious(w) ? ('hard' as const) : ('soft' as const), code: w.code, message: conditionText.title(w) })),
           ]}
           selected={selectedId === item.id}
-          removable={mine && item.item_type === 'activity' && !busy && !fixed}
+          removable={canEdit && item.item_type === 'activity' && !busy && !fixed}
           onLayoutRow={(y, h) => {
             drag.setRow(item.id, y, h);
           }}
           onCardWidth={drag.setCardWidth}
-          drag={mine && !busy && !item.pinned && !fixed ? gestures[item.id] : undefined}
+          drag={canEdit && !busy && !item.pinned && !fixed ? gestures[item.id] : undefined}
           dragging={isDragged}
           dimmed={dim && !isDragged}
           previewStart={previewStarts?.[item.id]}
           glide={dropped !== item.id && !isDragged}
           move={
-            mine && !busy && !fixed
+            canEdit && !busy && !fixed
               ? {
                   earlier: index > fixedCount ? () => reorder(d, item.id, index - 1) : undefined,
                   later: index < stops.length - 1 ? () => reorder(d, item.id, index + 1) : undefined,
@@ -910,15 +992,61 @@ export default function TripScreen() {
     return out;
   }
 
+  // A copy of the trip as a card, into friends' chats (friends-chat step 4, mockup 9)
+  const profile = me.data;
+  const sendToFriend =
+    mine && profile
+      ? () => {
+          // The destinations, if loaded, give the card its locator map at once; the server adds it anyway
+          const card = tripCard(
+            data,
+            { id: profile.id, name: profile.display_name || profile.username || '' },
+            queryClient.getQueryData<Destination[]>(['destinations']),
+          );
+          router.push({ pathname: '/share/send', params: { card: JSON.stringify(card) } });
+        }
+      : null;
+  const budgetAction: SheetAction = {
+    key: 'budget',
+    label: t('plan.budget'),
+    icon: 'wallet-outline',
+    onPress: () => router.push({ pathname: '/trip/budget/[id]', params: { id: tripId } }),
+  };
+  const deleteAction: SheetAction = {
+    key: 'delete',
+    label: t('plan.deleteTrip'),
+    icon: 'trash-can-outline',
+    danger: true,
+    onPress: () => confirm(t('plan.deleteTitle'), t('plan.deleteBody'), t('plan.deleteOk'), () => remove.mutate(), true),
+  };
   const actions: SheetAction[] = [];
+  if (after) {
+    // A finished trip (step 16): nothing that changes the plan; "Plan it again" makes a copy that can change
+    if (mine) {
+      if (hasPlan) actions.push(budgetAction);
+      if (sendToFriend) actions.push({ key: 'send', label: t('chat.share.sendToFriend'), icon: 'send-outline', onPress: sendToFriend });
+      actions.push({ key: 'again', label: t('after.again'), icon: 'content-copy', onPress: () => setAgainOpen(true) });
+      actions.push(
+        notTaken
+          ? { key: 'didHappen', label: t('after.didHappen'), icon: 'calendar-check-outline', onPress: () => setNotTaken.mutate(false) }
+          : {
+              key: 'notTaken',
+              label: t('after.notTaken'),
+              icon: 'calendar-remove-outline',
+              onPress: () => confirm(t('after.notTakenTitle'), t('after.notTakenBody'), t('after.notTakenOk'), () => setNotTaken.mutate(true)),
+            },
+      );
+      actions.push(deleteAction);
+    }
+  }
   if (todayOpen) actions.push({ key: 'today', label: t('today.open'), icon: 'calendar-today', onPress: openToday });
   // Meals (step 3): this day's, or the whole trip's
-  if (mine && day) {
+  if (canEdit && day) {
     actions.push({ key: 'mealsDay', label: t('meals.today'), icon: 'silverware-fork-knife', onPress: () => setMealsFor('day') });
     actions.push({ key: 'mealsTrip', label: t('meals.wholeTrip'), icon: 'silverware-variant', onPress: () => setMealsFor('trip') });
   }
   // Planning together (friends-chat step 7): invite friends to the trip's room
-  if (mine) {
+  if (canEdit) {
     actions.push({
       key: 'together',
       label: room ? t('tripRoom.inviteMore') : t('tripRoom.title'),
@@ -926,7 +1054,7 @@ export default function TripScreen() {
       onPress: () => router.push({ pathname: '/trip/invite/[id]', params: { id: String(tripId) } }),
     });
   }
-  if (mine) {
+  if (canEdit) {
     actions.push({
       key: 'route',
       label: t('trips.editRoute'),
@@ -934,12 +1062,7 @@ export default function TripScreen() {
       onPress: () => router.push({ pathname: '/trip/route/[id]', params: { id: tripId } }),
     });
     if (hasPlan) {
-      actions.push({
-        key: 'budget',
-        label: t('plan.budget'),
-        icon: 'wallet-outline',
-        onPress: () => router.push({ pathname: '/trip/budget/[id]', params: { id: tripId } }),
-      });
+      actions.push(budgetAction);
       actions.push({
         key: 'rebuild',
         label: t('plan.rebuild'),
@@ -948,31 +1071,8 @@ export default function TripScreen() {
       });
     }
     actions.push({ key: 'duplicate', label: t('plan.duplicate'), icon: 'content-copy', onPress: () => duplicate.mutate() });
-    // A copy of the trip as a card, into friends' chats (friends-chat step 4, mockup 9)
-    if (me.data && data) {
-      const profile = me.data;
-      actions.push({
-        key: 'send',
-        label: t('chat.share.sendToFriend'),
-        icon: 'send-outline',
-        onPress: () => {
-          // The destinations, if loaded, give the card its locator map at once; the server adds it anyway
-          const card = tripCard(
-            data,
-            { id: profile.id, name: profile.display_name || profile.username || '' },
-            queryClient.getQueryData<Destination[]>(['destinations']),
-          );
-          router.push({ pathname: '/share/send', params: { card: JSON.stringify(card) } });
-        },
-      });
-    }
-    actions.push({
-      key: 'delete',
-      label: t('plan.deleteTrip'),
-      icon: 'trash-can-outline',
-      danger: true,
-      onPress: () => confirm(t('plan.deleteTitle'), t('plan.deleteBody'), t('plan.deleteOk'), () => remove.mutate(), true),
-    });
+    if (sendToFriend) actions.push({ key: 'send', label: t('chat.share.sendToFriend'), icon: 'send-outline', onPress: sendToFriend });
+    actions.push(deleteAction);
   }
 
   return (
@@ -1064,12 +1164,15 @@ export default function TripScreen() {
           )}
 
           <View style={styles.header}>
-            <View style={styles.titleRow}>
-              <Text style={styles.title} accessibilityRole="header" testID="trip-title">
+            {/* At large text the chip and the room go under the name: a one-word name broke mid-word beside them (step 16) */}
+            <View style={[styles.titleRow, fontScale >= 1.3 && styles.titleRowStacked]}>
+              <Text style={[styles.title, fontScale >= 1.3 && styles.titleStacked]} accessibilityRole="header" testID="trip-title">
                 {data.destination}
               </Text>
-              <PhaseChip start={data.start_date} end={data.end_date} today={today} />
-              {room ? <RoomButton unread={room.unread_count} onPress={() => router.push({ pathname: '/chat/[id]', params: { id: String(room.id) } })} /> : null}
+              <View style={styles.titleSide}>
+                <PhaseChip start={data.start_date} end={data.end_date} today={today} notTaken={notTaken} />
+                {room ? <RoomButton unread={room.unread_count} onPress={() => router.push({ pathname: '/chat/[id]', params: { id: String(room.id) } })} /> : null}
+              </View>
             </View>
             <Text style={styles.subtitle}>
               {/* On the trip, today's date (frame 31: "Sat 21 Nov · 2 travellers") */}
@@ -1085,13 +1188,41 @@ export default function TripScreen() {
             ) : null}
           </View>
 
+          {/* After the trip (frame 33): "Your trip" with your rating, above the budget */}
+          {recap ? <TripRecap tripId={tripId} numbers={recapNumbers(data, days)} /> : null}
+
           {budget.data ? <BudgetRow data={budget.data} onPress={() => router.push({ pathname: '/trip/budget/[id]', params: { id: tripId } })} /> : null}
+
+          {/* "Put this trip on your map?" while it's unanswered, and with something to mark */}
+          {after && mine && !notTaken && !data.visited_prompt && mapPlaces.length > 0 ? (
+            <MapOffer places={mapPlaces} busy={marking.busyId === tripId} onMark={() => marking.mark(data)} onNotNow={() => marking.notNow(data)} />
+          ) : null}
+
+          {after && went ? (
+            // One under the other at large text (each fits on a line there)
+            <View style={[styles.afterActions, fontScale >= 1.3 && styles.afterActionsStacked]}>
+              <PressableScale
+                haptic="selection"
+                onPress={() => setAgainOpen(true)}
+                style={[styles.afterButton, styles.againButton]}
+                accessibilityRole="button"
+                testID="plan-again"
+              >
+                <Text style={styles.againText}>{t('after.again')}</Text>
+              </PressableScale>
+              {sendToFriend ? (
+                <PressableScale haptic="selection" onPress={sendToFriend} style={[styles.afterButton, styles.sendButton]} accessibilityRole="button" testID="send-trip">
+                  <Text style={styles.sendText}>{t('chat.share.sendToFriend')}</Text>
+                </PressableScale>
+              ) : null}
+            </View>
+          ) : null}
 
           {!hasPlan ? (
             <View style={styles.empty} testID="plan-empty">
-              <Text style={styles.emptyTitle}>{mine ? t('plan.buildTitle') : t('plan.notPlanned')}</Text>
-              {mine && <Text style={styles.muted}>{t('plan.buildBody')}</Text>}
-              {mine && (
+              <Text style={styles.emptyTitle}>{after ? t('after.noPlan') : mine ? t('plan.buildTitle') : t('plan.notPlanned')}</Text>
+              {canEdit && <Text style={styles.muted}>{t('plan.buildBody')}</Text>}
+              {canEdit && (
                 <Button
                   label={build.isPending ? t('plan.building') : t('plan.build')}
                   icon="map-marker-path"
@@ -1115,12 +1246,12 @@ export default function TripScreen() {
                   }}
                 />
 
-                {adviceForDay(advice.data?.suggestions, day.day_number).map((s) => (
+                {(after ? [] : adviceForDay(advice.data?.suggestions, day.day_number)).map((s) => (
                   <StayAdviceCard
                     key={s.id}
                     suggestion={s}
                     destination={data.destination}
-                    canAnswer={mine}
+                    canAnswer={canEdit}
                     busy={adviceBusy?.id === s.id ? adviceBusy.key : null}
                     onSwitch={() => answerAdvice(s, 'switch')}
                     onNotNow={() => answerAdvice(s, 'notNow')}
@@ -1158,13 +1289,14 @@ export default function TripScreen() {
                       meals={counts.meals}
                       money={byDay ? { amount: byDay.amount, estimate: byDay.estimate } : null}
                       travellers={data.num_travelers}
-                      roadMinutes={day.total_travel_time}
+                      // After the trip the road is in "Your trip" (frame 33: the day's places and meals, and its money)
+                      roadMinutes={after ? 0 : day.total_travel_time}
                     />
-                    {dayConditions && <ConditionChips day={dayConditions} onOpen={openConditions} />}
+                    {dayConditions && !after && <ConditionChips day={dayConditions} onOpen={openConditions} />}
                   </>
                 )}
 
-                {dayIndex === 0 && itinerary.data?.getting_there ? (
+                {after ? null : dayIndex === 0 && itinerary.data?.getting_there ? (
                   <GettingThere trip={itinerary.data.getting_there} tripId={tripId} />
                 ) : dayIndex === 0 && itinerary.data ? (
                   // No start given (or no way found): said plainly, so the plan's times and costs aren't misread
@@ -1173,7 +1305,7 @@ export default function TripScreen() {
                   </Text>
                 ) : null}
 
-                {mine &&
+                {canEdit &&
                   unplaced.map((u) => (
                     <UnplacedCard
                       key={u.place_id}
@@ -1192,7 +1324,7 @@ export default function TripScreen() {
                   </View>
                 )}
 
-                {dayProblems.length > 0 && (
+                {!after && dayProblems.length > 0 && (
                   <View style={styles.problems}>
                     <Text style={styles.problemsTitle}>{t('plan.needsAttention')}</Text>
                     {dayProblems.map((v, i) => (
@@ -1202,7 +1334,7 @@ export default function TripScreen() {
                           <Text style={styles.problemText}>{v.message}</Text>
                         </View>
                         {/* Back at the stay too late: a fresh plan for the day ends in time */}
-                        {mine && v.code === 'BACK_LATE' ? (
+                        {canEdit && v.code === 'BACK_LATE' ? (
                           <Button
                             variant="secondary"
                             icon="refresh"
@@ -1240,6 +1372,7 @@ export default function TripScreen() {
                 <View ref={attachRows} collapsable={false} style={styles.rows} testID="plan-rows">
                   {stopCount === 0 && <Text style={styles.muted}>{t('plan.emptyDay')}</Text>}
                   {/* Breakfast where you stay comes before leaving, dinner there after getting back */}
+                  {after ? null : (
                   <View style={dragging ? styles.dimmed : undefined}>
                     {/* On the trip, a meal where you stay that's over is a "Done" row, and once you've left, "From …" goes */}
                     {stayMealsOf(day).breakfast && isDone(stayMealsOf(day).breakfast!) ? (
@@ -1249,7 +1382,9 @@ export default function TripScreen() {
                     )}
                     {stopCount > 0 && !stopRows.some((r) => isFixed(r.item)) && <BaseRow way="from" base={day.start_base} leg={day.start_leg} at={leaveAt(day)} />}
                   </View>
+                  )}
                   {renderRows(day)}
+                  {after ? null : (
                   <View style={dragging ? styles.dimmed : undefined}>
                     {stopCount > 0 && <BaseRow way="back" base={day.end_base} leg={day.return_leg} at={backAt(day)} />}
                     {stayMealsOf(day).dinner && isDone(stayMealsOf(day).dinner!) ? (
@@ -1258,17 +1393,24 @@ export default function TripScreen() {
                       <StayMealRow item={stayMealsOf(day).dinner} />
                     )}
                   </View>
+                  )}
                 </View>
 
-                {/* Where you sleep tonight; on the last day, where you leave from */}
-                <TonightRow
-                  day={day}
-                  lastDay={dayIndex === days.length - 1}
-                  stay={mine ? stayForNight(stays.data?.stays, day.day_number) : null}
-                  onChange={mine && days.length > 1 ? () => setPickingStays(true) : undefined}
-                />
+                {/* Where you sleep tonight; on the last day, where you leave from. After the trip, the plan is kept as it was */}
+                {after ? (
+                  <Text style={styles.keptNote} testID="plan-kept">
+                    {went ? t('after.kept') : t('after.keptOnly')}
+                  </Text>
+                ) : (
+                  <TonightRow
+                    day={day}
+                    lastDay={dayIndex === days.length - 1}
+                    stay={mine ? stayForNight(stays.data?.stays, day.day_number) : null}
+                    onChange={canEdit && days.length > 1 ? () => setPickingStays(true) : undefined}
+                  />
+                )}
 
-                {mine && stopCount > 0 && (
+                {canEdit && stopCount > 0 && (
                   <PressableScale
                     haptic="selection"
                     disabled={busy}
@@ -1290,7 +1432,7 @@ export default function TripScreen() {
                   </PressableScale>
                 )}
 
-                {mine && (
+                {canEdit && (
                   <ChangePlan
                     dayNumber={day.day_number}
                     busy={busy}
@@ -1309,11 +1451,13 @@ export default function TripScreen() {
             ownerId={data.user_id ?? me.data?.id}
             mine={mine}
             hasPlan={hasPlan}
-            went={mine || !!room}
+            // "How was your trip?" here while it's on; after it, "Your trip" at the top has it (step 16)
+            went={went && phase?.kind === 'on'}
+            locked={after}
             stays={mine ? stays.data : null}
             room={room}
-            onStays={mine && (stays.data?.nights ?? 0) > 0 ? () => setPickingStays(true) : undefined}
-            onMeals={mine && day ? () => setMealsFor('trip') : undefined}
+            onStays={canEdit && (stays.data?.nights ?? 0) > 0 ? () => setPickingStays(true) : undefined}
+            onMeals={canEdit && day ? () => setMealsFor('trip') : undefined}
             note={hasPlan ? timesNote : null}
           />
         </BottomSheetScrollView>
@@ -1329,8 +1473,8 @@ export default function TripScreen() {
       <StopSheet
         item={sheetItem}
         issues={sheetItem ? issuesForItem(report, sheetItem.id) : []}
-        // A stop done today can't be changed any more
-        editable={mine && !busy && !(sheetItem && isDone(sheetItem))}
+        // A stop done today can't be changed any more, nor any stop once the trip is over
+        editable={canEdit && !busy && !(sheetItem && isDone(sheetItem))}
         onClose={() => setSheetItem(null)}
         onExplain={setWhy}
         onSwap={setReplacing}
@@ -1375,7 +1519,7 @@ export default function TripScreen() {
       <PlacesToEatSheet
         tripId={tripId}
         item={eatFor}
-        canPick={mine}
+        canPick={canEdit}
         busy={eatAt.isPending}
         onClose={() => setEatFor(null)}
         onPick={(restaurantId, name) => eatFor && eatAt.mutate({ itemId: eatFor.id, restaurantId, name })}
@@ -1406,6 +1550,18 @@ export default function TripScreen() {
         />
       )}
       <ActionSheet visible={menuOpen} title={t('plan.menuTitle')} actions={actions} onClose={() => setMenuOpen(false)} />
+      <PlanAgainSheet
+        visible={againOpen}
+        first={againDates(data, today)}
+        busy={again.isPending}
+        onClose={() => {
+          setAgainOpen(false);
+          const copy = madeCopy.current;
+          madeCopy.current = null;
+          if (copy) router.push({ pathname: '/trip/[id]', params: { id: copy.id } });
+        }}
+        onMake={(range) => again.mutate(range)}
+      />
     </View>
   );
 }
@@ -1434,11 +1590,23 @@ const useStyles = makeStyles((t) => {
     handle: { backgroundColor: t.colors.textTertiary, width: 40 },
     sheetBody: { paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.xs, gap: t.spacing.md },
     readOnly: { backgroundColor: t.colors.accentSoft, borderRadius: 14, padding: t.spacing.md },
+    // After the trip (frame 33): "Plan it again" on the blue tint, "Send to a friend" on the inset; the note under the day
+    afterActions: { flexDirection: 'row', gap: t.spacing.sm },
+    afterActionsStacked: { flexDirection: 'column' },
+    afterButton: { flexGrow: 1, flexBasis: 0, minHeight: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', paddingHorizontal: t.spacing.md },
+    againButton: { backgroundColor: t.colors.accentTint },
+    againText: { fontSize: 14.5, fontWeight: '500', color: t.colors.onAccentSoft, textAlign: 'center' },
+    sendButton: { backgroundColor: t.colors.surfaceInset },
+    sendText: { fontSize: 14.5, fontWeight: '500', color: t.colors.textPrimary, textAlign: 'center' },
+    keptNote: { fontSize: 13, lineHeight: 19, color: t.colors.textSecondary, paddingHorizontal: t.spacing.xs },
     readOnlyText: { ...t.type.callout, color: t.colors.textPrimary },
     // Frame 29: the name in Anek 28 with where the trip is beside it, then the dates and travellers
     header: { gap: 2, paddingHorizontal: t.spacing.xs },
     titleRow: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md },
+    titleRowStacked: { flexDirection: 'column', alignItems: 'flex-start', gap: 6 },
     title: { ...t.type.title, flex: 1, minWidth: 0, fontSize: 28, lineHeight: 32, color: t.colors.textPrimary },
+    titleStacked: { flex: 0, alignSelf: 'stretch' },
+    titleSide: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, flexShrink: 0 },
     subtitle: { fontSize: 14, color: t.colors.textSecondary },
     todayPill: {
       alignSelf: 'flex-start',

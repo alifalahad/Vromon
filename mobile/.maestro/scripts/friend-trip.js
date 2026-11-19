@@ -4,14 +4,21 @@ const headers = { Authorization: `Bearer ${FRIEND_TOKEN}`, 'Content-Type': 'appl
 const list = http.get(`${API_URL}/api/v1/trips`, { headers });
 if (list.status !== 200) throw new Error(`Listing the friend's trips failed: ${list.status} (an expired FRIEND_TOKEN gives 401)`);
 const trips = json(list.body);
-let trip = trips.find((t) => t.status === 'generated');
+// One that hasn't ended: after its last day a trip opens on "Your trip" (UI refresh step 16), its days further
+// down, and it's read-only for its owner too
+const pad = (n) => String(n).padStart(2, '0');
+const day = (n) => {
+  const d = new Date(Date.now() + n * 86400000);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+let trip = trips.find((t) => t.status === 'generated' && t.end_date >= day(0));
 if (!trip) {
   const created = http.post(`${API_URL}/api/v1/trips`, {
     headers,
     body: JSON.stringify({
       destination: "Cox's Bazar",
-      start_date: '2027-01-10',
-      end_date: '2027-01-11',
+      start_date: day(60),
+      end_date: day(61),
       num_travelers: 2,
       total_budget: 20000,
       preference: { interests: ['Beach', 'Food'] },

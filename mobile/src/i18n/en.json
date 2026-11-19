@@ -313,7 +313,8 @@
       "notBuilt": "Plan not built yet",
       "onMap": "On your map",
       "markVisited": "Mark visited",
-      "markA11y": "Mark {{places}} as visited on your map"
+      "markA11y": "Mark {{places}} as visited on your map",
+      "notTaken": "Not taken"
     },
     "firstTitle": "Plan your first trip",
     "firstBody": "Pick where and when. Vromon builds the days around what you want to see, and you can change anything after.",
@@ -852,7 +853,8 @@
       "before_other": "In {{n}} days",
       "tomorrow": "Tomorrow",
       "on": "Day {{day}} of {{of}}",
-      "after": "Finished"
+      "after": "Finished",
+      "notTaken": "Not taken"
     },
     "budgetOf": "of {{total}}",
     "budgetLeft": "{{amount}} left",
@@ -2557,6 +2559,38 @@
     "reminderBody": "One tap is enough. Only you see it.",
     "rate": "Rate",
     "notNow": "Not now"
+  },
+  "after": {
+    "yourTrip": "YOUR TRIP",
+    "days_one": "day",
+    "days_other": "days",
+    "places_one": "place",
+    "places_other": "places",
+    "km": "{{km}} km",
+    "onTheRoad": "on the road there",
+    "ratingLabel": "Your rating · only you see it",
+    "mapTitle": "Put this trip on your map?",
+    "mapOne": "Marks {{place}} as visited.",
+    "mapMany": "Marks {{list}} and {{last}} as visited.",
+    "again": "Plan it again",
+    "kept": "The plan is kept as it was. “Plan it again” makes a copy you can change.",
+    "keptOnly": "The plan is kept as it was.",
+    "noPlan": "No plan was made for this trip.",
+    "ratedGood": "You rated it good",
+    "ratedBad": "You rated it bad",
+    "rateA11y": "Rate {{name}}",
+    "notTaken": "This trip didn’t happen",
+    "didHappen": "It did happen",
+    "notTakenTitle": "This trip didn’t happen?",
+    "notTakenBody": "It leaves “Your trips so far”, and Vromon won’t ask you to rate it or put it on your map. Its plan stays here, marked “Not taken”. You can undo this from ⋮.",
+    "notTakenOk": "It didn’t happen",
+    "notTakenDone": "Marked as not taken",
+    "didHappenDone": "Back in your trips so far",
+    "notTakenFailed": "Couldn’t change it",
+    "againBody": "A copy of this trip for new dates, with its places and your choices. You build its plan next.",
+    "againGo": "Make the copy",
+    "againFailed": "Couldn’t make the copy",
+    "againReady": "Copied for {{range}}. Build its plan when you’re ready."
   },
   "travels": {
     "title": "Your travels",

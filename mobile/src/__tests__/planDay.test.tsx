@@ -102,9 +102,13 @@ describe("the trip's phase (one rule, the server's too)", () => {
     ];
     for (const [today, words] of cases) {
       const view = await render(<PhaseChip start="2026-11-20" end="2026-11-22" today={today} />);
-      expect(screen.getByTestId('trip-phase')).toHaveTextContent(words);
+      // (after it, a tick before the words: step 16)
+      expect(screen.getByTestId('trip-phase')).toHaveTextContent(new RegExp(`^.?${words}$`, 'u'));
       await view.unmount();
     }
+    // A trip that didn't happen (step 16, D19)
+    await render(<PhaseChip start="2026-11-20" end="2026-11-22" today="2026-11-23" notTaken />);
+    expect(screen.getByTestId('trip-phase')).toHaveTextContent(/^.?Not taken$/u);
   });
 
   it('in Bangla, with Bangla digits', async () => {

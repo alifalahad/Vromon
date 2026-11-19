@@ -264,6 +264,9 @@ class TestMarkVisited:
         assert trip["visited_prompt"] is None
         resp = client.post(f"{API}/trips/{trip['id']}/mark-visited", json={"mark": True})
         assert resp.status_code == 200 and resp.json()["visited_prompt"] == "marked"
+        # New on the map: Dhaka (wanted, now visited) and Cox's Bazar; Bangladesh was there (lived), its dates
+        # filled in only (docs/ui-refresh step 16: the count says what the offer named)
+        assert resp.json()["places_marked"] == 2
         with _ApiTestSession() as db:
             visits = {(v.place_type, v.place_code): v for v in db.scalars(select(Visit).where(Visit.user_id == ivy.id))}
         assert visits[("country", "BD")].status == "lived"  # never downgraded
