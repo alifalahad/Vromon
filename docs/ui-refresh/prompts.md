@@ -29,7 +29,7 @@ The owner's copy for the account used from step 13 on (2026-11-18). Checked agai
 | 15 | (asked 2026-11-14) | On the trip: the plan's "Now" card and Today | ✅ done 2026-11-18 | [step-15-report.md](reports/step-15-report.md) |
 | 16 | (asked 2026-11-14) | After the trip: the trip as it was; "This trip didn't happen" | ✅ done 2026-11-19 | [step-16-report.md](reports/step-16-report.md) |
 | 17 | (asked 2026-11-14) | Conditions, before, on and after the trip | ✅ done 2026-11-19 | [step-17-report.md](reports/step-17-report.md) |
-| 18 | (asked 2026-11-14) | Budget, redesigned | not started | |
+| 18 | (asked 2026-11-14) | Budget, redesigned | ✅ done 2026-11-19 | [step-18-report.md](reports/step-18-report.md) |
 | 19 | (asked 2026-11-14) | What you really spent: noting it, Budget on and after the trip | not started | |
 | 20 | (whole app) | Polish pass, full checks, the friends' APK | not started | |
 

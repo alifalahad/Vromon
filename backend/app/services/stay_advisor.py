@@ -507,7 +507,9 @@ def out(row: "StaySuggestion", trip: "Trip") -> dict:
         "hotel": {"id": h.id, "name": h.name, "destination_name": h.destination_name, "price_per_night": h.price_per_night,
                   "currency": h.currency, "rating": h.rating, "rating_known": h.rating_known,
                   "latitude": h.latitude, "longitude": h.longitude},
-        "current": {"id": cur.id, "name": cur.name, "price_per_night": cur.price_per_night if cur.price_known else None}
+        # Its rating only when known (docs/ui-refresh step 18)
+        "current": {"id": cur.id, "name": cur.name, "price_per_night": cur.price_per_night if cur.price_known else None,
+                    "rating": cur.rating if cur.rating_known else None}
         if cur is not None else None,
         "money_saved": row.money_saved,
         "minutes_saved": row.minutes_saved,

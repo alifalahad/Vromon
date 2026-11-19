@@ -33,6 +33,7 @@ export function BudgetCard({
   onBudget,
   onTier,
   onCurrency,
+  testID = 'budget-total',
 }: {
   /** The group's total, in taka */
   budget: number;
@@ -46,6 +47,8 @@ export function BudgetCard({
   onBudget: (taka: number) => void;
   onTier: (tier: Tier) => void;
   onCurrency: (code: Currency) => void;
+  /** The amount field's (Budget's "Change" sheet has its own: docs/ui-refresh step 18) */
+  testID?: string;
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
@@ -94,11 +97,13 @@ export function BudgetCard({
           selectTextOnFocus
           keyboardType="number-pad"
           maxLength={11}
+          // At the largest text the amount ran past the field's left edge ("২৫,০০০" read "৫,০০০")
+          maxFontSizeMultiplier={1.3}
           placeholder={canType ? t('newTrip.budgetType') : ''}
           placeholderTextColor={colors.textTertiary}
           style={styles.amount}
           accessibilityLabel={t('newTrip.budgetAmount', { currency: t(`currencies.${currency}`) })}
-          testID="budget-total"
+          testID={testID}
         />
         <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.textTertiary} />
       </View>
@@ -119,7 +124,16 @@ export function BudgetCard({
               accessibilityState={{ selected: on }}
               testID={`tier-${x}`}
             >
-              <Text style={[styles.segmentText, on && styles.segmentTextOn]}>{t(`newTrip.tiers.${x}`)}</Text>
+              {/* One line in its third: "আরামদায়ক" broke mid-word at the largest text */}
+              <Text
+                style={[styles.segmentText, on && styles.segmentTextOn]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                maxFontSizeMultiplier={1.3}
+              >
+                {t(`newTrip.tiers.${x}`)}
+              </Text>
             </PressableScale>
           );
         })}

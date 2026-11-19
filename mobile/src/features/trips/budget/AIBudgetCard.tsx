@@ -7,7 +7,6 @@
  * Nothing changes until "Use as my budget"; the budget can still be set by hand when the trip is made.
  */
 
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -73,30 +72,19 @@ export function AIBudgetCard({ tripId, mine, currentBudget, onApplied }: Props) 
 
   return (
     <View style={styles.card} testID="ai-budget">
+      {/* One quiet card under the ways to save (docs/ui-refresh step 18, frame 37) */}
       <View style={styles.head}>
-        <View style={styles.icon}>
-          <MaterialCommunityIcons name="creation" size={22} color={colors.link} />
-        </View>
-        <View style={styles.flex}>
-          <Text style={styles.title} accessibilityRole="header">
-            {t('aiBudget.title')}
-          </Text>
-          <Text style={styles.sub}>{t('aiBudget.sub')}</Text>
-        </View>
+        <Text style={styles.title} accessibilityRole="header">
+          {t('aiBudget.title')}
+        </Text>
+        <Text style={styles.sub}>{t('aiBudget.sub')}</Text>
       </View>
 
       {!data && !loading ? (
         <>
           {errorText ? <Text style={styles.error}>{errorText}</Text> : null}
-          <PressableScale
-            haptic="selection"
-            onPress={() => q.refetch()}
-            style={styles.primary}
-            accessibilityRole="button"
-            testID="ai-budget-run"
-          >
-            <MaterialCommunityIcons name="creation" size={18} color={colors.onAccent} />
-            <Text style={styles.primaryText}>{errorText ? t('aiBudget.retry') : t('aiBudget.run')}</Text>
+          <PressableScale haptic="selection" onPress={() => q.refetch()} style={styles.quiet} accessibilityRole="button" testID="ai-budget-run">
+            <Text style={styles.quietText}>{errorText ? t('aiBudget.retry') : t('aiBudget.run')}</Text>
           </PressableScale>
         </>
       ) : null}
@@ -186,12 +174,13 @@ export function AIBudgetCard({ tripId, mine, currentBudget, onApplied }: Props) 
 }
 
 const useStyles = makeStyles((t) => ({
-  card: { gap: t.spacing.md, padding: t.spacing.lg, borderRadius: 20, backgroundColor: t.colors.surface, borderWidth: 1, borderColor: t.colors.divider },
-  head: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md },
-  icon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.accentSoft },
+  card: { gap: t.spacing.md, padding: t.spacing.lg, borderRadius: 22, backgroundColor: t.colors.surface, ...t.depth.card },
+  head: { gap: 3 },
   flex: { flex: 1, minWidth: 0 },
-  title: { ...t.type.headline, color: t.colors.textPrimary },
-  sub: { ...t.type.footnote, color: t.colors.textSecondary },
+  title: { fontSize: 15, lineHeight: 19, fontWeight: '700', color: t.colors.textPrimary },
+  sub: { fontSize: 13, lineHeight: 18, color: t.colors.textSecondary },
+  quiet: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: t.colors.surfaceInset },
+  quietText: { fontSize: 14.5, fontWeight: '500', color: t.colors.textPrimary },
   error: { ...t.type.footnote, color: t.colors.danger },
   loading: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, minHeight: 44 },
   result: { gap: t.spacing.md },
@@ -222,7 +211,7 @@ const useStyles = makeStyles((t) => ({
     gap: 6,
     paddingHorizontal: t.spacing.lg,
     borderRadius: 999,
-    backgroundColor: t.colors.accent,
+    backgroundColor: t.colors.accentStrong,
   },
   primaryText: { ...t.type.callout, fontWeight: '700', color: t.colors.onAccent },
   secondary: { minHeight: 44, justifyContent: 'center', paddingHorizontal: t.spacing.lg, borderRadius: 999, backgroundColor: t.colors.accentSoft },

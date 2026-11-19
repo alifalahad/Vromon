@@ -106,6 +106,20 @@ export type ThemeColors = {
   /** "By the hour" (frame 34): the temperature's line; the chance of rain under 60% (likely hours are `accent`) */
   chartTemp: string;
   chartRainSoft: string;
+  /** Budget's five parts (UI refresh step 18, "The look"), always in this order, never by size, only for Budget */
+  partGettingThere: string;
+  partStay: string;
+  partFood: string;
+  partTickets: string;
+  partLocal: string;
+  /** Words inside a piece of the Budget bar: on getting there's blue, and on the other four */
+  onPartGettingThere: string;
+  onPart: string;
+  /** On Budget's hero card (frame 37): the meter and its track; "left" in green and "over by" in coral, each with an icon */
+  heroBar: string;
+  heroBarTrack: string;
+  heroGood: string;
+  heroDanger: string;
 };
 
 /** Names over other people's bubbles in a trip room, one per person; each 4.5:1 on `bubbleTheirs` (contrast.test.ts) */
@@ -180,6 +194,18 @@ export const darkColors: ThemeColors = {
   heroWarningTint: 'rgba(255, 181, 71, 0.14)',
   chartTemp: '#EE8150',
   chartRainSoft: '#3D5F9E',
+  partGettingThere: '#4C86F0',
+  partStay: '#E0703C',
+  partFood: '#1FA98C',
+  partTickets: '#C98500',
+  partLocal: '#D9628F',
+  // White on this lighter blue is only 3.4:1 for the bar's small words: navy instead (contrast.test.ts)
+  onPartGettingThere: '#0F1B2D',
+  onPart: '#0F1B2D',
+  heroBar: '#6FA0FF',
+  heroBarTrack: 'rgba(111, 160, 255, 0.26)',
+  heroGood: '#7BD8A5',
+  heroDanger: '#FF9F96',
 };
 
 export const lightColors: ThemeColors = {
@@ -249,6 +275,17 @@ export const lightColors: ThemeColors = {
   heroWarningTint: 'rgba(255, 181, 71, 0.14)',
   chartTemp: '#E8703A',
   chartRainSoft: '#A9C0F0',
+  partGettingThere: '#2459D6',
+  partStay: '#E8703A',
+  partFood: '#14A38B',
+  partTickets: '#EDA100',
+  partLocal: '#D9628F',
+  onPartGettingThere: '#FFFFFF',
+  onPart: '#0F1B2D',
+  heroBar: '#6FA0FF',
+  heroBarTrack: 'rgba(111, 160, 255, 0.26)',
+  heroGood: '#7BD8A5',
+  heroDanger: '#FF9F96',
 };
 
 export const radius = {

@@ -7,8 +7,10 @@ actually apply to this plan, each applied (and undone) in one tap.
     `routing.modes` (per seat, or per car).
   - Stay: night by night (the trip's stays): a hotel's price × its nights × rooms (2 travellers
     a room); a family or friend's home, or a day trip, costs nothing.
-  - Food and tickets: the plan's prices × travellers. Meals without a restaurant
-    record have a placeholder price, so food is then an estimate.
+  - Food and tickets: the plan's prices × travellers. A meal without a restaurant
+    record, or at one whose prices aren't known, has a default price: food is then an
+    estimate, with how many meals are guesses (docs/ui-refresh step 18). Tickets with no
+    entry price known at all are not known (never "৳0").
   - Local travel: every leg of every day, from where the day starts to the first stop and
     from its last stop or meal back to where the traveller sleeps included, by the leg's mode,
     its fare × the vehicles needed. Legs without road data use the straight line × 1.3.
@@ -47,6 +49,17 @@ class SaveError(Exception):
 
 def _r10(x: float) -> int:
     return int(x / 10 + 0.5) * 10
+
+
+def meal_is_guess(item: "ItineraryItem") -> bool:
+    """
+    A meal priced at the default (docs/ui-refresh step 18): one meant for a restaurant that has no
+    restaurant record, or whose restaurant's prices aren't known. Your own food and meals where you
+    stay cost what they're said to.
+    """
+    if item.item_type != "meal" or (item.meal_source or "restaurant") != "restaurant":
+        return False
+    return item.restaurant_id is None or (item.restaurant is not None and not item.restaurant.cost_known)
 
 
 def vehicles(mode: Optional[str], travellers: int) -> int:
@@ -175,7 +188,7 @@ def full_budget(db: "Session", trip: "Trip", hotel, getting_there: Optional[dict
                 food += (i.cost or 0.0) * n
                 if kind == "own":
                     own_total += (i.cost or 0.0) * n
-                if i.restaurant_id is None and kind == "restaurant":
+                if meal_is_guess(i):
                     placeholder += 1
                     day_estimate = True
             elif i.item_type == "activity":
@@ -207,7 +220,11 @@ def full_budget(db: "Session", trip: "Trip", hotel, getting_there: Optional[dict
         # A day can set its own amount, so the trip's amount alone doesn't say what the plan counts
         "own_total": round(own_total),
     })
-    tickets_part = _part("tickets", tickets_total, False, {"paid": paid, "free": free, "unknown": unknown})
+    if unknown and not paid and not free:
+        # Not one entry price known: nothing to add, and said so (never "৳0")
+        tickets_part = _part("tickets", None, False, {"reason": "no_price", "places": unknown, "paid": 0, "free": 0, "unknown": unknown})
+    else:
+        tickets_part = _part("tickets", tickets_total, False, {"paid": paid, "free": free, "unknown": unknown})
     local_part = _part("local", local_total, local_total > 0, {"legs": legs_count, "modes": sorted(local_modes)})
 
     parts = [gt, stay, food_part, tickets_part, local_part]
@@ -242,7 +259,8 @@ def stay_part(bases, nights: int, rooms: int, currency: str, private: bool = Fal
     only = bases.blocks[0] if len(bases.blocks) == 1 else None
     if only is not None and only.kind == "hotel" and only.hotel is not None:
         h = only.hotel
-        detail.update(hotel=h.name, hotel_id=h.id, rating=h.rating, per_night=h.price_per_night)
+        # A rating that isn't known isn't passed on as one (the 3.5 is a default)
+        detail.update(hotel=h.name, hotel_id=h.id, rating=h.rating if h.rating_known else None, per_night=h.price_per_night)
     return _part("stay", cost["amount"], False, detail)
 
 
@@ -262,11 +280,14 @@ def ways_to_save(db: "Session", trip: "Trip", hotel: Optional["Hotel"], nights: 
     n = trip.num_travelers
     out = []
 
-    # Sleeping somewhere else for some nights: the stay advisor's open suggestions (owner only)
+    # Sleeping somewhere else for some nights: the stay advisor's open suggestions (owner only). Offered on
+    # its price; the two ratings only when both are known (docs/ui-refresh step 18: never a default 3.5)
     for s in advice or []:
+        new, now = s["hotel"], s.get("current") or {}
+        both = new.get("rating_known") and now.get("rating") is not None
         out.append({
             "key": "stay", "saving": _r10(s["money_saved"] or 0), "estimate": True,
-            "detail": s,
+            "detail": {**s, "ratings": {"to": new["rating"], "from": now["rating"]} if both else None},
             "action": {"kind": "stay_advice", "suggestion_id": s["id"]},
         })
 

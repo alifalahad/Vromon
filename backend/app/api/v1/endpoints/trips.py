@@ -1586,8 +1586,12 @@ def _budget(db: Session, trip: Trip, viewer: Optional[User] = None, advice: bool
         incomplete.append(f"Accommodation is priced in {stay['detail'].get('currency')}, not {currency}, and is not included.")
     if placeholder_meals:
         incomplete.append(
-            f"{placeholder_meals} meal(s) have no restaurant data; their placeholder price is shown separately, not as a real cost."
+            f"{placeholder_meals} meal(s) have no known price (no restaurant, or its prices aren't known); "
+            "their placeholder price is shown separately, not as a real cost."
         )
+    tickets_part = next(p for p in full["parts"] if p["key"] == "tickets")
+    if not tickets_part["known"]:
+        incomplete.append(f"Tickets are not included (entry prices aren't known for {tickets_part['detail']['places']} place(s)).")
     for cur, count in sorted(other_currency.items()):
         incomplete.append(f"{count} item(s) priced in {cur} are left out (no conversion to {currency}).")
 
@@ -1935,9 +1939,8 @@ def _cost_source(item: ItineraryItem) -> str:
     placeholder price, not real data; so does a visit whose entry price isn't known (it counts 0).
     """
     if item.item_type == "meal":
-        if item.meal_source in ("own", "stay"):
-            return "data"  # your own food costs what you said (0 if nothing); where you stay, nothing
-        return "placeholder" if item.restaurant_id is None or (item.restaurant is not None and not item.restaurant.cost_known) else "data"
+        # One rule with the budget's (your own food costs what you said, 0 if nothing; where you stay, nothing)
+        return "placeholder" if budget_service.meal_is_guess(item) else "data"
     if item.place is not None and not item.place.cost_known:
         return "placeholder"
     return "data"

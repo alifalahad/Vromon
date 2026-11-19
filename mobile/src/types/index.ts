@@ -94,8 +94,8 @@ export interface StaySuggestion {
   /** The day it's shown above: the day you'd move (night a's day) */
   day_number: number;
   hotel: { id: number; name: string; destination_name: string; price_per_night: number; currency: string; rating: number; rating_known: boolean; latitude: number; longitude: number };
-  /** The hotel it replaces (price null when not known) */
-  current: { id: number; name: string; price_per_night: number | null } | null;
+  /** The hotel it replaces (price and rating null when not known) */
+  current: { id: number; name: string; price_per_night: number | null; rating?: number | null } | null;
   /** null: the current hotel's price isn't known (only the road time made the case) */
   money_saved: number | null;
   minutes_saved: number;
@@ -945,6 +945,8 @@ export interface BudgetPart {
   estimate: boolean;
   detail: {
     reason?: 'no_origin' | 'no_hotel' | 'currency' | 'no_price';
+    /** Tickets not known: how many places have no entry price (docs/ui-refresh step 18) */
+    places?: number;
     currency?: string;
     // getting_there
     mode?: TransportMode;
@@ -954,7 +956,7 @@ export interface BudgetPart {
     count?: number;
     // stay
     hotel?: string;
-    rating?: number;
+    rating?: number | null;
     nights?: number;
     rooms?: number;
     per_night?: number;
@@ -999,8 +1001,14 @@ export type SaveAction =
   | { kind: 'modes'; modes: Record<string, TravelMode | null>; times?: Record<string, [string, string]> };
 
 export type BudgetSave =
-  | { key: 'hotel'; saving: number; estimate: boolean; action: SaveAction; detail: { from: string; from_rating: number; to: string; to_rating: number; per_night: number } }
-  | { key: 'stay'; saving: number; estimate: boolean; action: SaveAction; detail: StaySuggestion }
+  | {
+      key: 'stay';
+      saving: number;
+      estimate: boolean;
+      action: SaveAction;
+      /** `ratings`: both hotels' ratings, only when both are known (docs/ui-refresh step 18) */
+      detail: StaySuggestion & { ratings?: { to: number; from: number } | null };
+    }
   | { key: 'skip'; saving: number; estimate: boolean; action: SaveAction; detail: { title: string; day_number: number; item_id: number } }
   | { key: 'rickshaw'; saving: number; estimate: boolean; action: SaveAction; detail: { legs: number; extra_min: number } };
 

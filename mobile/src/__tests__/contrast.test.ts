@@ -260,6 +260,28 @@ describe.each([
     expect(contrast(colors.accent, colors.surface)).toBeGreaterThanOrEqual(3);
   });
 
+  it('Budget (UI refresh step 18): the hero and its statuses, the meter, the words inside the bar, Apply', () => {
+    const seen = (tint: string, under: string) => {
+      const m = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(tint);
+      if (!m) return tint;
+      const top = `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+      return mix(under, top, Number(m[4]));
+    };
+    // "THE PLAN COSTS ABOUT", the amount, its lines, "Change", and "left" / "only … left" / "over by" (each with an icon)
+    for (const text of [colors.highlight, colors.onHero, colors.onHeroSecondary, colors.heroLink, colors.heroGood, colors.heroWarning, colors.heroDanger]) {
+      expect(contrast(text, colors.hero)).toBeGreaterThanOrEqual(AA);
+    }
+    // The meter against its track and against the card (3:1, a drawing)
+    expect(contrast(colors.heroBar, seen(colors.heroBarTrack, colors.hero))).toBeGreaterThanOrEqual(3);
+    expect(contrast(colors.heroBar, colors.hero)).toBeGreaterThanOrEqual(3);
+    // The share written inside each piece of the bar
+    expect(contrast(colors.onPartGettingThere, colors.partGettingThere)).toBeGreaterThanOrEqual(AA);
+    for (const part of [colors.partStay, colors.partFood, colors.partTickets, colors.partLocal]) expect(contrast(colors.onPart, part)).toBeGreaterThanOrEqual(AA);
+    // Apply on its blue tint; "Save ৳…" on the card
+    expect(contrast(colors.onAccentSoft, colors.accentTint)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.success, colors.surface)).toBeGreaterThanOrEqual(AA);
+  });
+
   it("a switch's track when off shows on a card and on the ground (3:1)", () => {
     expect(contrast(colors.switchOff, colors.surface)).toBeGreaterThanOrEqual(3);
     expect(contrast(colors.switchOff, colors.bg)).toBeGreaterThanOrEqual(3);
