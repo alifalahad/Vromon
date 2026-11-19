@@ -110,6 +110,24 @@ def disable_live_ai_providers():
     mp.undo()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def no_weather_service():
+    """
+    The weather service is never asked in tests: a test that forgets its fake gets "unavailable"
+    (as with no connection), not the real forecast. Tests fake `openmeteo.forecast_spots` /
+    `forecast` / `marine`, or `openmeteo._get` with a saved answer (docs/ui-refresh step 17).
+    """
+    from app.services.conditions import openmeteo
+
+    def offline(url, params, timeout):
+        raise openmeteo.ConditionsUnavailable("no network in tests")
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(openmeteo, "_get", offline)
+    yield
+    mp.undo()
+
+
 # ---------------------------------------------------------------------------
 # Accounts: API tests run as a signed-in test user
 # ---------------------------------------------------------------------------

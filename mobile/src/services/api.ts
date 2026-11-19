@@ -9,6 +9,7 @@ import { create, type AxiosRequestConfig } from 'axios';
 
 import { getAccessToken } from '../features/auth/session';
 import { supabase } from '../features/auth/supabase';
+import { localToday } from '../features/trips/dates';
 import type {
   AddRef,
   AIBudget,
@@ -289,9 +290,12 @@ export const tripsApi = {
   placesToEat: (tripId: number, itemId: number) => api.get<PlacesToEat>(`/trips/${tripId}/items/${itemId}/places-to-eat`).then((r) => r.data),
   eatAt: (tripId: number, itemId: number, restaurantId: number) =>
     api.put<EditResult>(`/trips/${tripId}/items/${itemId}/restaurant`, { restaurant_id: restaurantId }).then((r) => r.data),
-  // Live conditions (trip planner step 6): weather, sea, sun and usual traffic, with warnings per stop
+  // Live conditions (trip planner step 6): weather, sea, sun and usual traffic, with warnings per stop. The
+  // phone's date says which days are over, today or to come (docs/ui-refresh step 17)
   conditions: (tripId: number, refresh = false) =>
-    api.get<TripConditions>(`/trips/${tripId}/conditions`, { params: refresh ? { refresh: true } : undefined }).then((r) => r.data),
+    api
+      .get<TripConditions>(`/trips/${tripId}/conditions`, { params: refresh ? { today: localToday(), refresh: true } : { today: localToday() } })
+      .then((r) => r.data),
   keepWarning: (tripId: number, itemId: number, code: ConditionWarning['code'], kept = true) =>
     api.post<{ item_id: number; kept_warnings: string[] }>(`/trips/${tripId}/items/${itemId}/keep`, { code, kept }).then((r) => r.data),
   addItem: (tripId: number, dayId: number, placeId: number, position?: number) =>

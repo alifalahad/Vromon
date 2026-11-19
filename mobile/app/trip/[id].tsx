@@ -61,6 +61,7 @@ import { ChangePlan } from '../../src/features/trips/plan/ChangePlan';
 import { AboutTrip } from '../../src/features/trips/plan/AboutTrip';
 import { DropStrip } from '../../src/features/trips/plan/DropStrip';
 import { ConditionChips } from '../../src/features/trips/conditions/ConditionChips';
+import { dayWhen } from '../../src/features/trips/conditions/dayView';
 import { isSerious, useConditionText } from '../../src/features/trips/conditions/useConditionText';
 import { GettingThere } from '../../src/features/trips/plan/GettingThere';
 import { LegSheet } from '../../src/features/trips/plan/LegSheet';
@@ -1097,7 +1098,7 @@ export default function TripScreen() {
       {/* The row over the map (docs/ui-refresh step 7): weather, map options, Full map, ⋮; no back arrow */}
       <TripTopBar
         top={insets.top + 8}
-        look={weatherLook(dayConditions, conditions.data)}
+        look={weatherLook(dayConditions, conditions.data, clock.getTime(), { today, minute: nowMin })}
         dayNumber={day?.day_number ?? 1}
         layersOpen={layersOpen}
         onWeather={openConditions}
@@ -1292,7 +1293,7 @@ export default function TripScreen() {
                       // After the trip the road is in "Your trip" (frame 33: the day's places and meals, and its money)
                       roadMinutes={after ? 0 : day.total_travel_time}
                     />
-                    {dayConditions && !after && <ConditionChips day={dayConditions} onOpen={openConditions} />}
+                    {dayConditions && !after && dayWhen(dayConditions, today) !== 'past' && <ConditionChips day={dayConditions} onOpen={openConditions} />}
                   </>
                 )}
 

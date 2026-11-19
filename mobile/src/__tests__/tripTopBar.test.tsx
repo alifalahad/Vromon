@@ -49,17 +49,44 @@ beforeEach(async () => {
   await act(() => i18n.changeLanguage('en'));
 });
 
+// The phone's date and minute: before the trip, on its day at 11:30, after it
+const BEFORE = { today: '2026-11-18', minute: 10 * 60 };
+const ON = { today: '2026-11-20', minute: 11 * 60 + 30 };
+const AFTER = { today: '2026-11-25', minute: 10 * 60 };
+const RAINY = { ...DAY, hours: ['11:00', '12:00', '13:00', '14:00', '15:00', '16:00'].map((time, i) => ({ time, temp: 29 - (i > 3 ? 2 : 0), rain: i > 3 ? 70 : 10, code: i > 3 ? 61 : 2 })) };
+
 describe('what the weather button says', () => {
   it('waits for the forecast, says when there is none yet, else the day', () => {
-    expect(weatherLook(DAY, undefined, NOW)).toEqual({ kind: 'loading' });
-    expect(weatherLook(DAY, COND({ available: false }), NOW)).toEqual({ kind: 'later' });
-    expect(weatherLook({ ...DAY, in_forecast: false }, COND(), NOW)).toEqual({ kind: 'later' });
-    expect(weatherLook(DAY, COND(), NOW)).toMatchObject({ kind: 'forecast', max: 31, min: 24, warnings: 0, old: false });
+    expect(weatherLook(DAY, undefined, NOW, BEFORE)).toEqual({ kind: 'loading' });
+    expect(weatherLook(DAY, COND({ available: false }), NOW, BEFORE)).toEqual({ kind: 'later', opensOn: null });
+    expect(weatherLook({ ...DAY, in_forecast: false }, COND(), NOW, BEFORE)).toEqual({ kind: 'later', opensOn: null });
+    expect(weatherLook(DAY, COND(), NOW, BEFORE)).toMatchObject({ kind: 'forecast', max: 31, min: 24, warnings: 0, old: false });
+  });
+
+  it('too early: the day its forecast opens (docs/ui-refresh step 17)', () => {
+    expect(weatherLook({ ...DAY, in_forecast: false, opens_on: '2026-11-05' }, COND(), NOW, { today: '2026-10-20', minute: 600 })).toEqual({
+      kind: 'later',
+      opensOn: '2026-11-05',
+    });
+  });
+
+  it("today's tab: the weather now and the next rain", () => {
+    const look = weatherLook(RAINY, COND({ now: { time: '11:15', temp: 28, code: 2 } }), NOW, ON);
+    expect(look).toMatchObject({ kind: 'now', temp: 28, code: 2, night: false, rain: { at: '15:00', now: false } });
+    // Without the service's own, this hour's forecast
+    expect(weatherLook(RAINY, COND(), NOW, ON)).toMatchObject({ kind: 'now', temp: 29, rain: { at: '15:00' } });
+    // Dry for the rest of the day
+    expect(weatherLook({ ...RAINY, hours: RAINY.hours.slice(0, 3) }, COND(), NOW, ON)).toMatchObject({ kind: 'now', rain: null });
+  });
+
+  it('a day that is over: as it was, or not kept', () => {
+    expect(weatherLook({ ...DAY, recorded: true }, COND(), NOW, AFTER)).toEqual({ kind: 'recorded', code: 0, max: 31 });
+    expect(weatherLook({ ...DAY, in_forecast: false, recorded: false, temp_max: null, temp_min: null }, COND(), NOW, AFTER)).toEqual({ kind: 'notKept' });
   });
 
   it('is quieter when the refresh failed or the forecast is hours old', () => {
-    expect(weatherLook(DAY, COND({ stale: true }), NOW)).toMatchObject({ old: true });
-    expect(weatherLook(DAY, COND({ fetched_at: new Date(NOW - 4 * 3600_000).toISOString() }), NOW)).toMatchObject({ old: true });
+    expect(weatherLook(DAY, COND({ stale: true }), NOW, BEFORE)).toMatchObject({ old: true });
+    expect(weatherLook(DAY, COND({ fetched_at: new Date(NOW - 4 * 3600_000).toISOString() }), NOW, BEFORE)).toMatchObject({ old: true });
   });
 
   it('counts warnings still standing (not the ones kept anyway)', () => {
@@ -70,13 +97,13 @@ describe('what the weather button says', () => {
         { code: 'rough_sea', kept: true },
       ] as ConditionsDay['warnings'],
     };
-    expect(weatherLook(day, COND(), NOW)).toMatchObject({ warnings: 1, serious: true });
+    expect(weatherLook(day, COND(), NOW, BEFORE)).toMatchObject({ warnings: 1, serious: true });
   });
 });
 
 describe('the row', () => {
   it("the owner's row: the weather, map options, Full map and ⋮; no back arrow", async () => {
-    const { props } = await bar(weatherLook(DAY, COND(), NOW));
+    const { props } = await bar(weatherLook(DAY, COND(), NOW, BEFORE));
     expect(screen.getByText('31°')).toBeTruthy();
     expect(screen.getByText('Clear')).toBeTruthy();
     expect(screen.getByText('Low 24°')).toBeTruthy();
@@ -93,32 +120,56 @@ describe('the row', () => {
   });
 
   it("a friend's row has no ⋮; Full map is gone while in Full map", async () => {
-    await bar(weatherLook(DAY, COND(), NOW), { onMore: undefined, onFullMap: undefined });
+    await bar(weatherLook(DAY, COND(), NOW, BEFORE), { onMore: undefined, onFullMap: undefined });
     expect(screen.queryByTestId('trip-menu')).toBeNull();
     expect(screen.queryByTestId('trip-full-map')).toBeNull();
     expect(screen.getByTestId('trip-layers')).toBeTruthy();
   });
 
   it('no forecast yet', async () => {
-    await bar(weatherLook({ ...DAY, in_forecast: false }, COND(), NOW));
+    await bar(weatherLook({ ...DAY, in_forecast: false }, COND(), NOW, BEFORE));
     expect(screen.getByText('Forecast later')).toBeTruthy();
     expect(screen.getByTestId('trip-weather').props.accessibilityLabel).toBe('Weather for Day 1: Forecast later. Open the weather');
   });
 
   it('offline: how old it is, instead of the low', async () => {
-    await bar(weatherLook(DAY, COND({ stale: true, fetched_at: new Date(Date.now() - 2 * 3600_000).toISOString() }), NOW));
+    await bar(weatherLook(DAY, COND({ stale: true, fetched_at: new Date(Date.now() - 2 * 3600_000).toISOString() }), NOW, BEFORE));
     expect(screen.getByTestId('trip-weather-second')).toHaveTextContent('2 h ago');
     expect(screen.queryByText('Low 24°')).toBeNull();
   });
 
   it('a warning: a mark on the sky, and said to screen readers', async () => {
-    await bar(weatherLook({ ...DAY, warnings: [{ code: 'storm', kept: false }] as ConditionsDay['warnings'] }, COND(), NOW));
+    await bar(weatherLook({ ...DAY, warnings: [{ code: 'storm', kept: false }] as ConditionsDay['warnings'] }, COND(), NOW, BEFORE));
     expect(screen.getByTestId('trip-weather-warning')).toBeTruthy();
     expect(screen.getByTestId('trip-weather').props.accessibilityLabel).toContain('1 warning');
   });
 
+  it("today's tab: Now, and when the rain starts (frame 31)", async () => {
+    await bar(weatherLook(RAINY, COND({ now: { time: '11:15', temp: 28, code: 2 } }), NOW, ON));
+    expect(screen.getByText('28°')).toBeTruthy();
+    expect(screen.getByText('Now')).toBeTruthy();
+    expect(screen.getByTestId('trip-weather-second')).toHaveTextContent('Rain from 15:00');
+    expect(screen.getByTestId('trip-weather').props.accessibilityLabel).toBe('Weather now, Day 1: 28 degrees, Partly cloudy. Rain from 15:00. Open the weather');
+  });
+
+  it('a day that is over: as it was (frame 33)', async () => {
+    await bar(weatherLook({ ...DAY, recorded: true }, COND(), NOW, AFTER));
+    expect(screen.getByText('31°')).toBeTruthy();
+    expect(screen.getByText('Clear')).toBeTruthy();
+    expect(screen.getByTestId('trip-weather-second')).toHaveTextContent('As it was');
+    expect(screen.getByTestId('trip-weather').props.accessibilityLabel).toBe('Weather for Day 1, as it was: 31 degrees, Clear. Open the weather');
+  });
+
+  it('too early: a calendar and the day the forecast opens; too old: not kept', async () => {
+    await bar(weatherLook({ ...DAY, in_forecast: false, opens_on: '2026-11-05' }, COND(), NOW, { today: '2026-10-20', minute: 600 }));
+    expect(screen.getByText('Forecast from 5 Nov')).toBeTruthy();
+    expect(screen.getByTestId('sky-later', { includeHiddenElements: true })).toBeTruthy();
+    await bar(weatherLook({ ...DAY, in_forecast: false, recorded: false, temp_max: null, temp_min: null }, COND(), NOW, AFTER));
+    expect(screen.getByText('Not kept')).toBeTruthy();
+  });
+
   it('the map options button says whether its panel is open', async () => {
-    await bar(weatherLook(DAY, COND(), NOW), { layersOpen: true });
+    await bar(weatherLook(DAY, COND(), NOW, BEFORE), { layersOpen: true });
     expect(screen.getByTestId('trip-layers').props.accessibilityState).toMatchObject({ expanded: true });
     expect(screen.getByTestId('trip-layers').props.accessibilityLabel).toBe('Close map options');
   });

@@ -101,6 +101,11 @@ export type ThemeColors = {
   heroWarning: string;
   /** After the trip (UI refresh step 16, frame 33): a quiet button on the hero card ("Edit"), with `onHero` text */
   heroQuiet: string;
+  /** Conditions (UI refresh step 17, frames 34 and 35): behind the next rain on the hero card, with `heroWarning` text */
+  heroWarningTint: string;
+  /** "By the hour" (frame 34): the temperature's line; the chance of rain under 60% (likely hours are `accent`) */
+  chartTemp: string;
+  chartRainSoft: string;
 };
 
 /** Names over other people's bubbles in a trip room, one per person; each 4.5:1 on `bubbleTheirs` (contrast.test.ts) */
@@ -172,6 +177,9 @@ export const darkColors: ThemeColors = {
   heroLink: '#8AB4F8',
   heroWarning: '#FFD08A',
   heroQuiet: 'rgba(255, 255, 255, 0.12)',
+  heroWarningTint: 'rgba(255, 181, 71, 0.14)',
+  chartTemp: '#EE8150',
+  chartRainSoft: '#3D5F9E',
 };
 
 export const lightColors: ThemeColors = {
@@ -238,6 +246,9 @@ export const lightColors: ThemeColors = {
   heroLink: '#8AB4F8',
   heroWarning: '#FFD08A',
   heroQuiet: 'rgba(255, 255, 255, 0.12)',
+  heroWarningTint: 'rgba(255, 181, 71, 0.14)',
+  chartTemp: '#E8703A',
+  chartRainSoft: '#A9C0F0',
 };
 
 export const radius = {

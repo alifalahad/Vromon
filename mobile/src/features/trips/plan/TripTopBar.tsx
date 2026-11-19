@@ -4,9 +4,11 @@
  * leaves the screen.
  *
  * The weather is the selected day's: its sky and high, "Clear · Low 24°", a mark when the day has a
- * warning, and a quieter look with how old it is when the forecast couldn't be refreshed. It opens
- * the weather screen on that day, where refreshing lives. Map options open a small panel: the map
- * type (Default, Satellite), 3D on or off, and "Show the whole day".
+ * warning, and a quieter look with how old it is when the forecast couldn't be refreshed. On today's
+ * tab "Now" and the next rain; a day that's over "As it was"; too early, a calendar and the day the
+ * forecast opens (docs/ui-refresh step 17, frames 28, 31 and 33). It opens the weather screen on
+ * that day, where refreshing lives. Map options open a small panel: the map type (Default,
+ * Satellite), 3D on or off, and "Show the whole day".
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -20,33 +22,65 @@ import { LineIcon } from '../../../ui/LineIcon';
 import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
 import { Toggle } from '../../../ui/Toggle';
-import { daySky, isSerious, sky, useConditionText } from '../conditions/useConditionText';
+import { dayState, dayWhen, isNight, nextRain, weatherNow } from '../conditions/dayView';
+import { SkyIcon } from '../conditions/SkyIcon';
+import { daySky, isSerious, sky as skyOf, useConditionText } from '../conditions/useConditionText';
+import { localToday, parseDay } from '../dates';
+import { m2t, minuteOfDay } from '../today/today';
 import { usePlanFormat } from './usePlanFormat';
 
 /** Weather older than this is shown quieter, with its age */
 const OLD_MINUTES = 180;
 
+type Fresh = { warnings: number; serious: boolean; old: boolean; fetchedAt: string | null };
 export type WeatherLook =
   | { kind: 'loading' }
-  | { kind: 'later' }
-  | { kind: 'forecast'; code: number | null; max: number; min: number; warnings: number; serious: boolean; old: boolean; fetchedAt: string | null };
+  /** Too early for the forecast (from `opensOn`), or none fetched yet */
+  | { kind: 'later'; opensOn: string | null }
+  /** A day that's over, older than the weather records go */
+  | { kind: 'notKept' }
+  /** A day to come: its sky, high and low */
+  | ({ kind: 'forecast'; code: number | null; max: number; min: number } & Fresh)
+  /** Today's tab: the weather now and the next rain (docs/ui-refresh step 17, frame 31) */
+  | ({ kind: 'now'; code: number | null; temp: number; night: boolean; rain: { at: string; now: boolean } | null } & Fresh)
+  /** A day that's over, as it was (D22, frame 33) */
+  | { kind: 'recorded'; code: number | null; max: number };
 
-/** What the weather button says for a day. */
-export function weatherLook(day: ConditionsDay | undefined, conditions: TripConditions | undefined, now = Date.now()): WeatherLook {
+/**
+ * What the weather button says for a day (docs/ui-refresh step 7, and step 17's states). `clock` is the
+ * phone's date and minute; without it they're `now`'s.
+ */
+export function weatherLook(
+  day: ConditionsDay | undefined,
+  conditions: TripConditions | undefined,
+  now = Date.now(),
+  clock?: { today: string; minute: number },
+): WeatherLook {
   if (!conditions) return { kind: 'loading' };
-  if (!conditions.available || !day || !day.in_forecast || day.temp_max == null || day.temp_min == null) return { kind: 'later' };
+  if (!day) return { kind: 'later', opensOn: null };
+  const today = clock?.today ?? localToday(new Date(now));
+  const minute = clock?.minute ?? minuteOfDay(new Date(now));
+  const when = dayWhen(day, today);
+  const state = dayState(day, when);
+  if (state === 'recorded') return { kind: 'recorded', code: day.code, max: day.temp_max ?? 0 };
+  if (state === 'notKept') return { kind: 'notKept' };
+  if (state !== 'forecast' || !conditions.available || day.temp_max == null || day.temp_min == null) return { kind: 'later', opensOn: day.opens_on ?? null };
   const active = day.warnings.filter((w) => !w.kept);
   const ageMin = conditions.fetched_at ? (now - Date.parse(conditions.fetched_at)) / 60000 : 0;
-  return {
-    kind: 'forecast',
-    code: daySky(day),
-    max: day.temp_max,
-    min: day.temp_min,
+  const fresh: Fresh = {
     warnings: active.length,
     serious: active.some(isSerious),
     old: conditions.stale || ageMin > OLD_MINUTES,
     fetchedAt: conditions.fetched_at,
   };
+  if (when === 'today') {
+    const live = weatherNow(conditions, day, minute);
+    if (live) {
+      const rain = nextRain(day, minute);
+      return { kind: 'now', code: live.code, temp: live.temp, night: isNight(m2t(minute), day), rain: rain ? { at: rain.at, now: rain.now } : null, ...fresh };
+    }
+  }
+  return { kind: 'forecast', code: daySky(day), max: day.temp_max, min: day.temp_min, ...fresh };
 }
 
 export function TripTopBar({
@@ -120,13 +154,20 @@ export function TripTopBar({
 function WeatherButton({ look, dayNumber, onPress }: { look: WeatherLook; dayNumber: number; onPress: () => void }) {
   const styles = useStyles();
   const { colors } = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const f = usePlanFormat();
   const text = useConditionText();
   const day = t('plan.day', { n: f.n(dayNumber) });
 
-  if (look.kind !== 'forecast') {
-    const words = look.kind === 'loading' ? t('plan.weather') : t('conditions.noForecastShort');
+  if (look.kind === 'loading' || look.kind === 'later' || look.kind === 'notKept') {
+    const words =
+      look.kind === 'loading'
+        ? t('plan.weather')
+        : look.kind === 'notKept'
+          ? t('conditions.notKeptShort')
+          : look.opensOn
+            ? t('conditions.forecastFrom', { date: dateShort(look.opensOn, i18n.language) })
+            : t('conditions.noForecastShort');
     return (
       <PressableScale
         pressEffect="opacity"
@@ -137,7 +178,11 @@ function WeatherButton({ look, dayNumber, onPress }: { look: WeatherLook; dayNum
         accessibilityLabel={t('plan.weatherA11yLater', { day, words })}
         testID="trip-weather"
       >
-        <MaterialCommunityIcons name={look.kind === 'loading' ? 'weather-partly-cloudy' : 'calendar-clock'} size={30} color={colors.textSecondary} />
+        {look.kind === 'loading' ? (
+          <MaterialCommunityIcons name="weather-partly-cloudy" size={30} color={colors.textSecondary} />
+        ) : (
+          <SkyIcon later={look.kind === 'later'} code={null} size={30} tone={look.kind === 'notKept' ? 'quiet' : 'card'} />
+        )}
         <Text style={styles.weatherLater} maxFontSizeMultiplier={1.3}>
           {words}
         </Text>
@@ -145,16 +190,50 @@ function WeatherButton({ look, dayNumber, onPress }: { look: WeatherLook; dayNum
     );
   }
 
-  const s = sky(look.code);
-  const tint =
-    s.key === 'clear' || s.key === 'partly'
-      ? colors.highlight
-      : s.key === 'rain' || s.key === 'heavyRain' || s.key === 'storm'
-        ? colors.link
-        : colors.textSecondary;
+  if (look.kind === 'recorded') {
+    const sky = text.sky(look.code);
+    return (
+      <PressableScale
+        pressEffect="opacity"
+        haptic="selection"
+        onPress={onPress}
+        style={styles.weather}
+        accessibilityRole="button"
+        accessibilityLabel={[t('plan.weatherA11yWas', { day, max: f.n(look.max), sky }), t('plan.weatherOpen')].join('. ')}
+        testID="trip-weather"
+      >
+        <SkyIcon code={look.code} size={34} />
+        <Text style={styles.temp} maxFontSizeMultiplier={1.2}>
+          {`${f.n(look.max)}°`}
+        </Text>
+        <View style={styles.words}>
+          <Text style={styles.sky} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} maxFontSizeMultiplier={1.3}>
+            {t(`conditions.skyShort.${skyOf(look.code).key}`)}
+          </Text>
+          <Text style={styles.second} numberOfLines={1} maxFontSizeMultiplier={1.3} testID="trip-weather-second">
+            {t('conditions.asItWas')}
+          </Text>
+        </View>
+      </PressableScale>
+    );
+  }
+
+  const isNow = look.kind === 'now';
+  const big = isNow ? look.temp : look.max;
   // Short words: the row is narrow on a phone (the weather screen has the whole sentence)
-  const second = look.old ? text.age(look.fetchedAt) : t('plan.low', { n: f.n(look.min) });
+  const second = look.old
+    ? text.age(look.fetchedAt)
+    : isNow
+      ? look.rain
+        ? look.rain.now
+          ? t('conditions.rainNowShort')
+          : t('conditions.rainFromShort', { time: f.time(look.rain.at) })
+        : t('conditions.dryTodayShort')
+      : t('plan.low', { n: f.n(look.min) });
   const warn = look.warnings > 0 ? t('conditions.warnings', { count: look.warnings, n: f.n(look.warnings) }) : null;
+  const a11y = isNow
+    ? t('plan.weatherA11yNow', { day, temp: f.n(look.temp), sky: text.sky(look.code) })
+    : t('plan.weatherA11y', { day, max: f.n(look.max), sky: text.sky(look.code) });
   return (
     <PressableScale
       pressEffect="opacity"
@@ -162,28 +241,40 @@ function WeatherButton({ look, dayNumber, onPress }: { look: WeatherLook; dayNum
       onPress={onPress}
       style={styles.weather}
       accessibilityRole="button"
-      accessibilityLabel={[t('plan.weatherA11y', { day, max: f.n(look.max), sky: text.sky(look.code) }), warn, look.old ? t('conditions.updated', { age: second }) : null, t('plan.weatherOpen')]
+      accessibilityLabel={[a11y, isNow && !look.old ? second : null, warn, look.old ? t('conditions.updated', { age: second }) : null, t('plan.weatherOpen')]
         .filter(Boolean)
         .join('. ')}
       testID="trip-weather"
     >
       <View style={look.old && styles.old}>
-        <MaterialCommunityIcons name={s.icon} size={28} color={tint} />
+        <SkyIcon code={look.code} night={isNow && look.night} size={34} />
         {warn ? <View style={[styles.mark, look.serious ? styles.markDanger : styles.markWarning]} testID="trip-weather-warning" /> : null}
       </View>
       <Text style={[styles.temp, look.old && styles.old]} maxFontSizeMultiplier={1.2}>
-        {`${f.n(look.max)}°`}
+        {`${f.n(big)}°`}
       </Text>
       <View style={styles.words}>
         <Text style={styles.sky} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} maxFontSizeMultiplier={1.3}>
-          {t(`conditions.skyShort.${s.key}`)}
+          {isNow ? t('conditions.nowWord') : t(`conditions.skyShort.${skyOf(look.code).key}`)}
         </Text>
-        <Text style={[styles.second, look.old && styles.secondOld]} numberOfLines={1} maxFontSizeMultiplier={1.3} testID="trip-weather-second">
+        {/* Two lines at most: "১৫:০০ থেকে বৃষ্টি" is cut to its first word on one at large text */}
+        <Text
+          style={[styles.second, look.old && styles.secondOld, isNow && !look.old && look.rain && styles.secondRain]}
+          numberOfLines={2}
+          maxFontSizeMultiplier={1.3}
+          testID="trip-weather-second"
+        >
           {second}
         </Text>
       </View>
     </PressableScale>
   );
+}
+
+/** "5 Nov": the day the forecast opens, short enough for the button */
+function dateShort(iso: string, locale: string): string {
+  const d = parseDay(iso);
+  return `${d.toLocaleDateString(locale, { day: 'numeric' })} ${d.toLocaleDateString(locale, { month: 'short' })}`;
 }
 
 /** The map options panel (frame 12), under the row on the right; a tap outside it closes it. */
@@ -358,6 +449,8 @@ const useStyles = makeStyles((t) => ({
   sky: { ...t.type.footnote, fontSize: 13.5, fontWeight: '700', color: t.colors.textPrimary },
   second: { ...t.type.caption, color: t.colors.textSecondary },
   secondOld: { color: t.colors.warning, fontWeight: '600' },
+  // "Rain from 15:00" (frame 31)
+  secondRain: { color: t.colors.warning, fontWeight: '500' },
   old: { opacity: 0.55 },
   mark: { position: 'absolute', right: -2, top: -1, width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: t.colors.surface },
   markWarning: { backgroundColor: t.colors.warning },

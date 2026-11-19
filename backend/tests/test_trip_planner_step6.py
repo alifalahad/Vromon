@@ -14,6 +14,7 @@ import pytest
 
 from app.models.models import ConditionsCache, ItineraryItem
 from app.services.conditions import openmeteo
+from app.services.conditions import service as conditions_service
 from app.services.conditions.openmeteo import ConditionsUnavailable
 from app.services.conditions.service import _outdoor
 from tests.test_phase10_editing import (  # noqa: F401 (fixtures)
@@ -29,37 +30,56 @@ START = date(2026, 11, 1)
 
 
 class FakeSky:
-    """A forecast for 16 days from START: dry, 30°C, light wind, calm sea, unless told otherwise."""
+    """
+    A forecast for 16 days from START: dry, 30°C, light wind, calm sea, unless told otherwise. `spots`
+    gives one spot (0.1°) its own weather; the trip's conditions ask for every spot in one call.
+    """
 
     def __init__(self):
         self.weather: dict[tuple[date, int], dict] = {}
+        self.spots: dict[tuple[float, float], dict[tuple[date, int], dict]] = {}
         self.waves: dict[date, float] = {}
         self.forecast_calls = 0
         self.marine_calls = 0
+        self.asked: list[list[tuple[float, float]]] = []
         self.down = False
 
-    def forecast(self, lat, lon, **_):
-        self.forecast_calls += 1
-        if self.down:
-            raise ConditionsUnavailable("down")
+    def _sky(self, weather: dict, past_days: int = 0) -> dict:
         times, temp, prob, rain, code, gust = [], [], [], [], [], []
-        days = [START + timedelta(days=i) for i in range(16)]
+        days = [START + timedelta(days=i) for i in range(-past_days, 16)]
         for d in days:
             for h in range(24):
-                w = self.weather.get((d, h), {})
+                w = weather.get((d, h), {})
                 times.append(f"{d.isoformat()}T{h:02d}:00")
                 temp.append(w.get("temp", 30))
                 prob.append(w.get("rain", 10))
                 rain.append(0.0)
                 code.append(w.get("code", 1))
                 gust.append(w.get("gust", 20))
+        n = len(days)
         return {
             "hourly": {"time": times, "temperature_2m": temp, "precipitation_probability": prob, "precipitation": rain,
                        "weather_code": code, "wind_gusts_10m": gust},
             "daily": {"time": [d.isoformat() for d in days], "sunrise": [f"{d}T05:55" for d in days],
-                      "sunset": [f"{d}T17:15" for d in days], "temperature_2m_max": [32] * 16,
-                      "temperature_2m_min": [25] * 16, "weather_code": [1] * 16, "precipitation_probability_max": [10] * 16},
+                      "sunset": [f"{d}T17:15" for d in days], "temperature_2m_max": [32] * n,
+                      "temperature_2m_min": [25] * n, "weather_code": [1] * n, "precipitation_probability_max": [10] * n,
+                      "precipitation_sum": [0.0] * n},
+            "current": {"time": f"{START.isoformat()}T11:30", "interval": 900, "temperature_2m": 29.4, "weather_code": 2},
         }
+
+    def forecast(self, lat, lon, **_):
+        self.forecast_calls += 1
+        if self.down:
+            raise ConditionsUnavailable("down")
+        out = self._sky(self.weather)
+        return {"hourly": out["hourly"], "daily": out["daily"]}
+
+    def forecast_spots(self, spots, past_days=0, **_):
+        self.forecast_calls += 1
+        self.asked.append(list(spots))
+        if self.down:
+            raise ConditionsUnavailable("down")
+        return [self._sky({**self.weather, **self.spots.get(tuple(s), {})}, past_days) for s in spots]
 
     def marine(self, lat, lon, **_):
         self.marine_calls += 1
@@ -74,7 +94,10 @@ class FakeSky:
 def sky(monkeypatch):
     fake = FakeSky()
     monkeypatch.setattr(openmeteo, "forecast", fake.forecast)
+    monkeypatch.setattr(openmeteo, "forecast_spots", fake.forecast_spots)
     monkeypatch.setattr(openmeteo, "marine", fake.marine)
+    # The day before the test trips (1 Nov on): every day is still to come (docs/ui-refresh step 17)
+    monkeypatch.setattr(conditions_service, "_today", lambda: START - timedelta(days=1))
     s = _Session()
     s.query(ConditionsCache).delete()
     s.commit()
@@ -275,8 +298,7 @@ class TestFetching:
 
     def test_days_beyond_the_forecast(self, client, sky, monkeypatch):
         trip = create_trip(client, days=1)
-        monkeypatch.setattr(sky, "forecast", lambda lat, lon: {"hourly": {}, "daily": {}})
-        monkeypatch.setattr(openmeteo, "forecast", sky.forecast)
+        monkeypatch.setattr(openmeteo, "forecast_spots", lambda spots, **_: [{"hourly": {}, "daily": {}, "current": None} for _ in spots])
         out = conditions(client, trip["id"])
         assert out["days"][0]["in_forecast"] is False and out["forecast_until"] is None
 

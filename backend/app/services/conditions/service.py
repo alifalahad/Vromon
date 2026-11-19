@@ -3,9 +3,19 @@ Live conditions for a trip (trip planner step 6): the weather by the hour, the
 sea for beach and boat stops, sunrise and sunset, and the warnings that follow
 for each stop, each with its reason, its source and what can be done.
 
-  - Weather and sea come from Open-Meteo (free, no key), fetched for the
-    destination at most every 30 minutes and kept in `conditions_cache`. If a
-    refresh fails the last copy is used and marked stale, with its age.
+  - Weather and sea come from Open-Meteo (free, no key), fetched at most every
+    30 minutes and kept in `conditions_cache`. If a refresh fails the last copy is
+    used and marked stale, with its age.
+  - The weather where the stop is (docs/ui-refresh step 17): stops are grouped by a
+    spot about 11 km wide (coordinates rounded to 0.1°; a meal at its restaurant; a
+    stop without coordinates at the destination's centre), one forecast per spot,
+    all asked for in one request, at most 8 a trip (the rest use the nearest). Each
+    stop's weather and warnings come from its own spot; the day's summary and its
+    hours from the spot of the day's first place.
+  - Each day is "past", "today" or "coming" from the phone's date. A day that's over
+    comes back as it was (`recorded`, the rain that fell), with no warnings or checks
+    (D22); one older than the service keeps has no weather. On a trip day, `now` is
+    the weather now. A day the forecast doesn't reach yet says when it opens.
   - Days beyond the forecast (16 days for weather, about a week for the sea) have
     no weather yet; sunrise and sunset are still computed.
   - Traffic is the usual pattern of Bangladesh towns (slow 08:00-10:00 and
@@ -20,6 +30,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Callable, Optional
 
@@ -50,6 +61,12 @@ MODERATE_SEA_M = 0.8
 DARK_GRACE = 15                             # minutes after sunset that still count as light enough
 # Usual traffic in Bangladesh towns (not live): when, how much slower, and its name
 PEAKS = [(8 * 60, 10 * 60, 1.3, "morning"), (17 * 60, 20 * 60, 1.4, "evening")]
+MAX_SPOTS = 8                               # forecasts asked for per trip; other stops use the nearest of them
+# Days before today asked for once a trip has started, in a few sizes so one spot's copy serves
+# every trip that started within them (a copy per spot and size)
+PAST_SIZES = (7, 31, openmeteo.PAST_DAYS_MAX)
+
+Spot = tuple[float, float]
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +107,100 @@ def _cached(db: "Session", kind: str, lat: float, lon: float, fetch: Callable[[f
     except OperationalError as exc:
         logger.warning("%s for %s,%s not cached: %s", kind, slat, slon, exc)
     return payload, now, False
+
+
+def _cached_spots(db: "Session", spots: list[Spot], past_days: int, refresh: bool) -> dict[Spot, tuple]:
+    """
+    {spot: (payload or None, fetched_at or None, stale)} for the trip's spots: each spot's own
+    copy while it's fresh; the rest fetched together in one request, each kept on its own.
+    """
+    from sqlalchemy.orm import Session as _Session
+    from app.models.models import ConditionsCache
+
+    kind = f"weather:{past_days}"
+    now = datetime.utcnow()
+    rows = {s: db.query(ConditionsCache).filter_by(kind=kind, lat=s[0], lon=s[1]).first() for s in spots}
+    out: dict[Spot, tuple] = {}
+    need = []
+    for s, row in rows.items():
+        if row is not None and now - row.fetched_at < (MIN_REFRESH if refresh else TTL):
+            out[s] = (json.loads(row.payload_json), row.fetched_at, False)
+        else:
+            need.append(s)
+    if not need:
+        return out
+    try:
+        fetched = openmeteo.forecast_spots(need, past_days=past_days)
+    except ConditionsUnavailable as exc:
+        logger.warning("weather for %d spots unavailable: %s", len(need), exc)
+        for s in need:
+            row = rows[s]
+            out[s] = (json.loads(row.payload_json), row.fetched_at, True) if row is not None else (None, None, True)
+        return out
+    # Kept in its own session, as in `_cached` (never the request's changes; skipped while SQLite is locked)
+    try:
+        with _Session(bind=db.get_bind()) as cache:
+            for s, payload in zip(need, fetched):
+                saved = cache.query(ConditionsCache).filter_by(kind=kind, lat=s[0], lon=s[1]).first()
+                if saved is None:
+                    saved = ConditionsCache(kind=kind, lat=s[0], lon=s[1], payload_json="{}", fetched_at=now)
+                    cache.add(saved)
+                saved.payload_json = json.dumps(payload)
+                saved.fetched_at = now
+            cache.commit()
+    except OperationalError as exc:
+        logger.warning("weather for %d spots not cached: %s", len(need), exc)
+    for s, payload in zip(need, fetched):
+        out[s] = (payload, now, False)
+    return out
+
+
+def _grid(lat: float, lon: float) -> Spot:
+    """The spot a place is in: about 11 km wide."""
+    return round(lat, 1), round(lon, 1)
+
+
+def _coords(item: "ItineraryItem") -> Optional[tuple[float, float]]:
+    """Where a stop is: its place, or a meal's restaurant."""
+    if item.place is not None:
+        return item.place.latitude, item.place.longitude
+    if item.restaurant is not None:
+        return item.restaurant.latitude, item.restaurant.longitude
+    return None
+
+
+def pick_spots(seen: list[Spot]) -> tuple[list[Spot], dict[Spot, Spot]]:
+    """
+    The spots to fetch (at most MAX_SPOTS: those with the most stops, then the first seen) and,
+    for every spot seen (a spot once per stop), the fetched spot it uses: itself, or the nearest.
+    """
+    counts: dict[Spot, int] = {}
+    for s in seen:
+        counts[s] = counts.get(s, 0) + 1
+    order = list(counts)                                    # first seen first
+    fetched = sorted(order, key=lambda s: (-counts[s], order.index(s)))[:MAX_SPOTS]
+
+    def nearest(s: Spot) -> Spot:
+        shrink = math.cos(math.radians(s[0]))               # a degree of longitude is shorter
+        return min(fetched, key=lambda f: (f[0] - s[0]) ** 2 + ((f[1] - s[1]) * shrink) ** 2)
+
+    return fetched, {s: s if s in fetched else nearest(s) for s in order}
+
+
+def _past_size(start: date, today: date) -> int:
+    """The days before today to ask for: none before the trip starts."""
+    behind = (today - start).days
+    if behind <= 0:
+        return 0
+    return next((n for n in PAST_SIZES if n >= behind), PAST_SIZES[-1])
+
+
+def _viewer_today(requested: Optional[date]) -> date:
+    """The phone's date when it's within a day of the server's (time zones), else the server's (as reviews do)."""
+    today = _today()
+    if requested is not None and abs((requested - today).days) <= 1:
+        return requested
+    return today
 
 
 def _by_date(hourly: dict, fields: list[str]) -> dict[date, dict[int, dict]]:
@@ -156,40 +267,94 @@ def _peak(minute: int):
     return next(((a, b, f, name) for a, b, f, name in PEAKS if a <= minute < b), None)
 
 
-def trip_conditions(db: "Session", trip: "Trip", refresh: bool = False) -> dict:
+def trip_conditions(db: "Session", trip: "Trip", refresh: bool = False, today: Optional[date] = None) -> dict:
+    """The trip's conditions, each day past, today or coming from `today` (the phone's date; the server's when missing)."""
     from app.models.models import Destination
 
+    today = _viewer_today(today)
     dest = db.query(Destination).filter(Destination.name == trip.destination).first()
     days: list["Itinerary"] = sorted(trip.itinerary_days, key=lambda d: d.day_number)
     if dest is None or not days:
-        return {"available": False, "fetched_at": None, "stale": False, "forecast_until": None, "days": []}
+        return {"available": False, "fetched_at": None, "stale": False, "forecast_until": None, "now": None,
+                "today": today.isoformat(), "days": []}
     rules = rules_for(trip, dest)
+    centre = _grid(dest.latitude, dest.longitude)
 
-    fc, fc_at, fc_stale = _cached(db, "forecast", dest.latitude, dest.longitude, openmeteo.forecast, refresh)
-    hourly = _by_date((fc or {}).get("hourly", {}), ["temperature_2m", "precipitation_probability", "precipitation", "weather_code", "wind_gusts_10m"])
-    daily = (fc or {}).get("daily", {})
-    daily_by_date = {
-        date.fromisoformat(t): {k: (daily.get(k) or [None] * (i + 1))[i] for k in daily if k != "time"}
-        for i, t in enumerate(daily.get("time", []))
-    }
+    # Each stop's spot, and each day's first place's (the day's summary and hours)
+    ordered = {day.id: sorted(day.items, key=lambda x: x.order_index) for day in days}
+    stop_spot: dict[int, Spot] = {}
+    day_spot: dict[int, Spot] = {}
+    for day in days:
+        for item in ordered[day.id]:
+            c = _coords(item)
+            stop_spot[item.id] = _grid(*c) if c else centre
+        first = next((item for item in ordered[day.id] if _coords(item)), None)
+        day_spot[day.id] = stop_spot[first.id] if first is not None else centre
+    fetched, use = pick_spots(list(stop_spot.values()) + list(day_spot.values()))
+
+    # Nothing to ask for once every day is older than the service keeps
+    oldest = today - timedelta(days=openmeteo.PAST_DAYS_MAX)
+    got = {} if trip.end_date < oldest else _cached_spots(db, fetched, _past_size(trip.start_date, today), refresh)
+    sky: dict[Spot, dict] = {}
+    for s, (payload, _, _) in got.items():
+        if payload is None:
+            continue
+        daily = payload.get("daily", {})
+        sky[s] = {
+            "hours": _by_date(payload.get("hourly", {}), ["temperature_2m", "precipitation_probability", "precipitation", "weather_code", "wind_gusts_10m"]),
+            "daily": {
+                date.fromisoformat(t): {k: (daily.get(k) or [None] * (i + 1))[i] for k in daily if k != "time"}
+                for i, t in enumerate(daily.get("time", []))
+            },
+            "current": payload.get("current"),
+        }
+
+    def hours_at(spot: Spot) -> dict[date, dict[int, dict]]:
+        return sky.get(use[spot], {}).get("hours", {})
 
     # The sea, at the first beach or boat stop of the trip (one spot covers the coast here)
-    sea_stop = next((i for d in days for i in sorted(d.items, key=lambda x: x.order_index) if _by_sea(i) and i.place), None)
+    sea_stop = next((i for d in days for i in ordered[d.id] if _by_sea(i) and i.place), None)
     sea_hours: dict[date, dict[int, dict]] = {}
     sea_at = None
-    if sea_stop is not None:
+    if sea_stop is not None and trip.end_date >= today:
         mar, sea_at, _ = _cached(db, "marine", sea_stop.place.latitude, sea_stop.place.longitude, openmeteo.marine, refresh)
         sea_hours = _by_date((mar or {}).get("hourly", {}), ["wave_height"])
 
+    now = None
     out_days = []
     for day in days:
         d = day.day_date
-        hours = hourly.get(d, {})
-        in_forecast = bool(hours)
-        dd = daily_by_date.get(d, {})
+        when = "coming" if d is None or d > today else "today" if d == today else "past"
+        here = sky.get(use[day_spot[day.id]], {})
+        dd = here.get("daily", {}).get(d, {})
         sunrise = dd["sunrise"][11:16] if dd.get("sunrise") else m2t(sunrise_min(dest.latitude, dest.longitude, d))
         sunset = dd["sunset"][11:16] if dd.get("sunset") else m2t(sunset_min(dest.latitude, dest.longitude, d))
-        items = sorted(day.items, key=lambda x: x.order_index)
+        base = {
+            "day_id": day.id,
+            "day_number": day.day_number,
+            "date": d.isoformat() if d else None,
+            "when": when,
+            "sunrise": sunrise,
+            "sunset": sunset,
+            "temp_max": _round(dd.get("temperature_2m_max")),
+            "temp_min": _round(dd.get("temperature_2m_min")),
+            "rain_max": dd.get("precipitation_probability_max"),
+            "code": dd.get("weather_code"),
+        }
+        if when == "past":
+            # As it was (D22): the recorded day, no warnings and nothing to check
+            out_days.append({**base, "in_forecast": bool(dd), "recorded": bool(dd), "rain_mm": dd.get("precipitation_sum"),
+                             "opens_on": None, "hours": [], "sea": None, "items": {}, "legs": {}, "warnings": [], "checks": []})
+            continue
+        if when == "today":
+            current = here.get("current") or {}
+            if (current.get("time") or "")[:10] == d.isoformat():
+                now = {"time": current["time"][11:16], "temp": _round(current.get("temperature_2m")), "code": current.get("weather_code")}
+        hours = hours_at(day_spot[day.id]).get(d, {})
+        in_forecast = bool(hours)
+        reach = today + timedelta(days=openmeteo.FORECAST_DAYS - 1)
+        opens_on = d - timedelta(days=openmeteo.FORECAST_DAYS - 1) if d is not None and d > reach else None
+        items = ordered[day.id]
         acts = [i for i in items if i.item_type == "activity" and i.place is not None]
         warnings: list[dict] = []
 
@@ -207,26 +372,28 @@ def trip_conditions(db: "Session", trip: "Trip", refresh: bool = False) -> dict:
                 **params,
             })
 
-        # Weather on outdoor stops
+        # Weather on outdoor stops, from each stop's own spot
         for item in acts:
-            if not in_forecast or not _outdoor(item):
+            spot_hours = hours_at(stop_spot[item.id])
+            at = spot_hours.get(d, {})
+            if not at or not _outdoor(item):
                 continue
             s, e = t2m(item.start_time), t2m(item.end_time)
-            hs = _spans(hours, s, e)
-            storm = [h for h in hs if hours[h].get("weather_code") in STORM_CODES]
-            rainy = [h for h in hs if (hours[h].get("precipitation_probability") or 0) >= RAIN_LIKELY]
-            windy = [h for h in hs if (hours[h].get("wind_gusts_10m") or 0) >= WINDY_GUSTS]
-            move = _drier_day(days, day, s, e, hourly)
+            hs = _spans(at, s, e)
+            storm = [h for h in hs if at[h].get("weather_code") in STORM_CODES]
+            rainy = [h for h in hs if (at[h].get("precipitation_probability") or 0) >= RAIN_LIKELY]
+            windy = [h for h in hs if (at[h].get("wind_gusts_10m") or 0) >= WINDY_GUSTS]
+            move = _drier_day(days, day, s, e, spot_hours, today)
             if storm:
                 frm, to = _range(storm)
                 add(item, "storm", **{"from": frm, "to": to}, boat=_boat(item), move_to=move)
             elif rainy:
                 frm, to = _range(rainy)
-                chance = max(hours[h].get("precipitation_probability") or 0 for h in rainy)
+                chance = max(at[h].get("precipitation_probability") or 0 for h in rainy)
                 add(item, "rain", **{"from": frm, "to": to}, chance=chance, move_to=move)
             if _boat(item) and windy:
                 frm, to = _range(windy)
-                gust = max(hours[h].get("wind_gusts_10m") or 0 for h in windy)
+                gust = max(at[h].get("wind_gusts_10m") or 0 for h in windy)
                 add(item, "wind", **{"from": frm, "to": to}, gust=round(gust), move_to=move)
 
         # The sea for the day (daytime hours), on the first beach or boat stop of the day
@@ -280,35 +447,33 @@ def trip_conditions(db: "Session", trip: "Trip", refresh: bool = False) -> dict:
         ]
 
         out_days.append({
-            "day_id": day.id,
-            "day_number": day.day_number,
-            "date": d.isoformat() if d else None,
+            **base,
             "in_forecast": in_forecast,
-            "sunrise": sunrise,
-            "sunset": sunset,
-            "temp_max": _round(dd.get("temperature_2m_max")),
-            "temp_min": _round(dd.get("temperature_2m_min")),
-            "rain_max": dd.get("precipitation_probability_max"),
-            "code": dd.get("weather_code"),
+            "opens_on": opens_on.isoformat() if opens_on else None,
             "hours": [
                 {"time": m2t(h), "temp": _round(v.get("temperature_2m")), "rain": v.get("precipitation_probability"), "code": v.get("weather_code")}
                 for h, v in sorted(hours.items()) if 5 * 60 <= h <= 22 * 60
             ],
             "sea": sea,
             "items": {
-                str(i.id): _at(hours, t2m(i.start_time)) for i in items if in_forecast and _at(hours, t2m(i.start_time))
+                str(i.id): w for i in items if (w := _at(hours_at(stop_spot[i.id]).get(d, {}), t2m(i.start_time)))
             },
             "legs": legs,
             "warnings": warnings,
             "checks": checks,
         })
 
+    used = [v for v in got.values() if v[0] is not None]
+    every_hour = [d for s in sky.values() for d in s["hours"]]
     return {
-        "available": fc is not None,
-        "fetched_at": fc_at.isoformat() + "Z" if fc_at else None,
+        "available": bool(used),
+        # The oldest copy shown, so its age is never understated
+        "fetched_at": min(v[1] for v in used).isoformat() + "Z" if used else None,
         "sea_fetched_at": sea_at.isoformat() + "Z" if sea_at else None,
-        "stale": fc_stale,
-        "forecast_until": max(hourly).isoformat() if hourly else None,
+        "stale": any(v[2] for v in got.values()),
+        "forecast_until": max(every_hour).isoformat() if every_hour else None,
+        "now": now,
+        "today": today.isoformat(),
         "days": out_days,
     }
 
@@ -366,10 +531,13 @@ def _at(hours: dict[int, dict], minute: int) -> Optional[dict]:
     return {"temp": _round(v.get("temperature_2m")), "rain": v.get("precipitation_probability"), "code": v.get("weather_code")}
 
 
-def _drier_day(days: list["Itinerary"], here: "Itinerary", start: int, end: int, hourly: dict) -> Optional[dict]:
-    """Another day of the trip that's dry at the same time of day (the nearest one), if the forecast reaches it."""
+def _drier_day(days: list["Itinerary"], here: "Itinerary", start: int, end: int, hourly: dict, today: date) -> Optional[dict]:
+    """
+    Another day of the trip still to come that's dry at the same time of day (the nearest one), at
+    the stop's own spot (`hourly`), if the forecast reaches it. Never today or a day that's over.
+    """
     for d in sorted(days, key=lambda x: (abs(x.day_number - here.day_number), x.day_number)):
-        if d.id == here.id:
+        if d.id == here.id or d.day_date is None or d.day_date <= today:
             continue
         hours = hourly.get(d.day_date, {})
         hs = _spans(hours, start, end)

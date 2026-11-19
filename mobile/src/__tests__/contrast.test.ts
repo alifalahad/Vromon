@@ -234,6 +234,32 @@ describe.each([
     expect(contrast(review.onBad, review.bad)).toBeGreaterThanOrEqual(AA);
   });
 
+  it('Conditions (UI refresh step 17): the hero and the next rain on it, the strip, the next hours, "By the hour"', () => {
+    const seen = (tint: string, under: string) => {
+      const m = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(tint);
+      if (!m) return tint;
+      const top = `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+      return mix(under, top, Number(m[4]));
+    };
+    // The hero: "NOW · 11:30" in marigold, the temperature, its words; the next rain on its warm tint; "no rain" on the quiet one
+    for (const text of [colors.highlight, colors.onHero, colors.onHeroSecondary]) expect(contrast(text, colors.hero)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.heroWarning, seen(colors.heroWarningTint, colors.hero))).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.onHero, seen(colors.heroQuiet, colors.hero))).toBeGreaterThanOrEqual(AA);
+    // The strip: a day on its card, the chosen one in white on the blue, a day done on the inset; the dot's ring (3:1)
+    expect(contrast(colors.textSecondary, colors.surface)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.onAccent, colors.accentStrong)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.textSecondary, colors.surfaceInset)).toBeGreaterThanOrEqual(AA);
+    const sun = planColors({ scheme: colors === darkColors ? 'dark' : 'light', colors }).sun;
+    expect(contrast(sun, colors.surface)).toBeGreaterThanOrEqual(3);
+    // The next hours: "Now" on the blue tint; a likely hour's chance on the warm tint
+    expect(contrast(colors.onAccentSoft, colors.accentTint)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(colors.warning, seen(colors.warningBg, colors.surface))).toBeGreaterThanOrEqual(AA);
+    // By the hour: the temperature's line and the likely hours' columns on the card (3:1, drawings); the hours
+    // under 60% are the lighter step, their values written in text colours and read hour by hour
+    expect(contrast(colors.chartTemp, colors.surface)).toBeGreaterThanOrEqual(3);
+    expect(contrast(colors.accent, colors.surface)).toBeGreaterThanOrEqual(3);
+  });
+
   it("a switch's track when off shows on a card and on the ground (3:1)", () => {
     expect(contrast(colors.switchOff, colors.surface)).toBeGreaterThanOrEqual(3);
     expect(contrast(colors.switchOff, colors.bg)).toBeGreaterThanOrEqual(3);

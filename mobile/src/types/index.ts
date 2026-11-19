@@ -381,7 +381,15 @@ export interface ConditionsDay {
   day_id: number;
   day_number: number;
   date: string | null;
+  /** By the phone's date (docs/ui-refresh step 17): over, today or still to come. The app works it out again from its own date */
+  when?: 'past' | 'today' | 'coming';
   in_forecast: boolean;
+  /** A day that's over, with its weather as it was (D22): no warnings, nothing checked, no hours */
+  recorded?: boolean;
+  /** The rain that fell that day, in mm (a day that's over) */
+  rain_mm?: number | null;
+  /** A day the forecast doesn't reach yet: the date its forecast appears */
+  opens_on?: string | null;
   sunrise: string;
   sunset: string;
   temp_max: number | null;
@@ -408,6 +416,10 @@ export interface TripConditions {
   /** A refresh failed: this is the last copy */
   stale: boolean;
   forecast_until: string | null;
+  /** On a trip day: the weather now at that day's first place (Open-Meteo's 15-minute data) */
+  now?: { time: string; temp: number | null; code: number | null } | null;
+  /** The date the days' `when` was worked out from */
+  today?: string;
   days: ConditionsDay[];
 }
 

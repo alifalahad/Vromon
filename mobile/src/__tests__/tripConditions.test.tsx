@@ -15,7 +15,8 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: '5', day: '1' }),
   // The screen has finished sliding in (the plan sheet waits for that)
   useNavigation: () => ({ addListener: (_event: string, cb: (e: { data: { closing: boolean } }) => void) => (cb({ data: { closing: false } }), () => {}) }),
-  Stack: { Screen: () => null },
+  // The header's own button (Conditions' Refresh, docs/ui-refresh step 17) is drawn
+  Stack: { Screen: ({ options }: { options?: { headerRight?: () => React.ReactNode } }) => options?.headerRight?.() ?? null },
 }));
 const mockPush = jest.fn();
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
@@ -244,27 +245,39 @@ describe('live conditions (trip planner step 6)', () => {
     await waitFor(() => expect(api.conditions.mock.calls.length).toBeGreaterThan(asked));
   });
 
-  it('the conditions screen: hours, sun, sea, warnings with their source, and what was checked', async () => {
+  it('the conditions screen before the day (frame 34): the day in one look, what to know, by the hour, the stops, the sea, what was checked', async () => {
     setUp();
     api.conditions.mockResolvedValue(COND);
     await renderWithQuery(<ConditionsScreen />);
-    expect(await screen.findByText('Storms likely 10:00–12:00')).toBeTruthy();
-    expect(screen.getByText('Affects stop 2, Laboni Beach, which is outdoors.')).toBeTruthy();
-    expect(screen.getByText('Source: weather forecast (Open-Meteo) · just now')).toBeTruthy();
-    expect(screen.getByText("Waves around 1.8 m. Don't swim past the lifeguard flags.")).toBeTruthy();
-    // The day in one look, then the stops, the sea in plain words
-    expect(screen.getByText('Thunderstorm')).toBeTruthy();
-    expect(screen.getByText('25°–32°')).toBeTruthy();
-    expect(screen.getByText('Rain likely at times (70%)')).toBeTruthy();
-    expect(screen.getByText('Sunrise 05:52 · Sunset 17:25')).toBeTruthy();
+    // The day in one look, on the hero card
+    expect(await screen.findByText('DAY 1 · MON 19 OCT')).toBeTruthy();
+    expect(screen.getByText('Thunderstorms likely')).toBeTruthy();
+    expect(screen.getByText('Low 25° · 70% chance at 15:00')).toBeTruthy();
+    expect(screen.getByText('05:52')).toBeTruthy();
+    expect(screen.getByText('17:25')).toBeTruthy();
+    expect(screen.getByText('Rough · 1.8 m')).toBeTruthy();
+    // What to know: each warning with its reason, the drier day and its source
     expect(screen.getByText('2 things to know')).toBeTruthy();
+    expect(screen.getByText('Storms likely 10:00–12:00')).toBeTruthy();
+    expect(screen.getByText('Affects stop 2, Laboni Beach, which is outdoors. Tuesday is dry at that time.')).toBeTruthy();
+    expect(screen.getAllByText('Source: weather forecast (Open-Meteo) · just now').length).toBeGreaterThan(0);
+    expect(screen.getByText("Waves around 1.8 m. Don't swim past the lifeguard flags.")).toBeTruthy();
+    // By the hour: one figure, each strip in a sentence and each hour on its own
+    expect(screen.getByText('By the hour')).toBeTruthy();
+    expect(screen.getByLabelText('Temperature from 13:00 to 15:00: 31° at 13:00, a high of 31° at 13:00, 28° at 15:00')).toBeTruthy();
+    expect(screen.getByLabelText('Chance of rain from 13:00 to 15:00: the highest is 70% at 15:00')).toBeTruthy();
+    expect(screen.getByLabelText('Your stops on the same hours: 1 at 09:00, 2 at 10:00, 3 at 12:30, 4 at 13:40')).toBeTruthy();
+    expect(screen.getByLabelText('15:00: Thunderstorm, 28°, 70% chance of rain')).toBeTruthy();
+    // The stops, the sea, what else was checked
+    expect(screen.getByText('At your stops')).toBeTruthy();
+    expect(screen.getByLabelText('10:00, Laboni Beach: Partly cloudy, 29°, 40% chance of rain')).toBeTruthy();
+    expect(screen.getByText('Sea at Laboni Beach')).toBeTruthy();
     expect(screen.getByText('Rough · waves around 1.8 m. Stay near the shore.')).toBeTruthy();
-    expect(screen.getByTestId('conditions-refresh')).toBeTruthy();
     expect(screen.getByText('All 2 stops are open when you arrive.')).toBeTruthy();
     expect(screen.getByText('Some legs are in the usual evening traffic: they show how much longer they take. Not live.')).toBeTruthy();
     expect(screen.getByText("Vromon warns you using the data above. It can't promise that a place or a road is safe.")).toBeTruthy();
-    expect(screen.getByText('At your stops')).toBeTruthy();
-    expect(screen.getByLabelText('10:00, Laboni Beach: Partly cloudy, 29°, 40% chance of rain')).toBeTruthy();
+    expect(screen.getByTestId('conditions-updated')).toHaveTextContent("Cox's Bazar · updated just now");
+    expect(screen.getByTestId('conditions-refresh')).toBeTruthy();
   });
 
   it('refreshes on request on the weather screen (the trip screen has no refresh of its own)', async () => {

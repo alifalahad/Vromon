@@ -873,6 +873,7 @@ def item_leg(trip_id: int, item_id: int, db: Session = Depends(get_db), user: Us
 def trip_conditions(
     trip_id: int,
     refresh: bool = Query(False, description="Ask the weather service again (at most every 2 minutes)"),
+    today: Optional[date] = Query(None, description="The phone's date: which days are over, today or to come"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -880,11 +881,13 @@ def trip_conditions(
     Weather by the hour, the sea, sunrise and sunset for each day of the plan, and the
     warnings for each stop (rain or storms on outdoor stops, rough sea, after dark, usual
     traffic near a closing time), each with its source and, where it helps, a drier day.
-    Weather and sea: Open-Meteo, kept for 30 minutes. Traffic: the usual pattern, not live.
-    Owner, or a friend read-only.
+    Each stop's weather is where the stop is. A day that's over comes back as it was, with
+    no warnings; on a trip day `now` is the weather now; a day the forecast doesn't reach
+    yet says when it opens (docs/ui-refresh step 17). Weather and sea: Open-Meteo, kept for
+    30 minutes. Traffic: the usual pattern, not live. Owner, or a friend read-only.
     """
     trip = _load_trip(db, trip_id, user, friends_may_read=True)
-    return conditions_service.trip_conditions(db, trip, refresh=refresh)
+    return conditions_service.trip_conditions(db, trip, refresh=refresh, today=today)
 
 
 class KeepRequest(BaseModel):

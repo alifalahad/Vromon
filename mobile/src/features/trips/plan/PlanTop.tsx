@@ -15,9 +15,9 @@ import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import type { BudgetBreakdown, ConditionsDay, ItineraryDay } from '../../../types';
 import { PressableScale } from '../../../ui/PressableScale';
 import { makeStyles, useTheme } from '../../../ui/theme';
+import { SkyIcon } from '../conditions/SkyIcon';
 import { daySky, sky, useConditionText } from '../conditions/useConditionText';
 import { planPhase, type PlanPhase } from '../dates';
-import { planColors } from './colors';
 import { dayParts } from './timeline';
 import { localDigits, usePlanFormat } from './usePlanFormat';
 
@@ -143,9 +143,9 @@ export function BudgetRow({ data, onPress }: { data: BudgetBreakdown; onPress: (
   );
 }
 
-/** A day's sky for its tab, when the forecast reaches it. */
+/** A day's sky for its tab, when the forecast reaches it; none for a day that's over (frames 31 and 33). */
 function tabSky(day: ConditionsDay | undefined) {
-  if (!day?.in_forecast) return null;
+  if (!day?.in_forecast || day.recorded) return null;
   const code = daySky(day);
   return code == null ? null : { code, ...sky(code) };
 }
@@ -171,7 +171,6 @@ export function DayTabs({
   const styles = useStyles();
   const theme = useTheme();
   const { colors } = theme;
-  const sunColor = planColors(theme).sun;
   const { t, i18n } = useTranslation();
   const f = usePlanFormat();
   const text = useConditionText();
@@ -186,7 +185,6 @@ export function DayTabs({
     const gone = !!today && !!d.day_date && d.day_date < today;
     const isToday = !!today && d.day_date === today;
     const s = gone || isToday ? null : tabSky(conditions?.find((c) => c.day_id === d.id));
-    const sun = s && (s.key === 'clear' || s.key === 'partly');
     const label = [
       t('plan.day', { n: f.n(d.day_number) }),
       isToday ? t('today.open') : parts ? `${parts.weekday} ${parts.day}` : null,
@@ -226,7 +224,7 @@ export function DayTabs({
               {localDigits(`${parts.weekday} ${parts.day}`, i18n.language)}
             </Text>
           ) : null}
-          {s ? <MaterialCommunityIcons name={s.icon} size={15} color={on ? colors.onAccent : sun ? sunColor : colors.textSecondary} /> : null}
+          {s ? <SkyIcon code={s.code} size={15} tone={on ? 'onAccent' : 'card'} /> : null}
         </View>
       </PressableScale>
     );

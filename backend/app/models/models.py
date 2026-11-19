@@ -1121,9 +1121,10 @@ class RouteCache(Base):
 
 class ConditionsCache(Base):
     """
-    The last weather or sea forecast fetched for a spot (`kind`: forecast / marine), kept so
-    it's asked for at most every 30 minutes and still shown (with its age) when a refresh fails.
-    Spots are rounded to 2 decimals (about 1 km).
+    The last weather or sea forecast fetched for a spot, kept so it's asked for at most every 30
+    minutes and still shown (with its age) when a refresh fails. `kind`: forecast (the planner's,
+    spots rounded to 2 decimals, about 1 km) / marine (the same) / weather:<past days> (a trip's
+    conditions, spots rounded to 0.1°, about 11 km, with that many days before today).
     """
     __tablename__ = "conditions_cache"
     __table_args__ = (UniqueConstraint("kind", "lat", "lon", name="uq_conditions_cache_spot"),)
