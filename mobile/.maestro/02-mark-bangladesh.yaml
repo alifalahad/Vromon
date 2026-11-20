@@ -9,7 +9,8 @@ name: 02 Mark Bangladesh visited
     visible:
       id: tab-index
     timeout: 60000
-# One search for countries, divisions and cities (the map follows its zoom; no view to pick)
+# One search for countries, divisions and cities (the map follows its zoom; no view to pick).
+# Countries are flags: a flag opens the country's divisions, which start with "Mark all of …"
 - tapOn:
     id: add-place-fab
 - tapOn:
@@ -17,8 +18,9 @@ name: 02 Mark Bangladesh visited
 - inputText: "Bangladesh"
 - hideKeyboard
 - tapOn:
-    text: "Bangladesh"
-    index: 1
+    id: add-place-flag-BD
+- tapOn:
+    id: add-place-mark-country
 - tapOn:
     id: add-status-visited
 - tapOn:

@@ -53,6 +53,8 @@
     "searchRegions": "অঞ্চল খুঁজুন",
     "searchCities": "শহর খুঁজুন (২+ অক্ষর)",
     "pickCountryFirst": "আগে একটি দেশ বেছে নিন",
+    "markCountry": "পুরো {{name}} চিহ্নিত করুন",
+    "flagHint": "{{name}}-এর জায়গাগুলো খোলে। পুরো দেশটি চিহ্নিত করতে চেপে ধরে রাখুন।",
     "noResults": "কিছু পাওয়া যায়নি",
     "chooseStatus": "{{name}} — আপনার সম্পর্ক কী?",
     "firstVisited": "প্রথম ভ্রমণ (YYYY-MM-DD, ঐচ্ছিক)",

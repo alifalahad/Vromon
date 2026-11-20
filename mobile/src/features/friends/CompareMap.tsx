@@ -62,6 +62,8 @@ export const CompareMap = forwardRef<CompareMapHandle, {
       ref={mapRef}
       style={StyleSheet.absoluteFill}
       mapStyle={MAP_STYLE}
+      // On a screen that slides in and out: a TextureView moves with it (the default GLSurfaceView left a black box)
+      androidView="texture"
       attribution={false}
       logo={false}
       compass={false}

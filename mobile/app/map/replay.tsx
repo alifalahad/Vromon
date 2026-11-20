@@ -93,7 +93,9 @@ export default function ReplayScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       {/* Framed on home; each step repaints the places, nothing reloads */}
       {/* Framed on home, where the map shows divisions (the zoom decides) */}
-      <WorldMap visits={step?.visits ?? []} theme={mapTheme} home={home} onPressPlace={() => undefined} />
+      {/* A TextureView: this screen slides in and out over "Your travels", and the default GLSurfaceView
+          ignored the slide, leaving a black box over that screen after closing Replay */}
+      <WorldMap visits={step?.visits ?? []} theme={mapTheme} home={home} onPressPlace={() => undefined} androidView="texture" />
 
       <View style={[styles.top, { top: insets.top + 12 }]} pointerEvents="box-none">
         <View style={styles.topRow}>

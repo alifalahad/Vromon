@@ -1,19 +1,22 @@
 /**
- * Add place: one search for a country, a division of your home country or a city (the map
- * follows its zoom, so there's no view to match any more); a country's row also opens its
- * regions. Choose Visited / Want to visit / Lived, optionally the first visit date, and save.
- * Saving works offline (the edit is queued); region and city search need a connection.
+ * Add place: the countries as flags, three to a row with the name under each; a flag opens that
+ * country's regions, where the country itself can be marked too (or press and hold the flag).
+ * One search finds a country (as its flag), a division of your home country or a city (the map
+ * follows its zoom, so there's no view to match any more). Choose Visited / Want to visit /
+ * Lived, optionally the first visit date, and save. Saving works offline (the edit is queued);
+ * region and city search need a connection.
  */
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { Stack, useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, FlatList, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, BackHandler, FlatList, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMe } from '../../src/features/account/useMe';
+import { flagEmoji } from '../../src/features/geo/countries';
 import { mapCountries, mapCountryName } from '../../src/features/map/mapCountries';
 import { STATUS_ORDER } from '../../src/features/map/style';
 import { useMarkPlace } from '../../src/features/map/useMarkPlace';
@@ -35,7 +38,15 @@ import { notify } from '../../src/utils/dialogs';
 
 type Candidate = PlaceRef & { name: string; detail: string; flag: string };
 
+/** A line of the list: a heading, a row of flags, or one region or city */
+type Line =
+  | { kind: 'heading'; key: string; text: string }
+  | { kind: 'flags'; key: string; countries: Candidate[] }
+  | { kind: 'place'; key: string; place: Candidate };
+
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** Flags in a row */
+const PER_ROW = 3;
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
@@ -83,7 +94,7 @@ export default function AddPlaceScreen() {
     staleTime: 60_000,
   });
 
-  const candidates: Candidate[] = useMemo(() => {
+  const lines: Line[] = useMemo(() => {
     const region = (r: GeoRegion): Candidate => ({
       place_type: 'region',
       place_code: r.code,
@@ -92,24 +103,44 @@ export default function AddPlaceScreen() {
       detail: [r.type, mapCountryName(r.country_iso2, lang)].filter(Boolean).join(' · '),
       flag: '',
     });
+    const place = (c: Candidate): Line => ({ kind: 'place', key: `${c.place_type}-${c.place_code}`, place: c });
     const regionHits = (regions.data ?? []).filter((r) => !q || r.name.toLocaleLowerCase().includes(q) || (r.name_bn ?? '').includes(query.trim()));
-    if (regionCountry) return regionHits.map(region);
+    if (regionCountry) return regionHits.map((r) => place(region(r)));
+
+    const out: Line[] = [];
+    // Searching: your home country's divisions first, then countries, then cities, each under its name
+    if (q && regionHits.length) {
+      out.push({ kind: 'heading', key: 'h-regions', text: t(`map.views.${regionWord(home)}`) });
+      out.push(...regionHits.map((r) => place(region(r))));
+    }
     const countryHits = countries
       .filter((c) => !q || c.name.toLocaleLowerCase().includes(q) || c.code.toLowerCase() === q)
       .map((c): Candidate => ({ place_type: 'country', place_code: c.code, country_iso2: c.code, name: c.name, detail: '', flag: c.flag }));
-    if (!q) return countryHits;
-    const cityHits = (cities.data ?? []).map(
-      (c): Candidate => ({
-        place_type: 'city',
-        place_code: String(c.geonameid),
-        country_iso2: c.country_iso2,
-        name: c.name,
-        detail: mapCountryName(c.country_iso2, lang),
-        flag: '',
-      }),
-    );
-    return [...regionHits.map(region), ...countryHits, ...cityHits];
-  }, [regionCountry, countries, q, query, regions.data, cities.data, lang]);
+    if (countryHits.length) {
+      if (q) out.push({ kind: 'heading', key: 'h-countries', text: t('map.views.countries') });
+      for (let i = 0; i < countryHits.length; i += PER_ROW) {
+        const row = countryHits.slice(i, i + PER_ROW);
+        out.push({ kind: 'flags', key: `flags-${row[0].place_code}`, countries: row });
+      }
+    }
+    const cityHits = q
+      ? (cities.data ?? []).map(
+          (c): Candidate => ({
+            place_type: 'city',
+            place_code: String(c.geonameid),
+            country_iso2: c.country_iso2,
+            name: c.name,
+            detail: mapCountryName(c.country_iso2, lang),
+            flag: '',
+          }),
+        )
+      : [];
+    if (cityHits.length) {
+      out.push({ kind: 'heading', key: 'h-cities', text: t('map.views.cities') });
+      out.push(...cityHits.map(place));
+    }
+    return out;
+  }, [regionCountry, countries, q, query, regions.data, cities.data, lang, home, t]);
 
   const pick = (c: Candidate) => {
     haptics.selection();
@@ -121,6 +152,20 @@ export default function AddPlaceScreen() {
     setRegionCountry(code);
     setQuery('');
   };
+  // The country whose regions are open, as a place to mark (the country itself)
+  const openCountry: Candidate | null = regionCountry
+    ? { place_type: 'country', place_code: regionCountry, country_iso2: regionCountry, name: mapCountryName(regionCountry, lang), detail: '', flag: flagEmoji(regionCountry) }
+    : null;
+
+  // Android's Back goes from a country's regions back to the flags first
+  useEffect(() => {
+    if (!regionCountry || chosen) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setRegionCountry(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [regionCountry, chosen]);
 
   const save = () => {
     if (!chosen || !me) return;
@@ -201,18 +246,101 @@ export default function AddPlaceScreen() {
       </View>
       {failed ? <Text style={styles.error}>{t('map.tilesUnavailable')}</Text> : null}
       <FlatList
-        data={candidates}
-        keyExtractor={(c) => `${c.place_type}-${c.place_code}`}
+        data={lines}
+        keyExtractor={(l) => l.key}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-        ListEmptyComponent={
-          !loading ? <Text style={styles.hint}>{t('map.noResults')}</Text> : null
+        // A country's regions start with the country itself, to mark it as a whole
+        ListHeaderComponent={
+          openCountry ? (
+            <View style={styles.countryCard}>
+              <Text style={styles.countryCardFlag} accessible={false}>
+                {openCountry.flag}
+              </Text>
+              <View style={styles.rowText}>
+                <Text style={styles.countryCardName} numberOfLines={2} accessibilityRole="header">
+                  {openCountry.name}
+                </Text>
+                {(() => {
+                  const s = statusOf(visits, 'country', openCountry.place_code);
+                  return s ? (
+                    <View style={styles.countryCardStatus}>
+                      <StatusSwatch theme={mapTheme} status={s} />
+                      <Text style={styles.rowDetail}>{t(`map.status.${s}`)}</Text>
+                    </View>
+                  ) : null;
+                })()}
+              </View>
+              <PressableScale
+                haptic="selection"
+                style={styles.markCountry}
+                onPress={() => pick(openCountry)}
+                accessibilityLabel={t('map.markCountry', { name: openCountry.name })}
+                testID="add-place-mark-country"
+              >
+                <Text style={styles.markCountryText} numberOfLines={2}>
+                  {t('map.markCountry', { name: openCountry.name })}
+                </Text>
+              </PressableScale>
+            </View>
+          ) : null
         }
-        renderItem={({ item }) => {
+        ListEmptyComponent={
+          !loading && !openCountry ? <Text style={styles.hint}>{t('map.noResults')}</Text> : null
+        }
+        renderItem={({ item: line }) => {
+          if (line.kind === 'heading') {
+            return (
+              <Text style={styles.heading} accessibilityRole="header">
+                {line.text}
+              </Text>
+            );
+          }
+          if (line.kind === 'flags') {
+            return (
+              <View style={styles.flagRow}>
+                {line.countries.map((c) => {
+                  const s = statusOf(visits, 'country', c.place_code);
+                  const regionsLabel = t(`map.views.${regionWord(c.place_code)}`);
+                  return (
+                    <PressableScale
+                      key={c.place_code}
+                      haptic="none"
+                      style={styles.flagTile}
+                      onPress={() => openRegions(c.place_code)}
+                      // A shortcut: press and hold marks the country itself
+                      onLongPress={() => pick(c)}
+                      accessibilityLabel={[c.name, s ? t(`map.status.${s}`) : null, regionsLabel].filter(Boolean).join(', ')}
+                      accessibilityHint={t('map.flagHint', { name: c.name })}
+                      testID={`add-place-flag-${c.place_code}`}
+                    >
+                      <View style={[styles.flagBox, s ? { borderColor: mapTheme.outline[s] ?? mapTheme.status[s] } : null]}>
+                        <Text style={styles.flagBig} allowFontScaling={false}>
+                          {c.flag}
+                        </Text>
+                        {s ? (
+                          <View style={styles.flagBadge}>
+                            <StatusSwatch theme={mapTheme} status={s} size={14} />
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.flagName} numberOfLines={2}>
+                        {c.name}
+                      </Text>
+                    </PressableScale>
+                  );
+                })}
+                {/* Keeps the last row's flags the same size as the others */}
+                {Array.from({ length: PER_ROW - line.countries.length }, (_, i) => (
+                  <View key={`gap-${i}`} style={styles.flagTile} />
+                ))}
+              </View>
+            );
+          }
+          const item = line.place;
           const s = statusOf(visits, item.place_type, item.place_code);
           return (
             <PressableScale pressEffect="opacity" haptic="none" style={styles.row} onPress={() => pick(item)} accessibilityLabel={item.name}>
-              {item.flag ? <Text style={styles.flag}>{item.flag}</Text> : null}
               <View style={styles.rowText}>
                 <Text style={styles.rowName} numberOfLines={1}>
                   {item.name}
@@ -223,21 +351,6 @@ export default function AddPlaceScreen() {
                 <View accessible accessibilityLabel={t(`map.status.${s}`)}>
                   <StatusSwatch theme={mapTheme} status={s} />
                 </View>
-              ) : null}
-              {item.place_type === 'country' && !regionCountry ? (
-                <PressableScale
-                  pressEffect="opacity"
-                  haptic="none"
-                  onPress={() => openRegions(item.place_code)}
-                  hitSlop={8}
-                  style={styles.regionsButton}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${item.name}: ${t(`map.views.${regionWord(item.place_code)}`)}`}
-                  testID={`add-place-regions-${item.place_code}`}
-                >
-                  <Text style={styles.regionsText}>{t(`map.views.${regionWord(item.place_code)}`)}</Text>
-                  <MaterialCommunityIcons name="chevron-right" size={18} color={colors.link} />
-                </PressableScale>
               ) : null}
             </PressableScale>
           );
@@ -256,12 +369,40 @@ const useStyles = makeStyles((t) => ({
   hint: { ...t.type.callout, color: t.colors.textSecondary, paddingVertical: t.spacing.md },
   error: { ...t.type.callout, color: t.colors.danger },
   row: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, minHeight: 56, borderBottomWidth: 1, borderBottomColor: t.colors.divider },
-  flag: { fontSize: 24 },
   rowText: { flex: 1 },
   rowName: { ...t.type.body, color: t.colors.textPrimary },
   rowDetail: { ...t.type.footnote, color: t.colors.textSecondary },
-  regionsButton: { flexDirection: 'row', alignItems: 'center', minHeight: 40, paddingLeft: t.spacing.sm },
-  regionsText: { ...t.type.footnote, fontWeight: '600', color: t.colors.link },
+  heading: { ...t.type.footnote, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', color: t.colors.textSecondary, paddingTop: t.spacing.lg, paddingBottom: t.spacing.sm },
+  // Three flags to a row, the name under each
+  flagRow: { flexDirection: 'row', gap: t.spacing.md, paddingVertical: t.spacing.sm },
+  flagTile: { flex: 1, alignItems: 'center', gap: 6 },
+  flagBox: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    backgroundColor: t.colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flagBig: { fontSize: 46, lineHeight: 56 },
+  flagBadge: { position: 'absolute', top: 6, right: 6, padding: 2, borderRadius: 10, backgroundColor: t.colors.bg },
+  flagName: { ...t.type.footnote, fontWeight: '500', color: t.colors.textPrimary, textAlign: 'center', minHeight: 34 },
+  countryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.md,
+    padding: t.spacing.md,
+    marginBottom: t.spacing.sm,
+    borderRadius: 18,
+    backgroundColor: t.colors.surface,
+  },
+  countryCardFlag: { fontSize: 40, lineHeight: 48 },
+  countryCardName: { ...t.type.headline, color: t.colors.textPrimary },
+  countryCardStatus: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  markCountry: { maxWidth: 150, minHeight: 44, paddingHorizontal: t.spacing.md, borderRadius: 22, backgroundColor: t.colors.accentStrong, alignItems: 'center', justifyContent: 'center' },
+  markCountryText: { ...t.type.footnote, fontWeight: '700', color: t.colors.onAccent, textAlign: 'center' },
   chosen: { ...t.type.title, color: t.colors.textPrimary },
   detail: { ...t.type.callout, color: t.colors.textSecondary, marginTop: -8 },
   label: { ...t.type.callout, color: t.colors.textSecondary, marginTop: t.spacing.md },

@@ -11,21 +11,25 @@
  *   country's zoom its divisions (regions elsewhere) take over, closer in Bangladesh's districts,
  *   and closest every city's dot; a tap marks what's showing there. A country you marked with
  *   nothing marked inside keeps its colour all the way in.
- * - Zoomed out past the world (docs/ui-refresh step 1): a globe (globe/Globe.tsx) over the flat
- *   map, which can't go further out than the screen's width (so no edge ever shows). Pinching in
- *   on the globe hands back to the flat map at the place under the fingers; the earth button
- *   shows the globe turned to the home country.
+ * - Zoomed out past the world (docs/ui-refresh step 1): a globe (globe/Globe.tsx). Zooming out is
+ *   one movement, as in Apple Maps: the globe draws from the flat map's own camera, exactly over
+ *   it at first, and curves into the sphere as the zoom goes down (globe/projection.ts, "The zoom
+ *   out"), so it grows out of the map under the fingers. Let go part way and it settles at the
+ *   nearer end. Once it's the globe, it leads (turn, resize); pinching in plays the curve
+ *   backwards and the flat map takes over where it ends. The earth button flies out to the globe
+ *   turned to the home country, the home button flies back in.
  * Colours come from the active map theme. Status colours are paint expressions
  * rebuilt from the visit list, so marking a place repaints one property instead
  * of reloading data, and switching a theme repaints without reloading the style.
  */
 
 import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
-import { Camera, GeoJSONSource, Layer, Map, VectorSource, type CameraRef, type LngLatBounds, type MapRef } from '@maplibre/maplibre-react-native';
-import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
+import { Camera, GeoJSONSource, Layer, Map, VectorSource, type CameraRef, type LngLatBounds, type MapRef, type ViewStateChangeEvent } from '@maplibre/maplibre-react-native';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { cancelAnimation, Easing, useAnimatedReaction, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { tilesUrl } from '../../services/api';
 import type { Visit } from '../../types';
@@ -34,7 +38,8 @@ import { useReduceMotion } from '../../ui/useReduceMotion';
 import type { ResolvedMapTheme } from '../mapThemes/resolve';
 import { countryLabelPoint, HOME_DISTRICT_AREAS, HOME_DISTRICTS, HOME_REGION_BORDERS, HOME_REGION_LABELS, HOME_REGIONS } from './geoData';
 import { Globe, type GlobeFriend } from './globe/Globe';
-import { FLAT_FROM_GLOBE_ZOOM, FLAT_MIN_ZOOM, GLOBE_FROM_ZOOM } from './globe/projection';
+import { FLAT_MIN_ZOOM, globeZoom, MAX_TILT, MORPH_ZOOMS, morphAt, nearestLon, restingView, viewCentre } from './globe/projection';
+import { worldTexture } from './globe/texture';
 import { BUNDLED_HOMES, countryBounds } from './home';
 import { CountryLabels, CountryLayers, LAYER, TerrainLayer, WaterLayers, type FeaturePress } from './layers';
 import { CITIES_FROM, DISTRICTS_TAP_FROM, fadeInFrom, GLOBE_UNTIL, levelAt, REGIONS_FROM, type MapLevel } from './levels';
@@ -88,7 +93,19 @@ type Props = {
   onLevelChange?: (level: MapLevel) => void;
   /** Friends' country markers, for the globe (the flat map draws them as a child layer) */
   globeFriends?: readonly GlobeFriend[];
+  /**
+   * "texture" on screens that slide in and out (Replay): MapLibre's default GLSurfaceView is a
+   * separate layer that ignores the screen's slide, so closing the screen left a black box over
+   * the one under it. A TextureView is drawn with the rest of the screen.
+   */
+  androidView?: 'surface' | 'texture';
 };
+
+const NO_PADDING = { top: 0, bottom: 0, left: 0, right: 0 };
+const MAX_TILT_DEG = (MAX_TILT * 180) / Math.PI;
+const EASE = Easing.inOut(Easing.cubic);
+// While the globe leads and is this close to flat, the flat map under it follows it (it shows through)
+const FOLLOW_FROM = 0.12;
 
 // What a long press can mark: whatever's showing under the finger, the smallest first
 const PLACE_LAYERS = ['city-dot-marked', 'city-dot', 'home-district-area', 'home-region-fill', 'region-fill', LAYER.countryFill];
@@ -117,7 +134,7 @@ function firstProps(e: FeaturePress): Record<string, unknown> | null {
   return (e.nativeEvent.features?.[0]?.properties as Record<string, unknown> | undefined) ?? null;
 }
 
-export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ visits, theme, home, onPressPlace, onScopeChange, onUserMove, children, selected, onLongPressPlace, onLevelChange, bottomInset = 0, namedPlaces = [], globeFriends = [] }, ref) {
+export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ visits, theme, home, onPressPlace, onScopeChange, onUserMove, children, selected, onLongPressPlace, onLevelChange, bottomInset = 0, namedPlaces = [], globeFriends = [], androidView }, ref) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const styles = useStyles();
@@ -134,53 +151,176 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
   const homePadding = { ...HOME_PADDING, bottom: Math.max(HOME_PADDING.bottom, bottomInset + 24) };
   const reported = useRef<MapLevel | null>(null);
 
-  // The globe: mounted the first time it's needed and kept (its world picture is drawn once),
-  // faded in over the flat map and out again
-  const [globe, setGlobe] = useState<{ open: boolean; facing: { lon: number; lat: number; key: number } } | null>(null);
-  const [hint, setHint] = useState(true);
-  // The globe's state for map events, which fire before a re-render
-  const globeOpen = useRef(false);
-  const globeOpacity = useSharedValue(0);
-  const globeStyle = useAnimatedStyle(() => ({ opacity: globeOpacity.get() }));
-  const fade = (to: number) => {
-    globeOpacity.set(reduceMotion ? to : withTiming(to, { duration: 260 }));
-  };
-  const openGlobe = (lon: number, lat: number) => {
-    globeOpen.current = true;
-    setGlobe((g) => ({ open: true, facing: { lon, lat, key: (g?.facing.key ?? 0) + 1 } }));
-    fade(1);
-    onScopeChange?.('world');
-    if (reported.current !== 'country') {
-      reported.current = 'country';
-      onLevelChange?.('country');
-    }
-  };
-  const closeGlobe = () => {
-    globeOpen.current = false;
-    setGlobe((g) => (g ? { ...g, open: false } : g));
-    fade(0);
-  };
   const homePoint = countryLabelPoint(home) ?? centre(homeBounds);
 
+  // The globe (projection.ts, "The zoom out"). Its size at rest sets the zoom where the curve ends
+  // (zEnd), which is also as far out as the flat map goes; the curve starts MORPH_ZOOMS closer in.
+  const [layout, setLayout] = useState<{ width: number; height: number } | null>(null);
+  const zEnd = layout ? globeZoom(restingView(layout.width, layout.height).r) : FLAT_MIN_ZOOM;
+  const zStart = zEnd + MORPH_ZOOMS;
+  // The one camera both draw from (degrees): the flat map's while it leads, the globe's after
+  const camLon = useSharedValue(homePoint[0]);
+  const camLat = useSharedValue(homePoint[1]);
+  const camZ = useSharedValue(zStart + 3);
+  const camBearing = useSharedValue(0);
+  const globeCamera = { lon: camLon, lat: camLat, z: camZ, bearing: camBearing };
+  // The globe leads (its gestures move the camera, the flat map follows it); kept for map events too, which fire before a re-render
+  const [leading, setLeading] = useState(false);
+  const leadingRef = useRef(false);
+  const leadingSV = useSharedValue(false);
+  // Drawn at all: from where the curve starts (the globe's picture is see-through until then), or while it leads
+  const [drawn, setDrawn] = useState(false);
+  const drawnRef = useRef(false);
+  const [hint, setHint] = useState(true);
+  // Where to turn the globe once the flight out to it lands (the earth button), and what to do once the flat map takes over again
+  const faceOnLanding = useRef<[number, number] | null>(null);
+  const afterRelease = useRef<(() => void) | null>(null);
+  // The end a settle went for, so a settle that can't get there doesn't repeat forever
+  const settling = useRef<'globe' | 'flat' | null>(null);
+
+  // The world picture is drawn once (texture.ts); drawn ahead, the first zoom out doesn't stutter
+  useEffect(() => {
+    const timer = setTimeout(() => worldTexture(visits, theme), 700);
+    return () => clearTimeout(timer);
+  }, [visits, theme]);
+
+  const draw = (on: boolean) => {
+    if (on === drawnRef.current) return;
+    drawnRef.current = on;
+    setDrawn(on);
+  };
+
+  const reportLevel = (now: MapLevel) => {
+    if (now !== reported.current) {
+      reported.current = now;
+      onLevelChange?.(now);
+    }
+  };
+
+  // The flat map's camera, while it leads: the globe draws from it
+  const follow = (e: ViewStateChangeEvent) => {
+    if (leadingRef.current) return;
+    const [lon, lat] = viewCentre(e.center, e.bounds);
+    camLon.set(lon);
+    camLat.set(lat);
+    camZ.set(e.zoom);
+    camBearing.set(e.bearing);
+    draw(e.zoom < zStart + 0.15);
+  };
+
+  // The flat map came to rest at this zoom: what a tap marks, home or world
+  const landed = (z: number) => {
+    setZoom(z);
+    onScopeChange?.(z >= HOME_SCOPE_ZOOM ? 'home' : 'world');
+    reportLevel(levelAt(z));
+  };
+
+  /** Turn the globe (it leads) to face a place, at its size at rest. */
+  const turnTo = ([lon, lat]: [number, number]) => {
+    const to = { lon: nearestLon(camLon.get(), lon), lat: Math.max(-MAX_TILT_DEG, Math.min(MAX_TILT_DEG, lat)) };
+    if (reduceMotion) {
+      camLon.set(to.lon);
+      camLat.set(to.lat);
+      camZ.set(zEnd);
+      return;
+    }
+    camLon.set(withTiming(to.lon, { duration: 700, easing: EASE }));
+    camLat.set(withTiming(to.lat, { duration: 700, easing: EASE }));
+    camZ.set(withTiming(zEnd, { duration: 700, easing: EASE }));
+  };
+
+  /** The curve has finished: the globe leads (the flat map stays at its widest under it). */
+  const enterGlobe = () => {
+    settling.current = null;
+    leadingRef.current = true;
+    leadingSV.set(true);
+    setLeading(true);
+    draw(true);
+    camBearing.set(0);
+    onScopeChange?.('world');
+    reportLevel('country');
+    const face = faceOnLanding.current;
+    faceOnLanding.current = null;
+    if (face) turnTo(face);
+  };
+
+  /** The globe has flattened back into the flat map: it leads again, from where the camera is. */
+  const release = () => {
+    if (!leadingRef.current) return;
+    cancelAnimation(camLon);
+    cancelAnimation(camLat);
+    cancelAnimation(camZ);
+    const z = Math.max(zStart, camZ.get());
+    camera.current?.jumpTo({ center: [camLon.get(), camLat.get()], zoom: z, bearing: 0, padding: NO_PADDING });
+    leadingRef.current = false;
+    leadingSV.set(false);
+    setLeading(false);
+    landed(z);
+    const then = afterRelease.current;
+    afterRelease.current = null;
+    then?.();
+  };
+
+  /** From the globe back to the flat map: the curve played backwards to a place, then `then`. */
+  const leaveGlobe = (to: [number, number], z: number, then?: () => void) => {
+    afterRelease.current = then ?? null;
+    const lon = nearestLon(camLon.get(), to[0]);
+    const lat = Math.max(-MAX_TILT_DEG, Math.min(MAX_TILT_DEG, to[1]));
+    if (reduceMotion) {
+      camLon.set(lon);
+      camLat.set(lat);
+      camZ.set(z);
+      release();
+      return;
+    }
+    const timing = { duration: 650, easing: EASE };
+    camLon.set(withTiming(lon, timing));
+    camLat.set(withTiming(lat, timing));
+    camZ.set(
+      withTiming(z, timing, (done) => {
+        if (done) scheduleOnRN(release);
+      }),
+    );
+  };
+
+  /** Run a camera move on the flat map, first leaving the globe if it leads. */
+  const onFlat = (to: [number, number], move: () => void) => {
+    if (leadingRef.current) leaveGlobe(to, zStart, move);
+    else move();
+  };
+
+  // While the globe leads and is nearly flat, the flat map shows through it: keep it under the globe
+  const jumpMap = (lon: number, lat: number, z: number) => {
+    camera.current?.jumpTo({ center: [lon, lat], zoom: z, bearing: 0, padding: NO_PADDING });
+  };
+  useAnimatedReaction(
+    () => (leadingSV.get() && morphAt(camZ.get(), zEnd).s < FOLLOW_FROM ? [camLon.get(), camLat.get(), camZ.get()] : null),
+    (now, before) => {
+      if (now && (!before || now[0] !== before[0] || now[1] !== before[1] || now[2] !== before[2])) scheduleOnRN(jumpMap, now[0], now[1], now[2]);
+    },
+    [zEnd],
+  );
+
   useImperativeHandle(ref, () => ({
-    home: () => {
-      closeGlobe();
-      camera.current?.fitBounds(homeBounds, { padding: homePadding, duration: 600 });
+    home: () => onFlat(homePoint, () => camera.current?.fitBounds(homeBounds, { padding: homePadding, duration: 600 })),
+    world: () => {
+      if (leadingRef.current) {
+        turnTo(homePoint);
+        return;
+      }
+      // Fly out: the globe curves out of the flat map on the way, and turns to home when it lands
+      faceOnLanding.current = homePoint;
+      draw(true);
+      if (reduceMotion) camera.current?.jumpTo({ center: homePoint, zoom: zEnd, bearing: 0 });
+      else camera.current?.easeTo({ center: homePoint, zoom: zEnd, bearing: 0, duration: 1100, easing: 'ease' });
     },
-    world: () => openGlobe(homePoint[0], homePoint[1]),
-    fit: (b, padding = HOME_PADDING) => {
-      closeGlobe();
-      camera.current?.fitBounds(b, { padding, duration: 600 });
-    },
-    focus: (center) => {
-      closeGlobe();
-      camera.current?.easeTo({ center, zoom: 13, duration: 500 });
-    },
-    show: (target) => {
-      closeGlobe();
-      if ('bounds' in target) camera.current?.fitBounds(target.bounds, { padding: homePadding, duration: 700 });
-      else camera.current?.easeTo({ center: target.center, zoom: target.zoom, duration: 700 });
-    },
+    fit: (b, padding = HOME_PADDING) => onFlat(centre(b), () => camera.current?.fitBounds(b, { padding, duration: 600 })),
+    focus: (center) => onFlat(center, () => camera.current?.easeTo({ center, zoom: 13, duration: 500 })),
+    show: (target) =>
+      onFlat('bounds' in target ? centre(target.bounds) : target.center, () => {
+        if ('bounds' in target) camera.current?.fitBounds(target.bounds, { padding: homePadding, duration: 700 });
+        else camera.current?.easeTo({ center: target.center, zoom: target.zoom, duration: 700 });
+      }),
     snapshot: async () => {
       const uri = await mapRef.current?.createStaticMapImage({ output: 'file' });
       if (!uri) return null;
@@ -237,34 +377,47 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
   // Region layers sit under the terrain shading when there is one, else under the borders
   const belowBorders = base.terrain ? 'terrain-hillshade' : LAYER.glow;
 
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width !== layout?.width || height !== layout?.height) setLayout({ width, height });
+  };
+
   return (
-    <View style={StyleSheet.absoluteFill}>
+    <View style={StyleSheet.absoluteFill} onLayout={onLayout}>
     <Map
       ref={mapRef}
       style={StyleSheet.absoluteFill}
       mapStyle={MAP_STYLE}
+      androidView={androidView}
       attribution={false}
       logo={false}
       compass={false}
       touchPitch={false}
       onRegionIsChanging={(e) => {
-        // Pinched out past the world: the globe takes over, facing where the map was
-        if (!globeOpen.current && e.nativeEvent.userInteraction && e.nativeEvent.zoom < GLOBE_FROM_ZOOM) {
-          const [lon, lat] = e.nativeEvent.center;
-          openGlobe(lon, Math.max(-60, Math.min(60, lat)));
-        }
+        if (e.nativeEvent.userInteraction) settling.current = null;
+        follow(e.nativeEvent);
       }}
       onRegionDidChange={(e) => {
+        if (leadingRef.current) return;
+        follow(e.nativeEvent);
         const z = e.nativeEvent.zoom;
-        if (globeOpen.current) return;
-        setZoom(z);
-        onScopeChange?.(z >= HOME_SCOPE_ZOOM ? 'home' : 'world');
-        const now = levelAt(z);
-        if (now !== reported.current) {
-          reported.current = now;
-          onLevelChange?.(now);
-        }
         if (e.nativeEvent.userInteraction) onUserMove?.();
+        const { s } = morphAt(z, zEnd);
+        // At the end of the curve: the globe takes over
+        if (s >= 0.995 || (s > 0.005 && settling.current === 'globe')) {
+          enterGlobe();
+          return;
+        }
+        landed(z);
+        if (s <= 0.005 || settling.current === 'flat') {
+          settling.current = null;
+          return;
+        }
+        // Let go part way along the curve (it's only passed through): on to the nearer end
+        settling.current = s >= 0.5 ? 'globe' : 'flat';
+        const to = s >= 0.5 ? zEnd : zStart;
+        if (reduceMotion) camera.current?.jumpTo({ center: e.nativeEvent.center, zoom: to });
+        else camera.current?.easeTo({ center: e.nativeEvent.center, zoom: to, duration: 380, easing: 'ease' });
       }}
       onLongPress={
         onLongPressPlace
@@ -280,7 +433,8 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
           : undefined
       }
     >
-      <Camera ref={camera} minZoom={FLAT_MIN_ZOOM} initialViewState={{ bounds: homeBounds, padding: HOME_PADDING }} />
+      {/* As far out as the flat map goes is where the globe is at rest (it covers the map there) */}
+      <Camera ref={camera} minZoom={zEnd} initialViewState={{ bounds: homeBounds, padding: HOME_PADDING }} />
 
       <WaterLayers base={base} />
       <CountryLayers
@@ -517,34 +671,37 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
       <CountryLabels base={base} />
       {children}
     </Map>
-    {globe ? (
-      <Animated.View style={[StyleSheet.absoluteFill, globeStyle]} pointerEvents={globe.open ? 'auto' : 'none'} importantForAccessibility={globe.open ? 'auto' : 'no-hide-descendants'}>
-        <Globe
-          visits={visits}
-          theme={theme}
-          sky={colors.globeSky}
-          glow={colors.globeGlow}
-          shadowColor={colors.globeShadow}
-          facing={globe.facing}
-          friends={globeFriends}
-          accessibilityLabel={t('map.globeLabel')}
-          onInteract={() => setHint(false)}
-          onPressCountry={(iso2, name) => onPressPlace({ place_type: 'country', place_code: iso2, country_iso2: iso2, name })}
-          onLongPressCountry={(iso2, name, point) =>
-            onLongPressPlace?.({ place_type: 'country', place_code: iso2, country_iso2: iso2, name }, point)
-          }
-          onHandBack={(lon, lat) => {
-            camera.current?.jumpTo({ center: [lon, lat], zoom: FLAT_FROM_GLOBE_ZOOM });
-            closeGlobe();
-            onUserMove?.();
-          }}
-        />
-        {globe.open && hint ? (
-          <View style={[styles.hint, { bottom: bottomInset + 16 }]} pointerEvents="none">
-            <Text style={styles.hintText}>{t('map.globeHint')}</Text>
-          </View>
-        ) : null}
-      </Animated.View>
+    {(drawn || leading) && layout ? (
+      <Globe
+        visits={visits}
+        theme={theme}
+        sky={colors.globeSky}
+        glow={colors.globeGlow}
+        shadowColor={colors.globeShadow}
+        camera={globeCamera}
+        zEnd={zEnd}
+        width={layout.width}
+        height={layout.height}
+        leading={leading}
+        friends={globeFriends}
+        accessibilityLabel={t('map.globeLabel')}
+        onInteract={() => setHint(false)}
+        onPressCountry={(iso2, name) => onPressPlace({ place_type: 'country', place_code: iso2, country_iso2: iso2, name })}
+        onLongPressCountry={(iso2, name, point) => onLongPressPlace?.({ place_type: 'country', place_code: iso2, country_iso2: iso2, name }, point)}
+        onRelease={() => {
+          release();
+          onUserMove?.();
+        }}
+        onZoomIn={(lon, lat) => {
+          leaveGlobe([lon, lat], zStart + 0.8);
+          onUserMove?.();
+        }}
+      />
+    ) : null}
+    {leading && hint ? (
+      <View style={[styles.hint, { bottom: bottomInset + 16 }]} pointerEvents="none">
+        <Text style={styles.hintText}>{t('map.globeHint')}</Text>
+      </View>
     ) : null}
     </View>
   );

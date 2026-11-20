@@ -53,6 +53,8 @@
     "searchRegions": "Search regions",
     "searchCities": "Search cities (2+ letters)",
     "pickCountryFirst": "Choose a country first",
+    "markCountry": "Mark all of {{name}}",
+    "flagHint": "Opens the places in {{name}}. Press and hold to mark the country itself.",
     "noResults": "No matches",
     "chooseStatus": "How do you know {{name}}?",
     "firstVisited": "First visited (YYYY-MM-DD, optional)",
