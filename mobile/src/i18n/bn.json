@@ -190,7 +190,8 @@
       "undatedPlaces_other": "তারিখ নেই: {{places}}, আরও {{n}}টি",
       "undatedPlacesOnly": "তারিখ নেই: {{places}}"
     },
-    "searchAll": "দেশ, বিভাগ ও শহর খুঁজুন"
+    "searchAll": "দেশ, বিভাগ ও শহর খুঁজুন",
+    "searchAllHint": "দেশ, বিভাগ ও শহর"
   },
   "mapTheme": {
     "title": "মানচিত্র থিম",

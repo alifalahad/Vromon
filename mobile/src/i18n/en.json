@@ -190,7 +190,8 @@
       "undatedPlaces_other": "No date yet: {{places}}, and {{n}} more",
       "undatedPlacesOnly": "No date yet: {{places}}"
     },
-    "searchAll": "Search countries, divisions and cities"
+    "searchAll": "Search countries, divisions and cities",
+    "searchAllHint": "Countries, divisions, cities"
   },
   "mapTheme": {
     "title": "Map theme",

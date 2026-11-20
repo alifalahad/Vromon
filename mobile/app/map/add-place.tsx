@@ -233,7 +233,8 @@ export default function AddPlaceScreen() {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder={searchLabel}
+          // Short enough for one line on a narrow phone (the full wording is the label read out)
+          placeholder={regionCountry ? searchLabel : t('map.searchAllHint')}
           placeholderTextColor={colors.textTertiary}
           accessibilityLabel={searchLabel}
           style={styles.searchInput}
@@ -254,22 +255,25 @@ export default function AddPlaceScreen() {
         ListHeaderComponent={
           openCountry ? (
             <View style={styles.countryCard}>
-              <Text style={styles.countryCardFlag} accessible={false}>
-                {openCountry.flag}
-              </Text>
-              <View style={styles.rowText}>
-                <Text style={styles.countryCardName} numberOfLines={2} accessibilityRole="header">
-                  {openCountry.name}
+              {/* The name gets the whole width (long ones too), the button its own line under it */}
+              <View style={styles.countryCardTop}>
+                <Text style={styles.countryCardFlag} accessible={false}>
+                  {openCountry.flag}
                 </Text>
-                {(() => {
-                  const s = statusOf(visits, 'country', openCountry.place_code);
-                  return s ? (
-                    <View style={styles.countryCardStatus}>
-                      <StatusSwatch theme={mapTheme} status={s} />
-                      <Text style={styles.rowDetail}>{t(`map.status.${s}`)}</Text>
-                    </View>
-                  ) : null;
-                })()}
+                <View style={styles.rowText}>
+                  <Text style={styles.countryCardName} numberOfLines={2} accessibilityRole="header">
+                    {openCountry.name}
+                  </Text>
+                  {(() => {
+                    const s = statusOf(visits, 'country', openCountry.place_code);
+                    return s ? (
+                      <View style={styles.countryCardStatus}>
+                        <StatusSwatch theme={mapTheme} status={s} />
+                        <Text style={styles.rowDetail}>{t(`map.status.${s}`)}</Text>
+                      </View>
+                    ) : null;
+                  })()}
+                </View>
               </View>
               <PressableScale
                 haptic="selection"
@@ -390,18 +394,17 @@ const useStyles = makeStyles((t) => ({
   flagBadge: { position: 'absolute', top: 6, right: 6, padding: 2, borderRadius: 10, backgroundColor: t.colors.bg },
   flagName: { ...t.type.footnote, fontWeight: '500', color: t.colors.textPrimary, textAlign: 'center', minHeight: 34 },
   countryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: t.spacing.md,
     padding: t.spacing.md,
     marginBottom: t.spacing.sm,
     borderRadius: 18,
     backgroundColor: t.colors.surface,
   },
+  countryCardTop: { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md },
   countryCardFlag: { fontSize: 40, lineHeight: 48 },
   countryCardName: { ...t.type.headline, color: t.colors.textPrimary },
   countryCardStatus: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  markCountry: { maxWidth: 150, minHeight: 44, paddingHorizontal: t.spacing.md, borderRadius: 22, backgroundColor: t.colors.accentStrong, alignItems: 'center', justifyContent: 'center' },
+  markCountry: { minHeight: 44, paddingHorizontal: t.spacing.md, borderRadius: 22, backgroundColor: t.colors.accentStrong, alignItems: 'center', justifyContent: 'center' },
   markCountryText: { ...t.type.footnote, fontWeight: '700', color: t.colors.onAccent, textAlign: 'center' },
   chosen: { ...t.type.title, color: t.colors.textPrimary },
   detail: { ...t.type.callout, color: t.colors.textSecondary, marginTop: -8 },

@@ -14,7 +14,7 @@
  * its sheet; press and hold opens the quick mark. Nothing is fetched.
  */
 
-import { BlurMask, Canvas, createPicture, Fill, FilterMode, ImageShader, matchFont, MipmapMode, Oval, PaintStyle, Picture, Shader, Skia, type SkFont } from '@shopify/react-native-skia';
+import { BlurMask, Canvas, createPicture, Fill, FilterMode, Group, ImageShader, matchFont, MipmapMode, Oval, PaintStyle, Picture, Shader, Skia, type SkFont } from '@shopify/react-native-skia';
 import React, { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -205,6 +205,9 @@ const SETTLE = { duration: 320, easing: Easing.out(Easing.cubic) };
 const MAX_TILT_DEG = MAX_TILT * DEG;
 // Closer in than this the flat map shows everything (the globe is see-through)
 const FADE_UNTIL = 0.06;
+// The globe's names and friends' markers are gone before the picture starts to fade, so they're
+// never seen with the flat map's own (placed a little differently) through it
+const MARKS_FROM = 0.16;
 
 export function Globe({
   visits,
@@ -259,6 +262,7 @@ export function Globe({
   // Drawn over the flat map from the moment the curve starts (exactly the flat map there, so the
   // hand-over can't be seen), see-through when zoomed in past it
   const fade = useAnimatedStyle(() => ({ opacity: smoothstep(0, FADE_UNTIL, morphAt(camZ.get(), zEnd).s) }), [zEnd]);
+  const marks = useDerivedValue(() => smoothstep(FADE_UNTIL, MARKS_FROM, morphAt(camZ.get(), zEnd).s), [zEnd]);
 
   // A soft shadow under the globe, as in frame 2, once it's round
   const shadow = useDerivedValue(() => {
@@ -504,7 +508,9 @@ export function Globe({
                 />
               </Shader>
             </Fill>
-            <Picture picture={overlay} />
+            <Group opacity={marks}>
+              <Picture picture={overlay} />
+            </Group>
           </Canvas>
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: sky }]} />

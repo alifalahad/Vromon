@@ -28,7 +28,7 @@ import { Camera, GeoJSONSource, Layer, Map, VectorSource, type CameraRef, type L
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import { cancelAnimation, Easing, useAnimatedReaction, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, Easing, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { tilesUrl } from '../../services/api';
@@ -38,7 +38,7 @@ import { useReduceMotion } from '../../ui/useReduceMotion';
 import type { ResolvedMapTheme } from '../mapThemes/resolve';
 import { countryLabelPoint, HOME_DISTRICT_AREAS, HOME_DISTRICTS, HOME_REGION_BORDERS, HOME_REGION_LABELS, HOME_REGIONS } from './geoData';
 import { Globe, type GlobeFriend } from './globe/Globe';
-import { FLAT_MIN_ZOOM, globeZoom, MAX_TILT, MORPH_ZOOMS, morphAt, nearestLon, restingView, viewCentre } from './globe/projection';
+import { FLAT_MIN_ZOOM, globeZoom, MAX_TILT, MORPH_ZOOMS, morphAt, nearestLon, restingView, smoothstep, viewCentre } from './globe/projection';
 import { worldTexture } from './globe/texture';
 import { BUNDLED_HOMES, countryBounds } from './home';
 import { CountryLabels, CountryLayers, LAYER, TerrainLayer, WaterLayers, type FeaturePress } from './layers';
@@ -289,10 +289,15 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
     else move();
   };
 
-  // While the globe leads and is nearly flat, the flat map shows through it: keep it under the globe
+  // While the globe leads and is nearly flat, the flat map shows through it: keep it under the globe.
+  // One can still arrive after the flat map took over (the curve's last frame, after `release`):
+  // dropped, or it would stop the move that follows (a jump cuts a running ease short).
   const jumpMap = (lon: number, lat: number, z: number) => {
+    if (!leadingRef.current) return;
     camera.current?.jumpTo({ center: [lon, lat], zoom: z, bearing: 0, padding: NO_PADDING });
   };
+  // The globe's hint goes as the globe does (it's about turning the globe)
+  const hintFade = useAnimatedStyle(() => ({ opacity: smoothstep(0.7, 0.95, morphAt(camZ.get(), zEnd).s) }), [zEnd]);
   useAnimatedReaction(
     () => (leadingSV.get() && morphAt(camZ.get(), zEnd).s < FOLLOW_FROM ? [camLon.get(), camLat.get(), camZ.get()] : null),
     (now, before) => {
@@ -699,9 +704,9 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap({ vi
       />
     ) : null}
     {leading && hint ? (
-      <View style={[styles.hint, { bottom: bottomInset + 16 }]} pointerEvents="none">
+      <Animated.View style={[styles.hint, { bottom: bottomInset + 16 }, hintFade]} pointerEvents="none">
         <Text style={styles.hintText}>{t('map.globeHint')}</Text>
-      </View>
+      </Animated.View>
     ) : null}
     </View>
   );
