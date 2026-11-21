@@ -89,7 +89,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-localization',
     'expo-secure-store',
     'expo-web-browser',
-    '@maplibre/maplibre-react-native',
+    // MapLibre's globe pre-release (docs/smooth-zoom): it draws the earth as a globe when zoomed out,
+    // the one map at every zoom, as Apple Maps does. Back to a stable version once one has the globe.
+    ['@maplibre/maplibre-react-native', { android: { nativeVersion: '2026.11.2-globe' } }],
     // Scanning friend QR codes only: no microphone
     ['expo-camera', { cameraPermission: 'Vromon uses the camera to scan friend QR codes.', recordAudioAndroid: false }],
     ['expo-notifications', { defaultChannel: 'friends', color: '#3379F3' }],

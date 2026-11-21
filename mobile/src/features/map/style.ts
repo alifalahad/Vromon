@@ -36,8 +36,11 @@ export function placeNamePaint(base: { label: string; labelHalo: string }) {
   return { 'text-color': base.label, 'text-opacity': 0.7, 'text-halo-color': base.labelHalo, 'text-halo-width': 1.2, 'text-halo-blur': 0.5 };
 }
 
-/** Glyphs only: sources and layers are React children of <Map>. */
-export const MAP_STYLE: StyleSpecification = { version: 8, glyphs: GLYPHS, sources: {}, layers: [] };
+/**
+ * Glyphs only: sources and layers are React children of <Map>. The projection makes MapLibre draw
+ * the earth as a globe when zoomed out (docs/smooth-zoom); zoomed in it looks as the flat map did.
+ */
+export const MAP_STYLE: StyleSpecification = { version: 8, glyphs: GLYPHS, projection: { type: 'globe' }, sources: {}, layers: [] };
 
 type CodeKey = { type: PlaceType; property: string };
 

@@ -101,21 +101,6 @@ export default function MapScreen() {
   );
   const plannableNames = useMemo(() => (mapLayers.plannable ? (destinations ?? []).map((d) => d.name) : []), [mapLayers.plannable, destinations]);
   const friendData = useMemo(() => footprintsGeoJSON(friendsOn ? (footprints ?? []) : []), [friendsOn, footprints]);
-  // The same markers on the globe: countries only (regions are too small to see there)
-  const globeFriends = useMemo(
-    () =>
-      friendData.features
-        .filter((f) => f.properties?.place_type === 'country')
-        .map((f) => ({
-          iso2: String(f.properties?.place_code),
-          lon: f.geometry.coordinates[0],
-          lat: f.geometry.coordinates[1],
-          color: String(f.properties?.color),
-          initials: String(f.properties?.initials),
-          more: String(f.properties?.more ?? ''),
-        })),
-    [friendData],
-  );
   const [destination, setDestination] = useState<Destination | null>(null);
   const f = usePlanFormat();
   const queryClient = useQueryClient();
@@ -266,7 +251,6 @@ export default function MapScreen() {
           bottomInset={DOCK_GAP}
           selected={place ?? quick?.place ?? null}
           namedPlaces={plannableNames}
-          globeFriends={globeFriends}
           onLongPressPlace={(p, point) => {
             if (!me) return;
             haptics.medium();

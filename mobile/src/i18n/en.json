@@ -77,7 +77,6 @@
     "allThemes": "All themes",
     "sheetButton": "Map settings: what to show and the theme",
     "showWorld": "Show the whole world",
-    "globeLabel": "The world as a globe. Drag to turn it, pinch or double-tap to zoom in. Add a place with the plus button.",
     "globeHint": "Drag to turn the globe. Pinch or double-tap to zoom in.",
     "showHome": "Back to {{country}}",
     "storyDivisions": "{{done}} of {{total}} divisions",
